@@ -1,8 +1,12 @@
 'use client';
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { usePersistentState } from "@/hooks/usePersistentState";
-import { QUESTION_STORAGE_KEY, TEAM_STORAGE_KEY } from "@/lib/storage";
+import {
+  QUESTION_STORAGE_KEY,
+  TEAM_STORAGE_KEY,
+  TURN_STATE_STORAGE_KEY,
+} from "@/lib/storage";
 import { POINT_VALUES, type Question, type Team } from "@/lib/types";
 
 type ActiveQuestion = Question & { category: string };
@@ -17,6 +21,13 @@ function shuffle<T>(arr: T[]): T[] {
   return copy;
 }
 
+function generateRedPattern(count: number) {
+  const redCount = Math.max(1, Math.round(count * 0.4));
+  const indices = Array.from({ length: count }, (_, i) => i);
+  const shuffled = shuffle(indices).slice(0, redCount);
+  return shuffled.sort((a, b) => a - b);
+}
+
 export default function GameBoardPage() {
   const [teams, setTeams] = usePersistentState<Team[]>(TEAM_STORAGE_KEY, []);
   const [questions, setQuestions] = usePersistentState<Question[]>(
@@ -29,11 +40,22 @@ export default function GameBoardPage() {
   const [lyricsRevealed, setLyricsRevealed] = useState<boolean[]>([]);
   const [showAnswer, setShowAnswer] = useState(false);
   const [selectedTeamId, setSelectedTeamId] = useState<string>("");
-  const [turnOrder, setTurnOrder] = useState<TeamId[]>([]);
-  const [boardTurnIndex, setBoardTurnIndex] = useState(0);
-  const [lyricsTurnIndex, setLyricsTurnIndex] = useState(0);
+  const [turnState, setTurnState] = usePersistentState<{
+    order: TeamId[];
+    boardIndex: number;
+    lyricsIndex: number;
+  }>(TURN_STATE_STORAGE_KEY, {
+    order: [],
+    boardIndex: 0,
+    lyricsIndex: 0,
+  });
+  const turnOrder = turnState.order;
+  const boardTurnIndex = turnState.boardIndex;
+  const lyricsTurnIndex = turnState.lyricsIndex;
   const [lastGuessTeamId, setLastGuessTeamId] = useState<string>("");
   const [mapLocked, setMapLocked] = useState(true);
+  const [lyricsPattern, setLyricsPattern] = useState<number[]>([]);
+  const audioCtxRef = useRef<AudioContext | null>(null);
 
   const categories = useMemo(() => {
     const seen = new Set<string>();
@@ -56,44 +78,59 @@ export default function GameBoardPage() {
     [turnOrder, teams],
   );
 
-  const openQuestion = (question: Question) => {
-    setActiveQuestion(question);
-    setShowAnswer(false);
-    if (question.type === "lyrics") {
-      const len = question.lyricsSegments?.length ?? 0;
-      const arr = new Array(len).fill(false);
-      setLyricsRevealed(arr);
+const openQuestion = (question: Question) => {
+  let normalized = question;
+  if (question.type === "lyrics") {
+    const pattern = generateRedPattern(question.lyricsSegments?.length ?? 0);
+    normalized = { ...question, lyricsRedPattern: pattern };
+    setLyricsPattern(pattern);
+  }
+  setActiveQuestion(normalized);
+  setShowAnswer(false);
+  if (normalized.type === "lyrics") {
+    const len = normalized.lyricsSegments?.length ?? 0;
+    const arr = new Array(len).fill(false);
+    setLyricsRevealed(arr);
+  } else {
+    setLyricsRevealed([]);
+  }
+  if (activeTurnOrder.length > 0) {
+    if (normalized.type === "lyrics") {
+      const lyricId =
+        activeTurnOrder[lyricsTurnIndex % activeTurnOrder.length];
+      setSelectedTeamId(lyricId);
     } else {
-      setLyricsRevealed([]);
-    }
-    if (activeTurnOrder.length > 0) {
       const currentId =
         activeTurnOrder[boardTurnIndex % activeTurnOrder.length];
       setSelectedTeamId(currentId);
-      setLyricsTurnIndex(boardTurnIndex);
-    } else {
-      setLyricsTurnIndex(0);
     }
-  };
+  } else {
+    setTurnState((prev) => ({ ...prev, lyricsIndex: 0, boardIndex: 0, order: [] }));
+  }
+};
 
-  const closeModal = () => {
-    setActiveQuestion(null);
-    setShowAnswer(false);
-    setSelectedTeamId("");
-    setLyricsRevealed([]);
-    setLastGuessTeamId("");
-    setLyricsTurnIndex(0);
-    setMapLocked(true);
-  };
+const closeModal = () => {
+  setActiveQuestion(null);
+  setShowAnswer(false);
+  setSelectedTeamId("");
+  setLyricsRevealed([]);
+  setLastGuessTeamId("");
+  setMapLocked(true);
+  setLyricsPattern([]);
+};
 
   const markAnswered = (correct: boolean) => {
     if (!activeQuestion) return;
     const teamIdToScore =
-      lastGuessTeamId ||
-      selectedTeamId ||
-      (activeTurnOrder.length > 0
-        ? activeTurnOrder[boardTurnIndex % activeTurnOrder.length]
-        : "");
+      activeQuestion.type === "lyrics"
+        ? activeTurnOrder.length > 0
+          ? activeTurnOrder[lyricsTurnIndex % activeTurnOrder.length]
+          : ""
+        : lastGuessTeamId ||
+          selectedTeamId ||
+          (activeTurnOrder.length > 0
+            ? activeTurnOrder[boardTurnIndex % activeTurnOrder.length]
+            : "");
 
     if (teamIdToScore) {
       setTeams((prev) =>
@@ -113,8 +150,18 @@ export default function GameBoardPage() {
       ),
     );
     if (activeTurnOrder.length > 0) {
-      setBoardTurnIndex((prev) => (prev + 1) % activeTurnOrder.length);
-      setLyricsTurnIndex((prev) => (prev + 1) % activeTurnOrder.length);
+      setTurnState((prev) => {
+        if (prev.order.length === 0) return prev;
+        const len = prev.order.length;
+        return {
+          ...prev,
+          boardIndex: (prev.boardIndex + 1) % len,
+          lyricsIndex:
+            activeQuestion.type === "lyrics"
+              ? (prev.lyricsIndex + 1) % len
+              : prev.lyricsIndex,
+        };
+      });
     }
     setLastGuessTeamId("");
     closeModal();
@@ -139,19 +186,26 @@ export default function GameBoardPage() {
   const startTurnOrder = () => {
     if (teams.length === 0) return;
     const shuffled = shuffle(teams.map((t) => t.id));
-    setTurnOrder(shuffled);
-    setBoardTurnIndex(0);
-    setLyricsTurnIndex(0);
+    setTurnState({ order: shuffled, boardIndex: 0, lyricsIndex: 0 });
     setSelectedTeamId("");
   };
 
-  const currentTeamId =
+  const getBoardTeamId = () =>
     activeTurnOrder.length > 0
       ? activeTurnOrder[boardTurnIndex % activeTurnOrder.length]
       : "";
-  const currentTeam = teams.find((t) => t.id === currentTeamId);
+  const getLyricsTeamId = () =>
+    activeTurnOrder.length > 0
+      ? activeTurnOrder[lyricsTurnIndex % activeTurnOrder.length]
+      : "";
+
+  const displayTeamId =
+    activeQuestion?.type === "lyrics" ? getLyricsTeamId() : getBoardTeamId();
+  const currentTeam = teams.find((t) => t.id === displayTeamId);
   const answeringTeamId =
-    lastGuessTeamId || selectedTeamId || currentTeamId;
+    activeQuestion?.type === "lyrics"
+      ? getLyricsTeamId()
+      : lastGuessTeamId || selectedTeamId || getBoardTeamId();
   const answeringTeam = teams.find((t) => t.id === answeringTeamId);
   const lyricsSegments = activeQuestion?.lyricsSegments ?? [];
   const allLyricsRevealed =
@@ -165,16 +219,48 @@ export default function GameBoardPage() {
   const answerImageName =
     activeQuestion?.answerImageName || activeQuestion?.imageName || "Answer image";
   const answerVideoUrl = activeQuestion?.answerVideoUrl || null;
+  const buildVideoSrc = (url: string | null) => {
+    if (!url) return "";
+    const joiner = url.includes("?") ? "&" : "?";
+    return showAnswer ? `${url}${joiner}autoplay=1&playsinline=1` : url;
+  };
+  const isRedLyric = (idx: number) =>
+    activeQuestion?.type === "lyrics" && lyricsPattern.includes(idx);
+
+  const playRedBeep = () => {
+    try {
+      if (!audioCtxRef.current) {
+        audioCtxRef.current = new AudioContext();
+      }
+      const ctx = audioCtxRef.current;
+      if (!ctx) return;
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "triangle";
+      osc.frequency.setValueAtTime(440, now);
+      osc.frequency.exponentialRampToValueAtTime(180, now + 0.4);
+      gain.gain.value = 0.16;
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.42);
+      osc.stop(now + 0.45);
+    } catch (e) {
+      console.error("Audio error", e);
+    }
+  };
 
   const advanceToNextTeam = () => {
     if (activeTurnOrder.length === 0) return;
-    const currentIdx = lyricsTurnIndex % activeTurnOrder.length;
-    const nextIdx = (currentIdx + 1) % activeTurnOrder.length;
-    const nextTeamId = activeTurnOrder[nextIdx] ?? "";
-    if (nextTeamId) setSelectedTeamId(nextTeamId);
-    setLyricsTurnIndex((prev) =>
-      activeTurnOrder.length > 0 ? (prev + 1) % activeTurnOrder.length : prev,
-    );
+    setTurnState((prev) => {
+      if (prev.order.length === 0) return prev;
+      const len = prev.order.length;
+      const nextIdx = (prev.lyricsIndex + 1) % len;
+      const nextTeamId = prev.order[nextIdx] ?? "";
+      if (nextTeamId) setSelectedTeamId(nextTeamId);
+      return { ...prev, lyricsIndex: nextIdx };
+    });
   };
 
   const handleRevealLine = (idx: number) => {
@@ -184,15 +270,23 @@ export default function GameBoardPage() {
       next[idx] = true;
       return next;
     });
+    // pattern handled at modal open; no persistence here
     const guessTeamId =
       selectedTeamId ||
       (activeTurnOrder.length > 0
-        ? activeTurnOrder[turnIndex % activeTurnOrder.length]
+        ? activeTurnOrder[lyricsTurnIndex % activeTurnOrder.length]
         : "");
     if (guessTeamId) {
       setLastGuessTeamId(guessTeamId);
+      setSelectedTeamId(guessTeamId);
     }
-    advanceToNextTeam();
+    if (isRedLyric(idx)) {
+      playRedBeep();
+      advanceToNextTeam();
+    } else {
+      // keep current team; scoring should use lastGuessTeamId = current
+      setLastGuessTeamId(guessTeamId);
+    }
   };
 
   return (
@@ -218,7 +312,7 @@ export default function GameBoardPage() {
             <div style={{ color: "var(--muted)", fontSize: "0.95rem" }}>
               {turnOrder.length > 0 && currentTeam ? (
                 <>
-                  Answer order active · Current:{" "}
+                  {activeQuestion?.type === "lyrics" ? "Lyrics turn" : "Board turn"} · Current:{" "}
                   <strong style={{ color: "#f2c14f" }}>{currentTeam.name}</strong>
                 </>
               ) : (
@@ -538,6 +632,7 @@ export default function GameBoardPage() {
                       >
                         {(activeQuestion.lyricsSegments ?? []).map((line, idx) => {
                           const revealed = lyricsRevealed[idx];
+                          const isRed = isRedLyric(idx);
                           return (
                             <button
                               key={idx}
@@ -547,10 +642,14 @@ export default function GameBoardPage() {
                                 minHeight: "80px",
                                 borderRadius: "12px",
                                 border: revealed
-                                  ? "1px solid rgba(28,111,77,0.7)"
+                                  ? isRed
+                                    ? "1px solid rgba(207,45,45,0.8)"
+                                    : "1px solid rgba(28,111,77,0.7)"
                                   : "1px solid rgba(255,255,255,0.12)",
                                 background: revealed
-                                  ? "rgba(28,111,77,0.18)"
+                                  ? isRed
+                                    ? "linear-gradient(135deg, rgba(207,45,45,0.6), rgba(146,26,26,0.8))"
+                                    : "rgba(28,111,77,0.18)"
                                   : "rgba(255,255,255,0.08)",
                                 color: revealed ? "#f5f3ef" : "var(--foreground)",
                                 fontWeight: 700,
@@ -558,6 +657,7 @@ export default function GameBoardPage() {
                                 padding: "12px",
                                 textAlign: "center",
                                 cursor: revealed ? "default" : "pointer",
+                                animation: revealed && isRed ? "boom 450ms ease-out" : undefined,
                               }}
                               disabled={revealed}
                             >
@@ -801,7 +901,7 @@ export default function GameBoardPage() {
                           }}
                         >
                           <iframe
-                            src={answerVideoUrl}
+                            src={buildVideoSrc(answerVideoUrl)}
                             style={{ width: "100%", height: "240px", border: "0" }}
                             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                             allowFullScreen
@@ -1117,6 +1217,24 @@ export default function GameBoardPage() {
       <style jsx>{`
         .flip-inner.flipped {
           transform: rotateY(180deg);
+        }
+        @keyframes boom {
+          0% {
+            transform: scale(1);
+            box-shadow: 0 0 0 rgba(255, 255, 255, 0.4);
+          }
+          30% {
+            transform: scale(1.08);
+            box-shadow: 0 0 30px rgba(255, 255, 255, 0.4);
+          }
+          60% {
+            transform: scale(0.96);
+            box-shadow: 0 0 18px rgba(255, 255, 255, 0.2);
+          }
+          100% {
+            transform: scale(1);
+            box-shadow: 0 0 0 rgba(255, 255, 255, 0);
+          }
         }
         .lyrics-tile {
           transition: transform 0.2s ease, box-shadow 0.2s ease;
