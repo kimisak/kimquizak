@@ -145,7 +145,7 @@ export function TimelineModal({
           color: "var(--muted)",
         }}
       >
-        Drag to place the event on/around the correct year. Wrong guesses are marked and {rotateInfo ? "pass play to the next team." : "stay with the same team."} Final correct placement wins the points.
+        Drag to place the event on/around the correct year. Wrong guesses are marked and {rotateInfo ? "pass play to the next team." : "stay with the same team."} When the final event is placed, the current team earns the points if correct; otherwise the next team in order claims them.
       </div>
 
       <div
