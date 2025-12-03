@@ -14,10 +14,11 @@ type Props = {
   winnerName?: string | null;
   points?: number;
   rotateInfo?: boolean;
-  penaltyInfo?: number;
   noWinner?: boolean;
   title?: string | null;
   centerLabel?: string | null;
+  potentialScore?: number | null;
+  basePoints?: number | null;
 };
 
 export function TimelineModal({
@@ -32,10 +33,11 @@ export function TimelineModal({
   winnerName,
   points,
   rotateInfo,
-  penaltyInfo,
   noWinner,
   title,
   centerLabel,
+  potentialScore,
+  basePoints,
 }: Props) {
   const activeEvent = queue[0];
   const formatYear = (year: number | null | undefined) => {
@@ -102,7 +104,7 @@ export function TimelineModal({
         style={{
           display: "flex",
           justifyContent: "space-between",
-          alignItems: "center",
+          alignItems: "flex-start",
           marginBottom: "12px",
           gap: "10px",
         }}
@@ -131,9 +133,28 @@ export function TimelineModal({
             </div>
           ) : null}
         </div>
-        <button className="button ghost" onClick={onClose}>
-          Close
-        </button>
+        {(potentialScore || basePoints) && (
+          <div
+            style={{
+              borderRadius: "12px",
+              padding: "8px 12px",
+              border: "1px solid rgba(255,255,255,0.16)",
+              background: "rgba(255,255,255,0.05)",
+              display: "grid",
+              gap: "4px",
+              minWidth: "140px",
+              textAlign: "right",
+            }}
+          >
+            <div style={{ color: "var(--muted)", fontSize: "0.9rem" }}>Question score</div>
+            {basePoints !== null && basePoints !== undefined ? (
+              <div style={{ fontWeight: 700 }}>Base: {basePoints}</div>
+            ) : null}
+            {potentialScore !== null && potentialScore !== undefined ? (
+              <div style={{ fontWeight: 700, color: "#f2c14f" }}>Current: {potentialScore}</div>
+            ) : null}
+          </div>
+        )}
       </div>
 
       <div
@@ -146,9 +167,7 @@ export function TimelineModal({
           color: "var(--muted)",
         }}
       >
-        Drag to place the event on/around the correct year. Wrong guesses are marked and {rotateInfo ? "pass play to the next team." : "stay with the same team."}{" "}
-        {penaltyInfo && penaltyInfo > 0 ? `Penalty: -${penaltyInfo} pts on wrong. ` : ""}
-        Final correct placement wins the points.
+        Drag to place the event on/around the correct year. Wrong guesses are marked and {rotateInfo ? "pass play to the next team." : "stay with the same team."} Final correct placement wins the points.
       </div>
 
       <div
@@ -262,7 +281,7 @@ export function TimelineModal({
           {winnerName ? (
             <span>
               Congrats, <strong style={{ color: "#f2c14f" }}>{winnerName}</strong> earned{" "}
-              <strong style={{ color: "#f2c14f" }}>{points ?? 0}</strong> points!
+              <strong style={{ color: "#f2c14f" }}>{potentialScore ?? points ?? 0}</strong> points!
             </span>
           ) : noWinner ? (
             <span style={{ color: "#f2c14f", fontWeight: 700 }}>No team earned points.</span>

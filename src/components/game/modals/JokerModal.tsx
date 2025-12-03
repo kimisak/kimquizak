@@ -34,7 +34,6 @@ type Props = {
   disableActions?: boolean;
   maxScore: number;
   rotateInfo?: boolean;
-  penaltyInfo?: number;
 };
 
 const statusColors: Record<JokerResult, string> = {
@@ -62,7 +61,6 @@ export function JokerModal({
   disableActions,
   maxScore,
   rotateInfo,
-  penaltyInfo,
 }: Props) {
   const total = round.numbers.length;
   const activeIndex = total - 1 - progress.currentIndex; // start from rightmost
@@ -179,32 +177,31 @@ export function JokerModal({
             </span>
           </div>
         </div>
-        <div
-          style={{
-            borderRadius: "12px",
-            padding: "10px 12px",
-            border: "1px solid rgba(255,255,255,0.12)",
-            background: "rgba(255,255,255,0.04)",
-            display: "grid",
-            gap: "4px",
-            minWidth: "180px",
-            justifySelf: "end",
-          }}
-        >
-          <div style={{ color: "var(--muted)", fontSize: "0.9rem" }}>
-            Current potential
+          <div
+            style={{
+              borderRadius: "12px",
+              padding: "10px 12px",
+              border: "1px solid rgba(255,255,255,0.12)",
+              background: "rgba(255,255,255,0.04)",
+              display: "grid",
+              gap: "4px",
+              minWidth: "180px",
+              justifySelf: "end",
+            }}
+          >
+            <div style={{ color: "var(--muted)", fontSize: "0.9rem" }}>
+              Current potential
+            </div>
+            <div style={{ fontSize: "1.4rem", fontWeight: 800 }}>
+              {progress.score} / {maxScore}
+            </div>
+            <div style={{ color: "var(--muted)", fontSize: "0.9rem" }}>
+              Guesses left: {guessesLeft}
+            </div>
+            <div style={{ color: "var(--muted)", fontSize: "0.85rem" }}>
+              {rotateInfo ? "Wrong guesses: next team" : "Wrong guesses: same team"}
+            </div>
           </div>
-          <div style={{ fontSize: "1.4rem", fontWeight: 800 }}>
-            {progress.score} / {maxScore}
-          </div>
-          <div style={{ color: "var(--muted)", fontSize: "0.9rem" }}>
-            Guesses left: {guessesLeft}
-          </div>
-          <div style={{ color: "var(--muted)", fontSize: "0.85rem" }}>
-            {rotateInfo ? "Wrong guesses: next team" : "Wrong guesses: same team"}
-            {penaltyInfo && penaltyInfo > 0 ? `, -${penaltyInfo} pts` : ""}
-          </div>
-        </div>
       </div>
 
       {question.prompt && (

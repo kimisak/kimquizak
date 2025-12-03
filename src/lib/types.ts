@@ -49,9 +49,7 @@ export type Question = {
   timelineTitle?: string | null;
   timelineEvents?: TimelineEvent[];
   jokerRotateOnMiss?: boolean | null;
-  jokerPenalty?: number | null;
   timelineRotateOnMiss?: boolean | null;
-  timelinePenalty?: number | null;
 };
 
 export type TeamMap = Record<string, Team>;
