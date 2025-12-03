@@ -601,11 +601,20 @@ export default function GameBoardPage() {
       } else {
         setMcqEliminated((prev) => [...prev, idx]);
         const rotate = activeQuestion.mcqRotateOnMiss ?? true;
-        if (rotate && activeTurnOrder.length > 0) {
-          advanceBoard();
-          const nextId =
-            activeTurnOrder[(boardTurnIndex + 1) % activeTurnOrder.length] ?? "";
-          setSelectedTeamId(nextId);
+        if (rotate) {
+          const orderList =
+            activeTurnOrder.length > 0 ? activeTurnOrder : teams.map((t) => t.id);
+          if (orderList.length > 0) {
+            const currentIdx = orderList.findIndex((id) => id === currentTeamId);
+            const nextId =
+              currentIdx >= 0
+                ? orderList[(currentIdx + 1) % orderList.length]
+                : orderList[0];
+            setSelectedTeamId(nextId);
+            if (activeTurnOrder.length > 0) {
+              advanceBoard();
+            }
+          }
         }
       }
     }
