@@ -63,6 +63,7 @@ export default function GameBoardPage() {
   const [timelineWinnerName, setTimelineWinnerName] = useState<string | null>(null);
   const [timelineNoWinner, setTimelineNoWinner] = useState(false);
   const [timelinePotential, setTimelinePotential] = useState<number>(0);
+  const [showFinalLeaderboard, setShowFinalLeaderboard] = useState(false);
   const prevAnsweringTeamRef = useRef<string | null>(null);
 
   const { turnState, setOrder, advanceBoard, advanceLyrics } = useTurnState();
@@ -344,6 +345,16 @@ export default function GameBoardPage() {
     }
     prevAnsweringTeamRef.current = answeringTeamId ?? null;
   }, [answeringTeamId, activeQuestion?.id, activeQuestion?.type, showAnswer]);
+
+  useEffect(() => {
+    if (activeQuestion) return;
+    if (showFinalLeaderboard) return;
+    if (questions.length === 0) return;
+    const allAnswered = questions.every((q) => q.answered);
+    if (allAnswered) {
+      setShowFinalLeaderboard(true);
+    }
+  }, [questions, activeQuestion, showFinalLeaderboard]);
 
   const toggleGeoLock = () => {
     if (!activeQuestion || activeQuestion.type !== "geoguesser") return;
@@ -869,6 +880,125 @@ export default function GameBoardPage() {
           </div>
         </div>
       )}
+      {showFinalLeaderboard && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.75)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 30,
+            padding: "20px",
+          }}
+          onClick={() => setShowFinalLeaderboard(false)}
+        >
+          <div
+            className="card"
+            style={{
+              position: "relative",
+              maxWidth: "760px",
+              width: "min(92vw, 760px)",
+              padding: "24px",
+              background: "linear-gradient(145deg, rgba(18,22,34,0.95), rgba(26,30,46,0.95))",
+              border: "1px solid rgba(255,255,255,0.14)",
+              boxShadow: "0 18px 48px rgba(0,0,0,0.5)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <div
+                  style={{
+                    letterSpacing: "0.08em",
+                    textTransform: "uppercase",
+                    color: "var(--muted)",
+                    fontWeight: 800,
+                  }}
+                >
+                  All questions answered
+                </div>
+                <h2 style={{ margin: "6px 0 2px", fontSize: "2.2rem" }}>Final leaderboard</h2>
+                <div style={{ color: "var(--muted)" }}>Tap anywhere outside to close</div>
+              </div>
+              <div
+                style={{
+                  width: "68px",
+                  height: "68px",
+                  borderRadius: "50%",
+                  display: "grid",
+                  placeItems: "center",
+                  background:
+                    "radial-gradient(circle at 30% 30%, rgba(255, 215, 0, 0.25), transparent 45%), rgba(255,255,255,0.05)",
+                  border: "1px solid rgba(255,255,255,0.2)",
+                  fontSize: "1.8rem",
+                  boxShadow: "0 10px 30px rgba(0,0,0,0.35)",
+                }}
+              >
+                🏁
+              </div>
+            </div>
+            <div style={{ marginTop: "18px", display: "grid", gap: "12px" }}>
+              {sortedTeams.slice(0, 3).map((team, idx) => {
+                const medal = idx === 0 ? "🥇" : idx === 1 ? "🥈" : "🥉";
+                return (
+                  <div
+                    key={team.id}
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "auto 1fr auto",
+                      alignItems: "center",
+                      gap: "10px",
+                      padding: "12px 14px",
+                      borderRadius: "12px",
+                      background:
+                        idx === 0
+                          ? "linear-gradient(90deg, rgba(255,215,0,0.12), rgba(255,215,0,0.04))"
+                          : "rgba(255,255,255,0.03)",
+                      border: "1px solid rgba(255,255,255,0.08)",
+                    }}
+                  >
+                    <div style={{ fontSize: "1.8rem" }}>{medal}</div>
+                    <div style={{ display: "grid", gap: "4px" }}>
+                      <div style={{ fontWeight: 800, fontSize: "1.2rem" }}>{team.name}</div>
+                      <div
+                        style={{
+                          display: "flex",
+                          flexWrap: "wrap",
+                          gap: "8px",
+                          color: "var(--muted)",
+                        }}
+                      >
+                        {team.players.map((p) => (
+                          <span
+                            key={p.id}
+                            className="jumping-name"
+                            style={{
+                              padding: "4px 8px",
+                              borderRadius: "999px",
+                              background: "rgba(255,255,255,0.06)",
+                              border: "1px solid rgba(255,255,255,0.08)",
+                              fontSize: "0.95rem",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "6px",
+                              animationDelay: `${Math.random() * 0.6}s`,
+                            }}
+                          >
+                            {p.name}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                    <div style={{ fontWeight: 800, fontSize: "1.1rem" }}>{team.score} pts</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
       <style jsx global>{`
         .flip-inner.flipped {
           transform: rotateY(180deg);
@@ -899,6 +1029,16 @@ export default function GameBoardPage() {
         .lyrics-tile.concealed:hover {
           animation: giggle 0.7s ease-in-out infinite;
           box-shadow: 0 8px 18px rgba(0, 0, 0, 0.25);
+        }
+        @keyframes jumpy {
+          0% { transform: translateY(0); }
+          25% { transform: translateY(-6px) rotate(-1deg); }
+          50% { transform: translateY(2px) rotate(1deg); }
+          75% { transform: translateY(-4px) rotate(-0.5deg); }
+          100% { transform: translateY(0); }
+        }
+        .jumping-name {
+          animation: jumpy 1.6s ease-in-out infinite;
         }
         @keyframes boom {
           0% {
