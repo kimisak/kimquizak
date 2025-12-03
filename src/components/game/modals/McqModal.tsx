@@ -93,7 +93,13 @@ export function McqModal({
           {question.prompt}
         </div>
       )}
-      <div style={{ display: "grid", gap: "10px" }}>
+      <div
+        style={{
+          display: "grid",
+          gap: "12px",
+          gridTemplateColumns: options.length === 4 ? "repeat(2, minmax(0,1fr))" : "1fr",
+        }}
+      >
         {options.map((opt, idx) => {
           const disabled = eliminated.includes(idx);
           const isCorrect = resolved && idx === correctIndex;
@@ -109,7 +115,7 @@ export function McqModal({
                 alignItems: "stretch",
                 opacity: disabled ? 0.6 : 1,
                 cursor: disabled || resolved ? "not-allowed" : "pointer",
-                fontSize: "1.05rem",
+                fontSize: "1.2rem",
                 gap: "12px",
                 padding: 0,
                 background: "rgba(255,255,255,0.06)",
@@ -118,6 +124,7 @@ export function McqModal({
                 color: "#fdfdfd",
                 overflow: "hidden",
                 outline: isCorrect ? `2px solid #6ee7b7` : undefined,
+                minHeight: "82px",
               }}
             >
               <span
@@ -138,10 +145,11 @@ export function McqModal({
               </span>
               <span
                 style={{
-                  padding: "14px 16px",
+                  padding: "16px 18px",
                   flex: 1,
                   textAlign: "left",
                   background: "rgba(255,255,255,0.04)",
+                  lineHeight: 1.4,
                 }}
               >
                 {opt || "(empty option)"}
