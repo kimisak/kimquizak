@@ -813,16 +813,14 @@ const JokerFields = React.memo(function JokerFields({
   const [count, setCount] = useState<number>(q?.jokerCount ?? 5);
   const [minVal, setMinVal] = useState<number>(q?.jokerMin ?? 1);
   const [maxVal, setMaxVal] = useState<number>(q?.jokerMax ?? 9);
-  const [increment, setIncrement] = useState<number>(q?.jokerIncrement ?? 100);
   const [rotateOnMiss, setRotateOnMiss] = useState<boolean>(q?.jokerRotateOnMiss ?? true);
 
   React.useEffect(() => {
     setCount(q?.jokerCount ?? 5);
     setMinVal(q?.jokerMin ?? 1);
     setMaxVal(q?.jokerMax ?? 9);
-    setIncrement(q?.jokerIncrement ?? 100);
     setRotateOnMiss(q?.jokerRotateOnMiss ?? true);
-  }, [q?.jokerCount, q?.jokerMin, q?.jokerMax, q?.jokerIncrement, q?.jokerRotateOnMiss]);
+  }, [q?.jokerCount, q?.jokerMin, q?.jokerMax, q?.jokerRotateOnMiss]);
 
   const persist = (next: Partial<Question>) =>
     upsertQuestion(category, points, {
@@ -853,12 +851,6 @@ const JokerFields = React.memo(function JokerFields({
     setMinVal(nextMin);
     setMaxVal(nextMax);
     persistSettings({ jokerMin: nextMin, jokerMax: nextMax });
-  };
-
-  const handleIncrementBlur = () => {
-    const safe = clampInt(Number.isFinite(increment) ? increment : 0, 0, 1000);
-    setIncrement(safe);
-    persistSettings({ jokerIncrement: safe });
   };
 
   return (
@@ -909,22 +901,6 @@ const JokerFields = React.memo(function JokerFields({
             onBlur={() => handleRangeBlur("max")}
           />
         </div>
-      </div>
-      <label className="label" style={{ marginTop: "10px" }}>
-        Points per correct guess
-      </label>
-      <input
-        className="input"
-        type="number"
-        min={0}
-        max={1000}
-        step={10}
-        value={increment}
-        onChange={(e) => setIncrement(Number(e.target.value))}
-        onBlur={handleIncrementBlur}
-      />
-      <div style={{ marginTop: "6px", color: "var(--muted)", fontSize: "0.9rem" }}>
-        Wrong guesses subtract the same amount, down to zero. Joker gives base points + (circles × increment).
       </div>
       <div style={{ display: "grid", gap: "8px", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", marginTop: "10px" }}>
         <label
