@@ -941,22 +941,6 @@ export default function GameBoardPage() {
                 <h2 style={{ margin: "6px 0 2px", fontSize: "2.2rem" }}>Final leaderboard</h2>
                 <div style={{ color: "var(--muted)" }}>Tap outside or hit close</div>
               </div>
-              <div
-                style={{
-                  width: "68px",
-                  height: "68px",
-                  borderRadius: "50%",
-                  display: "grid",
-                  placeItems: "center",
-                  background:
-                    "radial-gradient(circle at 30% 30%, rgba(255, 215, 0, 0.25), transparent 45%), rgba(255,255,255,0.05)",
-                  border: "1px solid rgba(255,255,255,0.2)",
-                  fontSize: "1.8rem",
-                  boxShadow: "0 10px 30px rgba(0,0,0,0.35)",
-                }}
-              >
-                🏁
-              </div>
               <button
                 className="button ghost"
                 onClick={closeFinalLeaderboard}
@@ -982,6 +966,10 @@ export default function GameBoardPage() {
                       background:
                         idx === 0
                           ? "linear-gradient(90deg, rgba(255,215,0,0.12), rgba(255,215,0,0.04))"
+                          : idx === 1
+                          ? "linear-gradient(90deg, rgba(192,192,192,0.14), rgba(192,192,192,0.05))"
+                          : idx === 2
+                          ? "linear-gradient(90deg, rgba(205,127,50,0.16), rgba(205,127,50,0.06))"
                           : "rgba(255,255,255,0.03)",
                       border: "1px solid rgba(255,255,255,0.08)",
                     }}
