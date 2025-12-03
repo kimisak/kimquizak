@@ -101,34 +101,45 @@ export function McqModal({
               onClick={() => onSelect(idx)}
               style={{
                 justifyContent: "flex-start",
+                alignItems: "stretch",
                 opacity: disabled ? 0.6 : 1,
                 cursor: disabled ? "not-allowed" : "pointer",
                 fontSize: "1.05rem",
-                background: disabled
-                  ? "rgba(255,255,255,0.08)"
-                  : `linear-gradient(135deg, ${bg}, rgba(255,255,255,0.12))`,
-                border: "1px solid rgba(255,255,255,0.18)",
+                gap: "12px",
+                padding: 0,
+                background: "rgba(255,255,255,0.06)",
+                border: `1px solid ${bg}`,
                 boxShadow: disabled ? "none" : "0 10px 24px rgba(0,0,0,0.35)",
-                color: "#0b0d13",
+                color: "#fdfdfd",
+                overflow: "hidden",
               }}
             >
               <span
                 style={{
-                  display: "inline-block",
-                  minWidth: "26px",
+                  display: "grid",
+                  placeItems: "center",
+                  minWidth: "56px",
                   textAlign: "center",
-                  borderRadius: "999px",
-                  padding: "4px 8px",
+                  borderRadius: "0",
+                  padding: "0 10px",
                   background: bg,
-                  marginRight: "10px",
+                  borderRight: `1px solid rgba(0,0,0,0.2)`,
                   fontWeight: 800,
                   color: "#0b0d13",
-                  boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
                 }}
               >
                 {String.fromCharCode(65 + idx)}
               </span>
-              {opt || "(empty option)"}
+              <span
+                style={{
+                  padding: "14px 16px",
+                  flex: 1,
+                  textAlign: "left",
+                  background: "rgba(255,255,255,0.04)",
+                }}
+              >
+                {opt || "(empty option)"}
+              </span>
             </button>
           );
         })}
