@@ -2,12 +2,7 @@
 
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { TURN_STATE_STORAGE_KEY } from "@/lib/storage";
-
-export type TurnState = {
-  order: string[];
-  boardIndex: number;
-  lyricsIndex: number;
-};
+import type { TurnState } from "@/lib/types";
 
 export function useTurnState() {
   const [turnState, setTurnState] = usePersistentState<TurnState>(

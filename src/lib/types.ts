@@ -39,3 +39,9 @@ export type Question = {
 
 export type TeamMap = Record<string, Team>;
 export type QuestionMap = Record<string, Question>;
+
+export type TurnState = {
+  order: string[];
+  boardIndex: number;
+  lyricsIndex: number;
+};

@@ -1,3 +1,5 @@
+import { StorageBackupPanel } from "@/components/StorageBackupPanel";
+
 export default function Home() {
   return (
     <main
@@ -49,6 +51,9 @@ export default function Home() {
             Go to board
           </a>
         </div>
+      </div>
+      <div className="card" style={{ padding: "16px 18px", marginTop: "16px" }}>
+        <StorageBackupPanel />
       </div>
     </main>
   );

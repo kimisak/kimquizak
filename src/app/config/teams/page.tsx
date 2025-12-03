@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { TEAM_STORAGE_KEY } from "@/lib/storage";
 import type { Player, Team } from "@/lib/types";
@@ -66,6 +66,61 @@ export default function TeamConfigPage() {
     TEAM_STORAGE_KEY,
     useMemo(() => createDefaultTeams(), []),
   );
+  const [isShuffling, setIsShuffling] = useState(false);
+  const [shuffleMillisLeft, setShuffleMillisLeft] = useState<number | null>(null);
+
+  const shuffleArray = <T,>(arr: T[]) => {
+    const copy = [...arr];
+    for (let i = copy.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [copy[i], copy[j]] = [copy[j], copy[i]];
+    }
+    return copy;
+  };
+
+  const shufflePlayersAcrossTeams = () => {
+    setTeams((prev) => {
+      const counts = prev.map((team) => team.players.length);
+      const allPlayers = prev.flatMap((team) => team.players);
+      if (allPlayers.length === 0) return prev;
+      const shuffled = shuffleArray(allPlayers);
+      let cursor = 0;
+      return prev.map((team, idx) => {
+        const take = counts[idx];
+        const nextPlayers = shuffled.slice(cursor, cursor + take);
+        cursor += take;
+        return { ...team, players: nextPlayers };
+      });
+    });
+  };
+
+  const startShuffling = () => {
+    if (isShuffling) return;
+    const duration = Math.max(1, Math.min(10, Math.floor(Math.random() * 10) + 1));
+    setShuffleMillisLeft(duration * 1000);
+    setIsShuffling(true);
+    shufflePlayersAcrossTeams();
+  };
+
+  useEffect(() => {
+    if (!isShuffling || shuffleMillisLeft === null) return;
+    if (shuffleMillisLeft <= 0) {
+      setIsShuffling(false);
+      setShuffleMillisLeft(null);
+      return;
+    }
+    const id = setTimeout(() => {
+      shufflePlayersAcrossTeams();
+      setShuffleMillisLeft((prev) => (prev !== null ? prev - 500 : prev));
+    }, 500);
+    return () => clearTimeout(id);
+  }, [isShuffling, shuffleMillisLeft, shufflePlayersAcrossTeams]);
+
+  const shuffleLabel = () => {
+    if (!isShuffling) return "Shuffle players across teams";
+    const seconds = shuffleMillisLeft !== null ? Math.max(shuffleMillisLeft, 0) / 1000 : 0;
+    return `Shuffling… ${seconds.toFixed(1)}s`;
+  };
 
   const handleTeamNameChange = (teamId: string, name: string) => {
     setTeams((prev) =>
@@ -160,9 +215,18 @@ export default function TeamConfigPage() {
             Aim for 3–5 teams. All changes are saved locally.
           </p>
         </div>
-        <button className="button primary" onClick={addTeam}>
-          + Add team
-        </button>
+        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+          <button
+            className="button ghost"
+            onClick={startShuffling}
+            disabled={isShuffling}
+          >
+            {shuffleLabel()}
+          </button>
+          <button className="button primary" onClick={addTeam}>
+            + Add team
+          </button>
+        </div>
       </div>
 
       <div
