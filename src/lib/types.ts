@@ -51,6 +51,7 @@ export type Question = {
   timelineEvents?: TimelineEvent[];
   jokerRotateOnMiss?: boolean | null;
   timelineRotateOnMiss?: boolean | null;
+  mcqRotateOnMiss?: boolean | null;
   mcqOptions?: string[];
   mcqCorrectIndex?: number | null;
 };

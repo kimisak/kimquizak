@@ -58,12 +58,15 @@ const McqFields = React.memo(function McqFields({
   q,
   upsertQuestion,
 }: FieldProps) {
-  const [optionCount, setOptionCount] = useState<number>(Math.max(2, Math.min(4, q?.mcqOptions?.length || 2)));
+  const [optionCount, setOptionCount] = useState<number>(
+    Math.max(2, Math.min(4, q?.mcqOptions?.length || 2)),
+  );
   const [options, setOptions] = useState<string[]>(() => {
     const base = q?.mcqOptions && q.mcqOptions.length ? q.mcqOptions : ["", ""];
     return base.slice(0, 4).concat(new Array(Math.max(0, 4 - base.length)).fill(""));
   });
   const [correctIndex, setCorrectIndex] = useState<number>(q?.mcqCorrectIndex ?? 0);
+  const [rotateOnMiss, setRotateOnMiss] = useState<boolean>(q?.mcqRotateOnMiss ?? true);
 
   useEffect(() => {
     const base = q?.mcqOptions && q.mcqOptions.length ? q.mcqOptions : ["", ""];
@@ -71,14 +74,17 @@ const McqFields = React.memo(function McqFields({
     setOptions(normalized);
     setOptionCount(Math.max(2, Math.min(4, q?.mcqOptions?.length || 2)));
     setCorrectIndex(q?.mcqCorrectIndex ?? 0);
-  }, [q?.mcqOptions, q?.mcqCorrectIndex]);
+    setRotateOnMiss(q?.mcqRotateOnMiss ?? true);
+  }, [q?.mcqOptions, q?.mcqCorrectIndex, q?.mcqRotateOnMiss]);
 
-  const persist = (opts: string[], correct: number) => {
-    const trimmed = opts.slice(0, optionCount).map((o) => o.trim());
+  const persist = (opts: string[], correct: number, countOverride?: number) => {
+    const count = countOverride ?? optionCount;
+    const trimmed = opts.slice(0, count).map((o) => o.trim());
     const boundedCorrect = Math.min(trimmed.length - 1, Math.max(0, correct));
     upsertQuestion(category, points, {
       mcqOptions: trimmed,
       mcqCorrectIndex: boundedCorrect,
+      mcqRotateOnMiss: rotateOnMiss,
     });
   };
 
@@ -98,7 +104,7 @@ const McqFields = React.memo(function McqFields({
           setOptions(padded);
           const boundedCorrect = Math.min(next - 1, Math.max(0, correctIndex));
           setCorrectIndex(boundedCorrect);
-          persist(padded, boundedCorrect);
+          persist(padded, boundedCorrect, next);
         }}
         style={{ maxWidth: "140px" }}
       >
@@ -152,8 +158,21 @@ const McqFields = React.memo(function McqFields({
           </div>
         ))}
       </div>
+      <label className="label" style={{ marginTop: "10px", display: "flex", alignItems: "center", gap: "8px" }}>
+        <input
+          type="checkbox"
+          checked={rotateOnMiss}
+          onChange={(e) => {
+            const next = e.target.checked;
+            setRotateOnMiss(next);
+            persist(options, correctIndex, optionCount);
+          }}
+          style={{ width: "16px", height: "16px" }}
+        />
+        Rotate teams on wrong answer
+      </label>
       <div style={{ color: "var(--muted)", fontSize: "0.9rem", marginTop: "6px" }}>
-        Two or four options. Wrong answers rotate to the next team; first correct wins the points.
+        Two or four options. If rotation is on, wrong answers pass to the next team; first correct wins the points.
       </div>
     </>
   );
