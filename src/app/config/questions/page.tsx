@@ -44,12 +44,120 @@ function buildDefaultQuestions(): Question[] {
         timelineEvents: [],
         jokerRotateOnMiss: true,
         timelineRotateOnMiss: true,
+        mcqOptions: [],
+        mcqCorrectIndex: 0,
       });
     });
   });
   return rows;
 }
 
+const McqFields = React.memo(function McqFields({
+  category,
+  points,
+  q,
+  upsertQuestion,
+}: FieldProps) {
+  const [optionCount, setOptionCount] = useState<number>(Math.max(2, Math.min(4, q?.mcqOptions?.length || 2)));
+  const [options, setOptions] = useState<string[]>(() => {
+    const base = q?.mcqOptions && q.mcqOptions.length ? q.mcqOptions : ["", ""];
+    return base.slice(0, 4).concat(new Array(Math.max(0, 4 - base.length)).fill(""));
+  });
+  const [correctIndex, setCorrectIndex] = useState<number>(q?.mcqCorrectIndex ?? 0);
+
+  useEffect(() => {
+    const base = q?.mcqOptions && q.mcqOptions.length ? q.mcqOptions : ["", ""];
+    const normalized = base.slice(0, 4).concat(new Array(Math.max(0, 4 - base.length)).fill(""));
+    setOptions(normalized);
+    setOptionCount(Math.max(2, Math.min(4, q?.mcqOptions?.length || 2)));
+    setCorrectIndex(q?.mcqCorrectIndex ?? 0);
+  }, [q?.mcqOptions, q?.mcqCorrectIndex]);
+
+  const persist = (opts: string[], correct: number) => {
+    const trimmed = opts.slice(0, optionCount).map((o) => o.trim());
+    const boundedCorrect = Math.min(trimmed.length - 1, Math.max(0, correct));
+    upsertQuestion(category, points, {
+      mcqOptions: trimmed,
+      mcqCorrectIndex: boundedCorrect,
+    });
+  };
+
+  return (
+    <>
+      <label className="label" style={{ marginTop: "8px" }}>
+        Number of options
+      </label>
+      <select
+        className="input"
+        value={optionCount}
+        onChange={(e) => {
+          const next = Number(e.target.value);
+          setOptionCount(next);
+          const trimmed = options.slice(0, next);
+          const padded = trimmed.concat(new Array(Math.max(0, 4 - trimmed.length)).fill(""));
+          setOptions(padded);
+          const boundedCorrect = Math.min(next - 1, Math.max(0, correctIndex));
+          setCorrectIndex(boundedCorrect);
+          persist(padded, boundedCorrect);
+        }}
+        style={{ maxWidth: "140px" }}
+      >
+        <option value={2}>2 options</option>
+        <option value={4}>4 options</option>
+      </select>
+      <label className="label" style={{ marginTop: "8px" }}>
+        Prompt
+      </label>
+      <textarea
+        value={q?.prompt ?? ""}
+        onChange={(e) => upsertQuestion(category, points, { prompt: e.target.value })}
+        style={{
+          width: "100%",
+          minHeight: "70px",
+          borderRadius: "10px",
+          border: "1px solid rgba(255,255,255,0.12)",
+          background: "rgba(255,255,255,0.04)",
+          color: "var(--foreground)",
+          padding: "10px",
+        }}
+        placeholder="Question text"
+      />
+      <div style={{ display: "grid", gap: "8px", marginTop: "8px" }}>
+        {options.slice(0, optionCount).map((opt, idx) => (
+          <div key={idx} style={{ display: "grid", gap: "6px" }}>
+            <label className="label" style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <input
+                type="radio"
+                name={`correct-${category}-${points}`}
+                checked={correctIndex === idx}
+                onChange={() => {
+                  setCorrectIndex(idx);
+                  persist(options, idx);
+                }}
+                style={{ width: "16px", height: "16px" }}
+              />
+              Correct
+            </label>
+            <input
+              className="input"
+              value={opt}
+              onChange={(e) => {
+                const nextOpts = [...options];
+                nextOpts[idx] = e.target.value;
+                setOptions(nextOpts);
+              }}
+              onBlur={() => persist(options, correctIndex)}
+              placeholder={`Option ${idx + 1}`}
+            />
+          </div>
+        ))}
+      </div>
+      <div style={{ color: "var(--muted)", fontSize: "0.9rem", marginTop: "6px" }}>
+        Two or four options. Wrong answers rotate to the next team; first correct wins the points.
+      </div>
+    </>
+  );
+});
 export default function QuestionConfigPage() {
   const [isClient, setIsClient] = useState(false);
   const [questions, setQuestions] = usePersistentState<Question[]>(
@@ -137,6 +245,8 @@ export default function QuestionConfigPage() {
           timelineEvents: [],
           jokerRotateOnMiss: true,
           timelineRotateOnMiss: true,
+          mcqOptions: [],
+          mcqCorrectIndex: 0,
           ...updates,
         },
       ];
@@ -178,6 +288,8 @@ export default function QuestionConfigPage() {
           timelineEvents: [],
           jokerRotateOnMiss: true,
           timelineRotateOnMiss: true,
+          mcqOptions: [],
+          mcqCorrectIndex: 0,
       }));
       return [...prev, ...additions];
     });
@@ -1256,6 +1368,7 @@ const TimelineFields = React.memo(function TimelineFields({
                           <option value="geoguesser">Geoguesser</option>
                           <option value="joker">Joker high/low</option>
                           <option value="timeline">Timeline</option>
+                          <option value="mcq">Multiple choice</option>
                         </select>
                       </div>
                       {q?.answered && (
@@ -1302,6 +1415,14 @@ const TimelineFields = React.memo(function TimelineFields({
                     )}
                     {(q?.type ?? "standard") === "timeline" && (
                       <TimelineFields
+                        category={category}
+                        points={points}
+                        q={q}
+                        upsertQuestion={upsertQuestion}
+                      />
+                    )}
+                    {(q?.type ?? "standard") === "mcq" && (
+                      <McqFields
                         category={category}
                         points={points}
                         q={q}

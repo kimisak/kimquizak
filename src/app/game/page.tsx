@@ -9,6 +9,7 @@ import {
   type JokerProgress,
   type JokerRound,
 } from "@/components/game/modals/JokerModal";
+import { McqModal } from "@/components/game/modals/McqModal";
 import { TimelineModal } from "@/components/game/modals/TimelineModal";
 import { LyricsModal } from "@/components/game/modals/LyricsModal";
 import { StandardModal } from "@/components/game/modals/StandardModal";
@@ -65,6 +66,7 @@ export default function GameBoardPage() {
   const [timelinePotential, setTimelinePotential] = useState<number>(0);
   const [showFinalLeaderboard, setShowFinalLeaderboard] = useState(false);
   const [finalLeaderboardShown, setFinalLeaderboardShown] = useState(false);
+  const [mcqEliminated, setMcqEliminated] = useState<number[]>([]);
   const prevAnsweringTeamRef = useRef<string | null>(null);
 
   const { turnState, setOrder, advanceBoard, advanceLyrics, setTurnState } = useTurnState();
@@ -175,6 +177,7 @@ export default function GameBoardPage() {
       normalized = { ...question, lyricsRedPattern: pattern };
       setLyricsPattern(pattern);
       setTurnState((prev) => ({ ...prev, lyricsIndex: prev.boardIndex }));
+      setMcqEliminated([]);
     }
     if (question.type === "geoguesser") {
       const duration = question.geoTimerSeconds ?? 10;
@@ -252,6 +255,7 @@ export default function GameBoardPage() {
     setGeoTimerUsed(false);
     setGeoCountdown(null);
     setMapLocked(true);
+    setMcqEliminated([]);
     if (normalized.type === "lyrics") {
       const len = normalized.lyricsSegments?.length ?? 0;
       setLyricsRevealed(new Array(len).fill(false));
@@ -286,6 +290,7 @@ export default function GameBoardPage() {
     setJokerProgress(null);
     setShowJokerConfetti(false);
     resetTimelineState();
+    setMcqEliminated([]);
   };
 
   const handleRevealLine = (idx: number) => {
@@ -520,6 +525,30 @@ export default function GameBoardPage() {
     closeModal();
   };
 
+  const handleMcqSelect = (idx: number) => {
+    if (!activeQuestion || activeQuestion.type !== "mcq") return;
+    const opts = activeQuestion.mcqOptions ?? [];
+    if (!opts.length) return;
+    if (mcqEliminated.includes(idx)) return;
+    const currentTeamId = lastGuessTeamId || selectedTeamId || getBoardTeamId();
+    if (currentTeamId) {
+      setLastGuessTeamId(currentTeamId);
+    }
+    const correctIdx = activeQuestion.mcqCorrectIndex ?? 0;
+    const isCorrect = idx === correctIdx;
+    if (isCorrect) {
+      markAnswered(true);
+    } else {
+      setMcqEliminated((prev) => [...prev, idx]);
+      if (activeTurnOrder.length > 0) {
+        advanceBoard();
+        const nextId =
+          activeTurnOrder[(boardTurnIndex + 1) % activeTurnOrder.length] ?? "";
+        setSelectedTeamId(nextId);
+      }
+    }
+  };
+
   const handleTimelinePlace = (slot: { index: number; onYear?: number | null }) => {
     if (!activeQuestion || activeQuestion.type !== "timeline") return;
     const currentTeamId = getActiveTimelineTeamId();
@@ -688,6 +717,19 @@ export default function GameBoardPage() {
           disableActions={!answeringTeam}
           countdownSeconds={geoCountdown}
           timerUsed={geoTimerUsed}
+        />
+      );
+    }
+    if (activeQuestion.type === "mcq") {
+      return (
+        <McqModal
+          question={activeQuestion}
+          teams={teams}
+          currentTeamName={currentTeam?.name}
+          answeringTeamName={answeringTeam?.name}
+          eliminated={mcqEliminated}
+          onSelect={handleMcqSelect}
+          onClose={closeModal}
         />
       );
     }
