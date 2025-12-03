@@ -541,6 +541,7 @@ export default function GameBoardPage() {
     const correctIdx = activeQuestion.mcqCorrectIndex ?? 0;
     const isCorrect = idx === correctIdx;
     if (isCorrect) {
+      playSuccessChime();
       if (currentTeamId) {
         setTeams((prev) =>
           prev.map((team) =>
@@ -560,6 +561,7 @@ export default function GameBoardPage() {
       }
       setMcqResolved(true);
     } else {
+      playDownbeat();
       setMcqEliminated((prev) => [...prev, idx]);
       const rotate =
         (activeQuestion.mcqOptions?.length ?? 0) >= 4
