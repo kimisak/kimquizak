@@ -32,6 +32,7 @@ function buildDefaultQuestions(): Question[] {
         answerLocationLabel: null,
         answerLocationUrl: null,
         answerVideoUrl: null,
+        answerVideoAutoplay: true,
       });
     });
   });
@@ -102,6 +103,7 @@ export default function QuestionConfigPage() {
           answerLocationLabel: null,
           answerLocationUrl: null,
           answerVideoUrl: null,
+          answerVideoAutoplay: true,
           ...updates,
         },
       ];
@@ -131,6 +133,7 @@ export default function QuestionConfigPage() {
         answerLocationLabel: null,
         answerLocationUrl: null,
         answerVideoUrl: null,
+        answerVideoAutoplay: true,
       }));
       return [...prev, ...additions];
     });
@@ -452,13 +455,15 @@ const LyricsFields = React.memo(function LyricsFields(props: FieldProps) {
   const [lyrics, setLyrics] = useState((q?.lyricsSegments ?? []).join("\n"));
   const [answer, setAnswer] = useState(q?.answer ?? "");
   const [answerVideoUrl, setAnswerVideoUrl] = useState(q?.answerVideoUrl ?? "");
+  const [autoplay, setAutoplay] = useState(q?.answerVideoAutoplay ?? true);
 
   React.useEffect(() => {
     setPrompt(q?.prompt ?? "");
     setLyrics((q?.lyricsSegments ?? []).join("\n"));
     setAnswer(q?.answer ?? "");
     setAnswerVideoUrl(q?.answerVideoUrl ?? "");
-  }, [q?.prompt, q?.lyricsSegments, q?.answer, q?.answerVideoUrl]);
+    setAutoplay(q?.answerVideoAutoplay ?? true);
+  }, [q?.prompt, q?.lyricsSegments, q?.answer, q?.answerVideoUrl, q?.answerVideoAutoplay]);
 
   return (
     <>
@@ -496,6 +501,29 @@ const LyricsFields = React.memo(function LyricsFields(props: FieldProps) {
         }
         placeholder="https://youtube.com/watch?v=..."
       />
+      <label
+        className="label"
+        style={{
+          marginTop: "6px",
+          display: "inline-flex",
+          alignItems: "center",
+          gap: "8px",
+          cursor: "pointer",
+          userSelect: "none",
+        }}
+      >
+        <input
+          type="checkbox"
+          checked={autoplay}
+          onChange={(e) => {
+            const next = e.target.checked;
+            setAutoplay(next);
+            upsertQuestion(category, points, { answerVideoAutoplay: next });
+          }}
+          style={{ width: "16px", height: "16px" }}
+        />
+        Autoplay video when revealing answer
+      </label>
       <label className="label" style={{ marginTop: "8px" }}>
         Lyrics lines (one per line)
       </label>

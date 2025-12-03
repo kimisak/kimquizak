@@ -83,10 +83,13 @@ export default function GameBoardPage() {
     lyricsRevealed.length === (activeQuestion?.lyricsSegments?.length ?? 0) &&
     lyricsRevealed.every(Boolean);
 
-  const buildVideoSrc = (url: string | null) => {
+  const buildVideoSrc = (url: string | null, shouldAutoplay: boolean) => {
     if (!url) return "";
     const joiner = url.includes("?") ? "&" : "?";
-    return showAnswer ? `${url}${joiner}autoplay=1&playsinline=1` : url;
+    if (showAnswer && shouldAutoplay) {
+      return `${url}${joiner}autoplay=1&playsinline=1`;
+    }
+    return url;
   };
 
   const isRedLyric = (idx: number) =>
@@ -275,7 +278,10 @@ export default function GameBoardPage() {
 
   const renderModal = () => {
     if (!activeQuestion) return null;
-    const answerVideoUrl = buildVideoSrc(activeQuestion.answerVideoUrl || null);
+    const answerVideoUrl = buildVideoSrc(
+      activeQuestion.answerVideoUrl || null,
+      activeQuestion.answerVideoAutoplay ?? true,
+    );
 
     if (activeQuestion.type === "lyrics") {
       return (
