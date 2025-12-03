@@ -289,10 +289,9 @@ export function GeoguesserModal({
                     src={question.mapEmbedUrl}
                     style={{
                       width: "100%",
-                      height: "800px",
+                      height: "100%",
                       border: "0",
-                      marginTop: "-200px",
-                      pointerEvents: mapLocked ? "none" : "auto",
+                      pointerEvents: "auto",
                     }}
                     allowFullScreen
                     loading="lazy"
