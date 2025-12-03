@@ -292,14 +292,17 @@ export function GeoguesserModal({
                     overflow: "hidden",
                     border: "1px solid rgba(255,255,255,0.12)",
                     height: "320px",
+                    position: "relative",
+                    background: "rgba(255,255,255,0.04)",
                   }}
                 >
                   <iframe
                     src={question.mapEmbedUrl}
                     style={{
                       width: "100%",
-                      height: "100%",
+                      height: "620px",
                       border: "0",
+                      marginTop: "-150px",
                       pointerEvents: "auto",
                     }}
                     allowFullScreen
