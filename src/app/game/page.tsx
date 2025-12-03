@@ -575,9 +575,11 @@ export default function GameBoardPage() {
       playDownbeat();
       setMcqEliminated((prev) => [...prev, idx]);
       const rotate =
-        (activeQuestion.mcqOptions?.length ?? 0) >= 4
-          ? activeQuestion.mcqRotateOnMiss ?? true
-          : false;
+        (() => {
+          const raw = activeQuestion.mcqOptions ?? [];
+          const hasFour = raw.length >= 4 && raw.slice(2).some((o) => (o ?? "").trim() !== "");
+          return hasFour ? activeQuestion.mcqRotateOnMiss ?? true : false;
+        })();
       if (rotate && activeTurnOrder.length > 0) {
         advanceBoard();
         const nextId =
