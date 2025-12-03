@@ -178,8 +178,10 @@ export function McqModal({
                 }${resolvedInfo.points} pts`
               : "Close when ready."}
           </span>
-        ) : (
+        ) : options.length === 4 ? (
           "Wrong answers pass to the next team. First correct wins the points."
+        ) : (
+          "Two-option mode: a wrong answer ends the question and costs points."
         )}
       </div>
     </div>
