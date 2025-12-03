@@ -62,12 +62,20 @@ function createDefaultTeams(): Team[] {
 }
 
 export default function TeamConfigPage() {
+  const [hydrated, setHydrated] = useState(false);
   const [teams, setTeams] = usePersistentState<Team[]>(
     TEAM_STORAGE_KEY,
-    useMemo(() => createDefaultTeams(), []),
+    [],
   );
   const [isShuffling, setIsShuffling] = useState(false);
   const [shuffleMillisLeft, setShuffleMillisLeft] = useState<number | null>(null);
+
+  useEffect(() => {
+    setHydrated(true);
+    if (teams.length === 0) {
+      setTeams(createDefaultTeams());
+    }
+  }, [teams.length, setTeams]);
 
   const shuffleArray = <T,>(arr: T[]) => {
     const copy = [...arr];
@@ -121,6 +129,15 @@ export default function TeamConfigPage() {
     const seconds = shuffleMillisLeft !== null ? Math.max(shuffleMillisLeft, 0) / 1000 : 0;
     return `Shuffling… ${seconds.toFixed(1)}s`;
   };
+
+  if (!hydrated) {
+    return (
+      <main className="card" style={{ padding: "24px" }}>
+        <h1 style={{ margin: 0 }}>Teams & Players</h1>
+        <p style={{ color: "var(--muted)", marginTop: "6px" }}>Loading…</p>
+      </main>
+    );
+  }
 
   const handleTeamNameChange = (teamId: string, name: string) => {
     setTeams((prev) =>

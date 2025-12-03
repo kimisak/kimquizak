@@ -33,6 +33,12 @@ function buildDefaultQuestions(): Question[] {
         answerLocationUrl: null,
         answerVideoUrl: null,
         answerVideoAutoplay: true,
+        jokerCount: 5,
+        jokerMin: 1,
+        jokerMax: 9,
+        jokerIncrement: 100,
+        timelineCenterYear: 2000,
+        timelineEvents: [],
       });
     });
   });
@@ -40,19 +46,32 @@ function buildDefaultQuestions(): Question[] {
 }
 
 export default function QuestionConfigPage() {
+  const [isClient, setIsClient] = useState(false);
   const [questions, setQuestions] = usePersistentState<Question[]>(
     QUESTION_STORAGE_KEY,
-    useMemo(() => buildDefaultQuestions(), []),
+    [],
   );
   const [newCategory, setNewCategory] = useState("");
   const [categoryNames, setCategoryNames] = useState<Record<string, string>>({});
 
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isClient) return;
+    if (questions.length === 0) {
+      setQuestions(buildDefaultQuestions());
+    }
+  }, [isClient, questions.length, setQuestions]);
+
   const categories = useMemo(() => {
-    const existing = Array.from(new Set(questions.map((q) => q.category)));
+    const list = isClient ? questions : [];
+    const existing = Array.from(new Set(list.map((q) => q.category)));
     return newCategory && !existing.includes(newCategory)
       ? [...existing, newCategory]
       : existing;
-  }, [questions, newCategory]);
+  }, [questions, newCategory, isClient]);
 
   useEffect(() => {
     setCategoryNames((prev) => {
@@ -104,6 +123,12 @@ export default function QuestionConfigPage() {
           answerLocationUrl: null,
           answerVideoUrl: null,
           answerVideoAutoplay: true,
+          jokerCount: 5,
+          jokerMin: 1,
+          jokerMax: 9,
+          jokerIncrement: 100,
+          timelineCenterYear: 2000,
+          timelineEvents: [],
           ...updates,
         },
       ];
@@ -132,8 +157,14 @@ export default function QuestionConfigPage() {
         mapEmbedUrl: null,
         answerLocationLabel: null,
         answerLocationUrl: null,
-        answerVideoUrl: null,
-        answerVideoAutoplay: true,
+          answerVideoUrl: null,
+          answerVideoAutoplay: true,
+          jokerCount: 5,
+          jokerMin: 1,
+          jokerMax: 9,
+          jokerIncrement: 100,
+          timelineCenterYear: 2000,
+          timelineEvents: [],
       }));
       return [...prev, ...additions];
     });
@@ -236,7 +267,7 @@ type FieldProps = {
     points: PointValue,
     file: File | null,
   ) => void;
-  handleAnswerImageChange: (
+  handleAnswerImageChange?: (
     category: string,
     points: PointValue,
     file: File | null,
@@ -249,7 +280,7 @@ const StandardFields = React.memo(function StandardFields({
   q,
   upsertQuestion,
   handleImageChange,
-  handleAnswerImageChange,
+  handleAnswerImageChange = () => {},
 }: FieldProps) {
   const [prompt, setPrompt] = useState(q?.prompt ?? "");
   const [answer, setAnswer] = useState(q?.answer ?? "");
@@ -580,7 +611,7 @@ const GeoguesserFields = React.memo(function GeoguesserFields({
   points,
   q,
   upsertQuestion,
-  handleAnswerImageChange,
+  handleAnswerImageChange = () => {},
 }: FieldProps) {
   const [prompt, setPrompt] = useState(q?.prompt ?? "");
   const [mapUrl, setMapUrl] = useState(q?.mapEmbedUrl ?? "");
@@ -763,6 +794,228 @@ const GeoguesserFields = React.memo(function GeoguesserFields({
   );
 });
 
+const JokerFields = React.memo(function JokerFields({
+  category,
+  points,
+  q,
+  upsertQuestion,
+}: FieldProps) {
+  const [count, setCount] = useState<number>(q?.jokerCount ?? 5);
+  const [minVal, setMinVal] = useState<number>(q?.jokerMin ?? 1);
+  const [maxVal, setMaxVal] = useState<number>(q?.jokerMax ?? 9);
+  const [increment, setIncrement] = useState<number>(q?.jokerIncrement ?? 100);
+
+  React.useEffect(() => {
+    setCount(q?.jokerCount ?? 5);
+    setMinVal(q?.jokerMin ?? 1);
+    setMaxVal(q?.jokerMax ?? 9);
+    setIncrement(q?.jokerIncrement ?? 100);
+  }, [q?.jokerCount, q?.jokerMin, q?.jokerMax, q?.jokerIncrement]);
+
+  const persist = (next: Partial<Question>) =>
+    upsertQuestion(category, points, {
+      ...next,
+    });
+
+  const clampInt = (value: number, min: number, max: number) =>
+    Math.min(max, Math.max(min, Math.round(value)));
+
+  const handleCountBlur = () => {
+    const safe = clampInt(count || 5, 3, 9);
+    setCount(safe);
+    persist({ jokerCount: safe });
+  };
+
+  const handleRangeBlur = (which: "min" | "max") => {
+    let nextMin = minVal || 1;
+    let nextMax = maxVal || 9;
+    nextMin = clampInt(nextMin, -50, 50);
+    nextMax = clampInt(nextMax, -50, 50);
+    if (nextMin >= nextMax) {
+      if (which === "min") nextMax = nextMin + 1;
+      else nextMin = nextMax - 1;
+    }
+    setMinVal(nextMin);
+    setMaxVal(nextMax);
+    persist({ jokerMin: nextMin, jokerMax: nextMax });
+  };
+
+  const handleIncrementBlur = () => {
+    const safe = clampInt(increment || 100, 10, 1000);
+    setIncrement(safe);
+    persist({ jokerIncrement: safe });
+  };
+
+  return (
+    <>
+      <div
+        style={{
+          padding: "10px",
+          borderRadius: "12px",
+          border: "1px solid rgba(255,255,255,0.12)",
+          background: "rgba(255,255,255,0.04)",
+          color: "var(--muted)",
+          marginBottom: "8px",
+          fontSize: "0.95rem",
+          lineHeight: 1.4,
+        }}
+      >
+        Configure how many circles to play, the number range, and the score per correct guess.
+        A hidden 🎩 Joker awards the max score possible for this round.
+      </div>
+      <label className="label">Circles per row</label>
+      <input
+        className="input"
+        type="number"
+        min={3}
+        max={9}
+        value={count}
+        onChange={(e) => setCount(Number(e.target.value))}
+        onBlur={handleCountBlur}
+      />
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "10px", marginTop: "10px" }}>
+        <div>
+          <label className="label">Min value</label>
+          <input
+            className="input"
+            type="number"
+          value={minVal}
+          onChange={(e) => setMinVal(Number(e.target.value))}
+          onBlur={() => handleRangeBlur("min")}
+        />
+      </div>
+      <div>
+        <label className="label">Max value</label>
+        <input
+            className="input"
+            type="number"
+            value={maxVal}
+            onChange={(e) => setMaxVal(Number(e.target.value))}
+            onBlur={() => handleRangeBlur("max")}
+          />
+        </div>
+      </div>
+      <label className="label" style={{ marginTop: "10px" }}>
+        Points per correct guess
+      </label>
+      <input
+        className="input"
+        type="number"
+        min={10}
+        max={1000}
+        step={10}
+        value={increment}
+        onChange={(e) => setIncrement(Number(e.target.value))}
+        onBlur={handleIncrementBlur}
+      />
+      <div style={{ marginTop: "6px", color: "var(--muted)", fontSize: "0.9rem" }}>
+        Wrong guesses subtract the same amount, down to zero. Joker gives base points + (circles × increment).
+      </div>
+    </>
+  );
+});
+
+const TimelineFields = React.memo(function TimelineFields({
+  category,
+  points,
+  q,
+  upsertQuestion,
+}: FieldProps) {
+  const [centerYear, setCenterYear] = useState<number>(q?.timelineCenterYear ?? 2000);
+  const [bulkEvents, setBulkEvents] = useState(
+    (q?.timelineEvents ?? [])
+      .map((ev) => `${Math.abs(ev.year ?? 0)} ${ev.year && ev.year < 0 ? "BC" : "AC"}, ${ev.text}`)
+      .join("\n"),
+  );
+
+  React.useEffect(() => {
+    setCenterYear(q?.timelineCenterYear ?? 2000);
+    setBulkEvents(
+      (q?.timelineEvents ?? [])
+        .map((ev) => `${Math.abs(ev.year ?? 0)}, ${ev.text}, ${ev.year && ev.year < 0 ? "BC" : "AC"}`)
+        .join("\n"),
+    );
+  }, [q?.timelineCenterYear, q?.timelineEvents]);
+
+  const persistCenterYear = () => {
+    const safe = Number.isFinite(centerYear) ? Math.round(centerYear) : 2000;
+    setCenterYear(safe);
+    upsertQuestion(category, points, { timelineCenterYear: safe });
+  };
+
+  const parseBulkEvents = (raw: string): Question["timelineEvents"] => {
+    return raw
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => {
+        // Expect "YEAR AC/BC, Event text"
+        const [yearPart, ...rest] = line.split(",").map((p) => p.trim());
+        const text = rest.join(", ");
+        const yearTokens = (yearPart || "").split(/\s+/);
+        const yearNum = Number(yearTokens[0]);
+        const eraToken = (yearTokens[1] || "AC").toUpperCase();
+        const signedYear = Number.isFinite(yearNum)
+          ? eraToken === "BC"
+            ? -Math.abs(yearNum)
+            : Math.abs(yearNum)
+          : null;
+        return {
+          id: makeId("timeline"),
+          text,
+          year: signedYear,
+          isBC: eraToken === "BC",
+        };
+      });
+  };
+
+  return (
+    <>
+      <div
+        style={{
+          padding: "10px",
+          borderRadius: "12px",
+          border: "1px solid rgba(255,255,255,0.12)",
+          background: "rgba(255,255,255,0.04)",
+          color: "var(--muted)",
+          marginBottom: "8px",
+          fontSize: "0.95rem",
+          lineHeight: 1.4,
+        }}
+      >
+        Enter timeline events as one per line: YEAR AC/BC, Event. BC years will be stored as
+        negative; AC/AD is implied if omitted. The center year anchors the starting point.
+      </div>
+      <label className="label">Center year</label>
+      <input
+        className="input"
+        type="number"
+        value={centerYear}
+        onChange={(e) => setCenterYear(Number(e.target.value))}
+        onBlur={persistCenterYear}
+      />
+      <label className="label" style={{ marginTop: "10px" }}>
+        Events (one per line: YEAR AC/BC, Event)
+      </label>
+      <textarea
+        className="input"
+        style={{ minHeight: "160px" }}
+        value={bulkEvents}
+        onChange={(e) => {
+          setBulkEvents(e.target.value);
+        }}
+        onBlur={() => {
+          const parsed = parseBulkEvents(bulkEvents);
+          upsertQuestion(category, points, { timelineEvents: parsed });
+        }}
+        placeholder={`e.g.
+1998 AC, Google founded
+44 BC, Julius Caesar assassinated`}
+      />
+    </>
+  );
+});
+
   return (
     <main className="card" style={{ padding: "24px" }}>
       <div
@@ -898,6 +1151,8 @@ const GeoguesserFields = React.memo(function GeoguesserFields({
                           <option value="standard">Standard</option>
                           <option value="lyrics">Lyrics grid</option>
                           <option value="geoguesser">Geoguesser</option>
+                          <option value="joker">Joker high/low</option>
+                          <option value="timeline">Timeline</option>
                         </select>
                       </div>
                       {q?.answered && (
@@ -932,6 +1187,22 @@ const GeoguesserFields = React.memo(function GeoguesserFields({
                         q={q}
                         upsertQuestion={upsertQuestion}
                         handleAnswerImageChange={handleAnswerImageChange}
+                      />
+                    )}
+                    {(q?.type ?? "standard") === "joker" && (
+                      <JokerFields
+                        category={category}
+                        points={points}
+                        q={q}
+                        upsertQuestion={upsertQuestion}
+                      />
+                    )}
+                    {(q?.type ?? "standard") === "timeline" && (
+                      <TimelineFields
+                        category={category}
+                        points={points}
+                        q={q}
+                        upsertQuestion={upsertQuestion}
                       />
                     )}
                   </div>

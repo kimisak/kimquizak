@@ -27,7 +27,7 @@ export type Question = {
   imageName?: string | null;
   answerImageData?: string | null;
   answerImageName?: string | null;
-  type?: "standard" | "lyrics" | "geoguesser";
+  type?: "standard" | "lyrics" | "geoguesser" | "joker" | "timeline";
   lyricsSegments?: string[];
   mapEmbedUrl?: string | null;
   answerLocationLabel?: string | null;
@@ -36,6 +36,16 @@ export type Question = {
   answerVideoAutoplay?: boolean | null;
   geoTimerSeconds?: number | null;
   lyricsRedPattern?: number[];
+  jokerNumbers?: number[];
+  jokerTargets?: number[];
+  jokerJokerIndex?: number | null;
+  jokerJokerPosition?: "above" | "below" | null;
+  jokerCount?: number | null;
+  jokerMin?: number | null;
+  jokerMax?: number | null;
+  jokerIncrement?: number | null;
+  timelineCenterYear?: number | null;
+  timelineEvents?: TimelineEvent[];
 };
 
 export type TeamMap = Record<string, Team>;
@@ -45,4 +55,11 @@ export type TurnState = {
   order: string[];
   boardIndex: number;
   lyricsIndex: number;
+};
+
+export type TimelineEvent = {
+  id: string;
+  text: string;
+  year: number | null;
+  isBC?: boolean | null;
 };

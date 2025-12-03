@@ -9,6 +9,7 @@ import {
   type JokerProgress,
   type JokerRound,
 } from "@/components/game/modals/JokerModal";
+import { TimelineModal } from "@/components/game/modals/TimelineModal";
 import { LyricsModal } from "@/components/game/modals/LyricsModal";
 import { StandardModal } from "@/components/game/modals/StandardModal";
 import { useAudioCue } from "@/hooks/useAudioCue";
@@ -47,6 +48,13 @@ export default function GameBoardPage() {
   const [jokerRound, setJokerRound] = useState<JokerRound | null>(null);
   const [jokerProgress, setJokerProgress] = useState<JokerProgress | null>(null);
   const [showJokerConfetti, setShowJokerConfetti] = useState(false);
+  const [timelineQueue, setTimelineQueue] = useState<Question["timelineEvents"]>([]);
+  const [timelinePlacedLeft, setTimelinePlacedLeft] = useState<Question["timelineEvents"]>([]);
+  const [timelinePlacedRight, setTimelinePlacedRight] = useState<Question["timelineEvents"]>([]);
+  const [timelineCenterYear, setTimelineCenterYear] = useState<number>(2000);
+  const [timelineTeamIndex, setTimelineTeamIndex] = useState(0);
+  const [timelineLastCorrectTeamId, setTimelineLastCorrectTeamId] = useState<string | null>(null);
+  const [timelineWinnerName, setTimelineWinnerName] = useState<string | null>(null);
   const prevAnsweringTeamRef = useRef<string | null>(null);
 
   const { turnState, setOrder, advanceBoard, advanceLyrics } = useTurnState();
@@ -117,9 +125,34 @@ export default function GameBoardPage() {
     setSelectedTeamId("");
   };
 
+  const resetTimelineState = () => {
+    setTimelineQueue([]);
+    setTimelinePlacedLeft([]);
+    setTimelinePlacedRight([]);
+    setTimelineCenterYear(2000);
+    setTimelineTeamIndex(0);
+    setTimelineLastCorrectTeamId(null);
+    setTimelineWinnerName(null);
+  };
+
+  const getActiveTimelineTeamId = () => {
+    const orderList =
+      turnOrder.length > 0 ? activeTurnOrder : teams.map((t) => t.id);
+    if (!orderList.length) return "";
+    return orderList[timelineTeamIndex % orderList.length];
+  };
+
+  const advanceTimelineTeam = () => {
+    const orderList =
+      turnOrder.length > 0 ? activeTurnOrder : teams.map((t) => t.id);
+    if (!orderList.length) return;
+    setTimelineTeamIndex((idx) => (idx + 1) % orderList.length);
+  };
+
   const openQuestion = (question: Question) => {
     setJokerRound(null);
     setJokerProgress(null);
+    resetTimelineState();
     let normalized = question;
     if (question.type === "lyrics") {
       const pattern = generateRedPattern(question.lyricsSegments?.length ?? 0);
@@ -174,6 +207,21 @@ export default function GameBoardPage() {
         chosenPositions: new Array(numbers.length).fill(null),
       });
     }
+    if (question.type === "timeline") {
+      const events = shuffle([...(question.timelineEvents ?? [])]);
+      setTimelineQueue(events);
+      setTimelinePlacedLeft([]);
+      setTimelinePlacedRight([]);
+      setTimelineCenterYear(question.timelineCenterYear ?? 2000);
+      setTimelineTeamIndex(0);
+      setTimelineLastCorrectTeamId(null);
+      setTimelineWinnerName(null);
+      const boardId =
+        activeTurnOrder.length > 0
+          ? activeTurnOrder[boardTurnIndex % activeTurnOrder.length]
+          : teams[0]?.id ?? "";
+      setSelectedTeamId(boardId);
+    }
     setActiveQuestion(normalized);
     setShowAnswer(false);
     setGeoTimerUsed(false);
@@ -210,6 +258,7 @@ export default function GameBoardPage() {
     setJokerRound(null);
     setJokerProgress(null);
     setShowJokerConfetti(false);
+    resetTimelineState();
   };
 
   const handleRevealLine = (idx: number) => {
@@ -408,6 +457,78 @@ export default function GameBoardPage() {
     closeModal();
   };
 
+  const handleTimelinePlace = (slot: { index: number; onYear?: number | null }) => {
+    if (!activeQuestion || activeQuestion.type !== "timeline") return;
+    const currentTeamId = getActiveTimelineTeamId();
+    const current = timelineQueue?.[0];
+    if (!current || current.year === null || current.year === undefined) {
+      return;
+    }
+
+    const remaining = (timelineQueue ?? []).slice(1);
+
+    // Build combined sorted timeline including center pivot
+    const combined = [
+      ...(timelinePlacedLeft ?? []),
+      { id: "__center", year: timelineCenterYear, text: "Center" },
+      ...(timelinePlacedRight ?? []),
+    ].sort((a, b) => (a.year ?? 0) - (b.year ?? 0));
+
+    // Calculate actual insertion index for the current event (first >=)
+    const candidateYear = current.year ?? 0;
+    let actualIndex = combined.findIndex((ev) => (ev.year ?? 0) >= candidateYear);
+    if (actualIndex === -1) actualIndex = combined.length;
+
+    const targetOnYear = slot.onYear ?? null;
+    const actualYearAtIndex = combined[actualIndex]?.year ?? null;
+
+    const correct =
+      targetOnYear !== null && targetOnYear !== undefined
+        ? candidateYear === targetOnYear
+        : slot.index === actualIndex && candidateYear !== actualYearAtIndex;
+
+    if (correct) {
+      if (candidateYear < (timelineCenterYear ?? 0)) {
+        setTimelinePlacedLeft((prev) =>
+          [...(prev ?? []), current].sort((a, b) => (a.year ?? 0) - (b.year ?? 0)),
+        );
+      } else {
+        setTimelinePlacedRight((prev) =>
+          [...(prev ?? []), current].sort((a, b) => (a.year ?? 0) - (b.year ?? 0)),
+        );
+      }
+      setTimelineLastCorrectTeamId(currentTeamId || null);
+      playSuccessChime();
+    } else {
+      playDownbeat();
+    }
+
+    setTimelineQueue(remaining);
+    if (!correct && remaining.length > 0) {
+      advanceTimelineTeam();
+    }
+
+    if (remaining.length === 0) {
+      const winner = correct ? currentTeamId : timelineLastCorrectTeamId;
+      if (winner) {
+        const winnerTeam = teams.find((t) => t.id === winner);
+        setTimelineWinnerName(winnerTeam?.name ?? null);
+        setTeams((teamsPrev) =>
+          teamsPrev.map((t) =>
+            t.id === winner ? { ...t, score: t.score + (activeQuestion.points ?? 0) } : t,
+          ),
+        );
+      }
+      setQuestions((qs) =>
+        qs.map((q) => (q.id === activeQuestion.id ? { ...q, answered: true } : q)),
+      );
+      if (activeTurnOrder.length > 0) {
+        advanceBoard();
+      }
+      // keep modal open so hosts can review the timeline; allow manual close
+   }
+ };
+
   const adjustScore = (teamId: string, delta: number) => {
     setTeams((prev) =>
       prev.map((team) =>
@@ -491,6 +612,24 @@ export default function GameBoardPage() {
           onClose={closeModal}
           disableActions={!answeringTeam}
           maxScore={getMaxJokerScore()}
+        />
+      );
+    }
+    if (activeQuestion.type === "timeline") {
+      const timelineTeamId = getActiveTimelineTeamId();
+      const timelineTeam = teams.find((t) => t.id === timelineTeamId);
+      return (
+        <TimelineModal
+          centerYear={timelineCenterYear}
+          currentTeamName={timelineTeam?.name}
+          queue={timelineQueue ?? []}
+          placedLeft={timelinePlacedLeft ?? []}
+          placedRight={timelinePlacedRight ?? []}
+          onPlace={handleTimelinePlace}
+          onClose={closeModal}
+          disableActions={!timelineTeamId}
+          winnerName={timelineWinnerName}
+          points={activeQuestion.points}
         />
       );
     }
