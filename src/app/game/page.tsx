@@ -64,6 +64,7 @@ export default function GameBoardPage() {
   const [timelineNoWinner, setTimelineNoWinner] = useState(false);
   const [timelinePotential, setTimelinePotential] = useState<number>(0);
   const [showFinalLeaderboard, setShowFinalLeaderboard] = useState(false);
+  const [finalLeaderboardShown, setFinalLeaderboardShown] = useState(false);
   const prevAnsweringTeamRef = useRef<string | null>(null);
 
   const { turnState, setOrder, advanceBoard, advanceLyrics } = useTurnState();
@@ -349,12 +350,14 @@ export default function GameBoardPage() {
   useEffect(() => {
     if (activeQuestion) return;
     if (showFinalLeaderboard) return;
+    if (finalLeaderboardShown) return;
     if (questions.length === 0) return;
     const allAnswered = questions.every((q) => q.answered);
     if (allAnswered) {
       setShowFinalLeaderboard(true);
+      setFinalLeaderboardShown(true);
     }
-  }, [questions, activeQuestion, showFinalLeaderboard]);
+  }, [questions, activeQuestion, showFinalLeaderboard, finalLeaderboardShown]);
 
   const toggleGeoLock = () => {
     if (!activeQuestion || activeQuestion.type !== "geoguesser") return;
@@ -892,7 +895,7 @@ export default function GameBoardPage() {
             zIndex: 30,
             padding: "20px",
           }}
-          onClick={() => setShowFinalLeaderboard(false)}
+          onClick={closeFinalLeaderboard}
         >
           <div
             className="card"
@@ -940,7 +943,7 @@ export default function GameBoardPage() {
               </div>
               <button
                 className="button ghost"
-                onClick={() => setShowFinalLeaderboard(false)}
+                onClick={closeFinalLeaderboard}
                 style={{ marginLeft: "12px", whiteSpace: "nowrap" }}
                 aria-label="Close final leaderboard"
               >
@@ -1084,3 +1087,6 @@ export default function GameBoardPage() {
     </main>
   );
 }
+  const closeFinalLeaderboard = () => {
+    setShowFinalLeaderboard(false);
+  };
