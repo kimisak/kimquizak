@@ -101,9 +101,15 @@ export function McqModal({
               onClick={() => onSelect(idx)}
               style={{
                 justifyContent: "flex-start",
-                opacity: disabled ? 0.5 : 1,
+                opacity: disabled ? 0.6 : 1,
                 cursor: disabled ? "not-allowed" : "pointer",
                 fontSize: "1.05rem",
+                background: disabled
+                  ? "rgba(255,255,255,0.08)"
+                  : `linear-gradient(135deg, ${bg}, rgba(255,255,255,0.12))`,
+                border: "1px solid rgba(255,255,255,0.18)",
+                boxShadow: disabled ? "none" : "0 10px 24px rgba(0,0,0,0.35)",
+                color: "#0b0d13",
               }}
             >
               <span
@@ -113,16 +119,16 @@ export function McqModal({
                   textAlign: "center",
                   borderRadius: "999px",
                   padding: "4px 8px",
-                background: bg,
-                marginRight: "10px",
-                fontWeight: 800,
-                color: "#0b0d13",
-                boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
-              }}
-            >
-              {String.fromCharCode(65 + idx)}
-            </span>
-            {opt || "(empty option)"}
+                  background: bg,
+                  marginRight: "10px",
+                  fontWeight: 800,
+                  color: "#0b0d13",
+                  boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+                }}
+              >
+                {String.fromCharCode(65 + idx)}
+              </span>
+              {opt || "(empty option)"}
             </button>
           );
         })}
