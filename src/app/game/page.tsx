@@ -959,10 +959,7 @@ export default function GameBoardPage() {
               {turnOrder.length > 0 && currentTeam ? (
                 <div style={{ display: "grid", gap: "2px" }}>
                   <div>{activeQuestion?.type === "lyrics" ? "Lyrics turn" : "Board turn"}</div>
-                  <div style={{ display: "grid", gap: "2px" }}>
-                    <span>Current:</span>
-                    <strong style={{ color: "#f2c14f" }}>{currentTeam.name}</strong>
-                  </div>
+                  <TeamPill label="Current" name={currentTeam.name} color={currentTeamColor} emoji={currentTeamEmoji} />
                 </div>
               ) : (
                 "Set random answer order"

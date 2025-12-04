@@ -20,7 +20,7 @@ export function TeamPill({ name, color = "#f2c14f", emoji = "⭐️", label }: P
           padding: "6px 10px",
           borderRadius: "999px",
           background: `${color}1f`,
-          border: `1px solid ${color}66`,
+          border: `2px solid ${color}80`,
           color: "#f8fafc",
           fontWeight: 800,
           letterSpacing: "0.01em",
