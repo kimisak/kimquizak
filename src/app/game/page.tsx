@@ -14,6 +14,7 @@ import { TimelineModal } from "@/components/game/modals/TimelineModal";
 import { LyricsModal } from "@/components/game/modals/LyricsModal";
 import { StandardModal } from "@/components/game/modals/StandardModal";
 import { AudioModal } from "@/components/game/modals/AudioModal";
+import { TeamPill } from "@/components/game/TeamPill";
 import { useAudioCue } from "@/hooks/useAudioCue";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { useTurnState } from "@/hooks/useTurnState";
