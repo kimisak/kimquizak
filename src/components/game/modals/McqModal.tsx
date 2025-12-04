@@ -183,9 +183,7 @@ export function McqModal({
               }}
             >
               {resolvedInfo
-                ? `${resolvedInfo.points >= 0 ? "Correct" : "Wrong"}! ${
-                    resolvedInfo.points >= 0 ? "+" : ""
-                  }${resolvedInfo.points} pts`
+                ? `${resolvedInfo.points >= 0 ? "+" : ""}${resolvedInfo.points} pts`
                 : "Close when ready."}
             </span>
           </div>
