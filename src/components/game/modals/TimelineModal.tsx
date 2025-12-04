@@ -3,6 +3,7 @@
 import type { TimelineEvent } from "@/lib/types";
 
 type Props = {
+  category?: string;
   centerYear: number;
   currentTeamName?: string;
   queue: TimelineEvent[];
@@ -22,6 +23,7 @@ type Props = {
 };
 
 export function TimelineModal({
+  category,
   centerYear,
   currentTeamName,
   queue,
@@ -118,8 +120,13 @@ export function TimelineModal({
               color: "var(--muted)",
             }}
           >
-            Timeline
+            {category ? `${category} · Timeline` : "Timeline"}
           </div>
+          {(basePoints || points) && (
+            <div style={{ fontWeight: 800, fontSize: "2rem" }}>
+              {basePoints ?? points} pts
+            </div>
+          )}
           {title ? (
             <div style={{ fontWeight: 800, fontSize: "1.2rem" }}>{title}</div>
           ) : null}

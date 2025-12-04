@@ -86,7 +86,7 @@ export function LyricsModal({
                   color: "var(--muted)",
                 }}
               >
-                {question.category}
+                {question.category} · Lyrics
               </div>
               <div style={{ fontSize: "2rem", fontWeight: 800 }}>
                 {question.points} pts
@@ -198,7 +198,7 @@ export function LyricsModal({
                 fontWeight: 800,
               }}
             >
-              {question.category}
+              {question.category} · Lyrics
             </div>
             <div style={{ fontWeight: 800, fontSize: "2rem", marginTop: "6px" }}>
               {question.points} pts

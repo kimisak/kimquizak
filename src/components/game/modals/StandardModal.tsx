@@ -75,7 +75,7 @@ export function StandardModal({
                   color: "var(--muted)",
                 }}
               >
-                {question.category}
+                {question.category} · Standard
               </div>
               <div style={{ fontSize: "2rem", fontWeight: 800 }}>
                 {question.points} pts
@@ -156,7 +156,7 @@ export function StandardModal({
                 fontWeight: 800,
               }}
             >
-              {question.category}
+              {question.category} · Standard
             </div>
             <div style={{ fontWeight: 800, fontSize: "2rem", marginTop: "6px" }}>
               {question.points} pts

@@ -88,7 +88,7 @@ export function GeoguesserModal({
                   color: "var(--muted)",
                 }}
               >
-                {question.category}
+                {question.category} · Geoguesser
               </div>
               <div style={{ fontSize: "2rem", fontWeight: 800 }}>
                 {question.points} pts
@@ -231,14 +231,14 @@ export function GeoguesserModal({
             }}
           >
             <div
-              style={{
-                textTransform: "uppercase",
-                color: "var(--muted)",
-                letterSpacing: "0.05em",
-                fontWeight: 800,
-              }}
-            >
-              {question.category}
+            style={{
+              textTransform: "uppercase",
+              color: "var(--muted)",
+              letterSpacing: "0.05em",
+              fontWeight: 800,
+            }}
+          >
+              {question.category} · Geoguesser
             </div>
             <div style={{ fontWeight: 800, fontSize: "2rem", marginTop: "6px" }}>
               {question.points} pts

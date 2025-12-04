@@ -140,7 +140,7 @@ export function JokerModal({
               color: "var(--muted)",
             }}
           >
-            {question.category}
+            {question.category} · Joker
           </div>
           <div style={{ fontSize: "2rem", fontWeight: 800 }}>
             {question.points} pts

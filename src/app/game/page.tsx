@@ -838,6 +838,7 @@ export default function GameBoardPage() {
       const timelineTeam = teams.find((t) => t.id === timelineTeamId);
       return (
         <TimelineModal
+          category={activeQuestion.category}
           centerYear={timelineCenterYear}
           currentTeamName={timelineTeam?.name}
           queue={timelineQueue ?? []}
