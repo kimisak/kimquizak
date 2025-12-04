@@ -296,9 +296,12 @@ export function LyricsModal({
               }}
             >
               {answeringTeamName && (
-                <div style={{ color: "var(--muted)", fontSize: "0.95rem" }}>
-                  Answered by: <strong style={{ color: "#81e6d9" }}>{answeringTeamName}</strong>
-                </div>
+                <TeamPill
+                  label="Answered by"
+                  name={answeringTeamName}
+                  color={answeringTeamColor}
+                  emoji={answeringTeamEmoji}
+                />
               )}
               <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
                 <button
