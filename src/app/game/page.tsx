@@ -1129,7 +1129,10 @@ export default function GameBoardPage() {
                   >
                     <div style={{ fontSize: "1.8rem" }}>{medal}</div>
                     <div style={{ display: "grid", gap: "4px" }}>
-                      <div style={{ fontWeight: 800, fontSize: "1.2rem" }}>{team.name}</div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px", fontWeight: 800, fontSize: "1.2rem" }}>
+                      <span>{team.badgeEmoji || "⭐️"}</span>
+                      <span>{team.name}</span>
+                    </div>
                       <div
                         style={{
                           display: "flex",
