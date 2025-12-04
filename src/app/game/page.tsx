@@ -926,7 +926,7 @@ export default function GameBoardPage() {
             justifyContent: "space-between",
             alignItems: "center",
             gap: "12px",
-            marginBottom: "12px",
+            marginBottom: "8px",
           }}
         >
           <div>
@@ -946,32 +946,17 @@ export default function GameBoardPage() {
               <span>Adjust scores in the leaderboard panel.</span>
             </p>
           </div>
-          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-            <div
-              style={{
-                color: "var(--muted)",
-                fontSize: "0.95rem",
-                minWidth: "220px",
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                maxWidth: "360px",
-              }}
-            >
-              {turnOrder.length > 0 && currentTeam ? (
-                <div style={{ display: "grid", gap: "4px" }}>
-                  <div>{activeQuestion?.type === "lyrics" ? "Lyrics turn" : "Board turn"}</div>
-                  <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "nowrap" }}>
-                    <span>Current:</span>
-                    <TeamPill label={undefined} name={currentTeam.name} color={currentTeamColor} emoji={currentTeamEmoji} />
-                  </div>
-                </div>
-              ) : (
-                "Set random answer order"
-              )}
-            </div>
-            <button className="button secondary" onClick={startTurnOrder}>
-              Randomize answer order
+          <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
+            {turnOrder.length > 0 && currentTeam ? (
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "var(--muted)", fontSize: "0.95rem" }}>
+                <span>{activeQuestion?.type === "lyrics" ? "Lyrics turn" : "Board turn"}:</span>
+                <TeamPill name={currentTeam.name} color={currentTeamColor} emoji={currentTeamEmoji} />
+              </div>
+            ) : (
+              <span style={{ color: "var(--muted)", fontSize: "0.95rem" }}>Set random answer order</span>
+            )}
+            <button className="button ghost" onClick={startTurnOrder} style={{ paddingInline: "10px" }}>
+              Randomize order
             </button>
           </div>
         </div>
