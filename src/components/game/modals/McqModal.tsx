@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import type { Question, Team } from "@/lib/types";
+import { TeamPill } from "@/components/game/TeamPill";
 
 type Props = {
   question: Question;
@@ -10,6 +11,8 @@ type Props = {
   answeringTeamName?: string;
   currentTeamColor?: string;
   answeringTeamColor?: string;
+  currentTeamEmoji?: string | null;
+  answeringTeamEmoji?: string | null;
   eliminated: number[];
   resolved?: boolean;
   correctIndex?: number;
@@ -24,6 +27,8 @@ export function McqModal({
   answeringTeamName,
   currentTeamColor,
   answeringTeamColor,
+  currentTeamEmoji,
+  answeringTeamEmoji,
   eliminated,
   resolved = false,
   correctIndex = 0,
@@ -78,20 +83,10 @@ export function McqModal({
             {question.points} pts
           </div>
           {answeringTeamName && (
-            <div
-              style={{
-                color: "var(--muted)",
-                marginTop: "2px",
-                fontSize: "0.95rem",
-              }}
-            >
-              Answering: <strong style={{ color: answeringTeamColor || "#81e6d9" }}>{answeringTeamName}</strong>
-            </div>
+            <TeamPill label="Answering" name={answeringTeamName} color={answeringTeamColor} emoji={answeringTeamEmoji} />
           )}
           {currentTeamName && !answeringTeamName && (
-            <div style={{ color: "var(--muted)", marginTop: "2px" }}>
-              Current: <strong style={{ color: currentTeamColor || "#f2c14f" }}>{currentTeamName}</strong>
-            </div>
+            <TeamPill label="Current" name={currentTeamName} color={currentTeamColor} emoji={currentTeamEmoji} />
           )}
         </div>
         <button className="button ghost" onClick={onClose}>

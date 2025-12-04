@@ -2,13 +2,16 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Question } from "@/lib/types";
+import { TeamPill } from "@/components/game/TeamPill";
 
 type Props = {
   question: Question;
   currentTeamName?: string;
   currentTeamColor?: string;
+  currentTeamEmoji?: string | null;
   answeringTeamName?: string;
   answeringTeamColor?: string;
+  answeringTeamEmoji?: string | null;
   showAnswer: boolean;
   onRevealAnswer: () => void;
   onCorrect: () => void;
@@ -73,8 +76,10 @@ export function AudioModal({
   question,
   answeringTeamName,
   answeringTeamColor,
+  answeringTeamEmoji,
   currentTeamName,
   currentTeamColor,
+  currentTeamEmoji,
   showAnswer,
   onRevealAnswer,
   onCorrect,
@@ -229,14 +234,15 @@ export function AudioModal({
                 {question.points} pts
               </div>
               {answeringTeamName && (
-                <div style={{ color: "var(--muted)", marginTop: "2px", fontSize: "0.95rem" }}>
-                  Answering: <strong style={{ color: answeringTeamColor || "#81e6d9" }}>{answeringTeamName}</strong>
-                </div>
+                <TeamPill
+                  label="Answering"
+                  name={answeringTeamName}
+                  color={answeringTeamColor}
+                  emoji={answeringTeamEmoji}
+                />
               )}
               {currentTeamName && !answeringTeamName && (
-                <div style={{ color: "var(--muted)", marginTop: "2px", fontSize: "0.95rem" }}>
-                  Current: <strong style={{ color: currentTeamColor || "#f2c14f" }}>{currentTeamName}</strong>
-                </div>
+                <TeamPill label="Current" name={currentTeamName} color={currentTeamColor} emoji={currentTeamEmoji} />
               )}
             </div>
           </div>
@@ -486,9 +492,12 @@ export function AudioModal({
               )}
             </div>
             {answeringTeamName && (
-              <div style={{ color: "var(--muted)", fontSize: "0.95rem" }}>
-                Answered by: <strong style={{ color: answeringTeamColor || "#81e6d9" }}>{answeringTeamName}</strong>
-              </div>
+              <TeamPill
+                label="Answered by"
+                name={answeringTeamName}
+                color={answeringTeamColor}
+                emoji={answeringTeamEmoji}
+              />
             )}
             <div
               style={{

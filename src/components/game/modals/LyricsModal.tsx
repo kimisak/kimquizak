@@ -1,6 +1,7 @@
 'use client';
 
 import type { Question, Team } from "@/lib/types";
+import { TeamPill } from "@/components/game/TeamPill";
 
 type Props = {
   question: Question;
@@ -14,8 +15,10 @@ type Props = {
   showAnswer: boolean;
   currentTeamName?: string;
   currentTeamColor?: string;
+  currentTeamEmoji?: string | null;
   answeringTeamName?: string;
   answeringTeamColor?: string;
+  answeringTeamEmoji?: string | null;
   answerVideoUrl?: string | null;
   onCorrect: () => void;
   onWrong: () => void;
@@ -35,8 +38,10 @@ export function LyricsModal({
   showAnswer,
   currentTeamName,
   currentTeamColor,
+  currentTeamEmoji,
   answeringTeamName,
   answeringTeamColor,
+  answeringTeamEmoji,
   answerVideoUrl,
   onCorrect,
   onWrong,
@@ -92,16 +97,19 @@ export function LyricsModal({
               >
                 {question.category} · Text Grid
               </div>
-              <div style={{ fontSize: "2rem", fontWeight: 800 }}>
-                {question.points} pts
-              </div>
-              {answeringTeamName && (
-                <div style={{ color: "var(--muted)", marginTop: "2px", fontSize: "0.95rem" }}>
-                  Answering: <strong style={{ color: answeringTeamColor || "#81e6d9" }}>{answeringTeamName}</strong>
-                </div>
-              )}
+            <div style={{ fontSize: "2rem", fontWeight: 800 }}>
+              {question.points} pts
             </div>
+            {answeringTeamName && (
+              <TeamPill
+                label="Answering"
+                name={answeringTeamName}
+                color={answeringTeamColor}
+                emoji={answeringTeamEmoji}
+              />
+            )}
           </div>
+        </div>
           {question.prompt && (
             <div style={{ marginBottom: "10px", fontWeight: 700, fontSize: "1.15rem", lineHeight: 1.35 }}>
               {question.prompt}
@@ -213,9 +221,12 @@ export function LyricsModal({
               {question.points} pts
             </div>
             {answeringTeamName && (
-              <div style={{ color: "var(--muted)", fontSize: "0.95rem" }}>
-                Answered by: <strong style={{ color: answeringTeamColor || "#81e6d9" }}>{answeringTeamName}</strong>
-              </div>
+              <TeamPill
+                label="Answered by"
+                name={answeringTeamName}
+                color={answeringTeamColor}
+                emoji={answeringTeamEmoji}
+              />
             )}
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>

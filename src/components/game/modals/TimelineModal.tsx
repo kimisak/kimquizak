@@ -1,12 +1,14 @@
 'use client';
 
 import type { TimelineEvent } from "@/lib/types";
+import { TeamPill } from "@/components/game/TeamPill";
 
 type Props = {
   category?: string;
   centerYear: number;
   currentTeamName?: string;
   currentTeamColor?: string;
+  currentTeamEmoji?: string | null;
   queue: TimelineEvent[];
   placedLeft: TimelineEvent[];
   placedRight: TimelineEvent[];
@@ -28,6 +30,7 @@ export function TimelineModal({
   centerYear,
   currentTeamName,
   currentTeamColor,
+  currentTeamEmoji,
   queue,
   placedLeft,
   placedRight,
@@ -137,9 +140,7 @@ export function TimelineModal({
               Winner: {winnerName}
             </div>
           ) : currentTeamName ? (
-            <div style={{ color: "var(--muted)", fontSize: "0.95rem" }}>
-              Guessing: <strong style={{ color: currentTeamColor || "#f2c14f" }}>{currentTeamName}</strong>
-            </div>
+            <TeamPill label="Guessing" name={currentTeamName} color={currentTeamColor} emoji={currentTeamEmoji} />
           ) : null}
         </div>
       </div>

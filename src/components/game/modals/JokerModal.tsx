@@ -1,6 +1,7 @@
 'use client';
 
 import type { Question, Team } from "@/lib/types";
+import { TeamPill } from "@/components/game/TeamPill";
 
 export type JokerRound = {
   numbers: number[];
@@ -27,6 +28,7 @@ type Props = {
   currentTeamName?: string;
   currentTeamColor?: string;
   answeringTeamName?: string;
+  answeringTeamEmoji?: string | null;
   round: JokerRound;
   progress: JokerProgress;
   onGuess: (position: "above" | "below") => void;
@@ -54,8 +56,11 @@ const statusBorder: Record<JokerResult, string> = {
 
 export function JokerModal({
   question,
+  teams,
+  currentTeamName,
   currentTeamColor,
   answeringTeamName,
+  answeringTeamEmoji,
   round,
   progress,
   onGuess,
@@ -148,9 +153,7 @@ export function JokerModal({
             {question.points} pts
           </div>
           {answeringTeamName && (
-            <div style={{ color: "var(--muted)", fontSize: "0.95rem" }}>
-              Guessing: <strong style={{ color: currentTeamColor || "#f2c14f" }}>{answeringTeamName}</strong>
-            </div>
+            <TeamPill label="Guessing" name={answeringTeamName} color={currentTeamColor} emoji={answeringTeamEmoji} />
           )}
         </div>
         <div style={{ textAlign: "center", justifySelf: "center" }}>

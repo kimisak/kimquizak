@@ -1,6 +1,7 @@
 'use client';
 
 import type { Question, Team } from "@/lib/types";
+import { TeamPill } from "@/components/game/TeamPill";
 
 type Props = {
   question: Question;
@@ -8,6 +9,7 @@ type Props = {
   currentTeamName?: string;
   answeringTeamName?: string;
   answeringTeamColor?: string;
+  answeringTeamEmoji?: string | null;
   mapLocked: boolean;
   onToggleLock: () => void;
   onClose: () => void;
@@ -26,6 +28,7 @@ export function GeoguesserModal({
   currentTeamName,
   answeringTeamName,
   answeringTeamColor,
+  answeringTeamEmoji,
   mapLocked,
   onToggleLock,
   onClose,
@@ -96,15 +99,12 @@ export function GeoguesserModal({
                 {question.points} pts
               </div>
               {answeringTeamName && (
-                <div
-                  style={{
-                    color: "var(--muted)",
-                    marginTop: "2px",
-                    fontSize: "0.95rem",
-                  }}
-                >
-                  Answering: <strong style={{ color: answeringTeamColor || "#81e6d9" }}>{answeringTeamName}</strong>
-                </div>
+                <TeamPill
+                  label="Answering"
+                  name={answeringTeamName}
+                  color={answeringTeamColor}
+                  emoji={answeringTeamEmoji}
+                />
               )}
             </div>
             {question.mapEmbedUrl && (

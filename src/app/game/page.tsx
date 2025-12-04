@@ -123,6 +123,10 @@ export default function GameBoardPage() {
       : lastGuessTeamId || selectedTeamId || getBoardTeamId();
   const answeringTeam = teams.find((t) => t.id === answeringTeamId);
   const currentTeamColor = currentTeam?.accentBase || "#f2c14f";
+  const currentTeamEmoji = currentTeam?.badgeEmoji || "⭐️";
+  const answeringTeamColor = answeringTeam?.accentBase || "#81e6d9";
+  const answeringTeamEmoji = answeringTeam?.badgeEmoji || "⭐️";
+  const currentTeamColor = currentTeam?.accentBase || "#f2c14f";
   const answeringTeamColor = answeringTeam?.accentBase || "#81e6d9";
 
   const allLyricsRevealed =
@@ -772,8 +776,10 @@ export default function GameBoardPage() {
           showAnswer={showAnswer}
           currentTeamName={currentTeam?.name}
           currentTeamColor={currentTeamColor}
+          currentTeamEmoji={currentTeamEmoji}
           answeringTeamName={answeringTeam?.name}
           answeringTeamColor={answeringTeamColor}
+          answeringTeamEmoji={answeringTeamEmoji}
           answerVideoUrl={answerVideoUrl}
           onCorrect={() => markAnswered(true)}
           onWrong={() => markAnswered(false)}
@@ -790,6 +796,7 @@ export default function GameBoardPage() {
           currentTeamName={currentTeam?.name}
           answeringTeamColor={answeringTeamColor}
           answeringTeamName={answeringTeam?.name}
+          answeringTeamEmoji={answeringTeamEmoji}
           mapLocked={mapLocked}
           onToggleLock={toggleGeoLock}
           onClose={closeModal}
@@ -809,9 +816,11 @@ export default function GameBoardPage() {
           question={activeQuestion}
           teams={teams}
           currentTeamName={currentTeam?.name}
-          answeringTeamName={answeringTeam?.name}
           currentTeamColor={currentTeamColor}
+          currentTeamEmoji={currentTeamEmoji}
+          answeringTeamName={answeringTeam?.name}
           answeringTeamColor={answeringTeamColor}
+          answeringTeamEmoji={answeringTeamEmoji}
           eliminated={mcqEliminated}
           onSelect={handleMcqSelect}
           onClose={closeModal}
@@ -829,6 +838,7 @@ export default function GameBoardPage() {
           currentTeamName={currentTeam?.name}
           currentTeamColor={currentTeamColor}
           answeringTeamName={answeringTeam?.name}
+          answeringTeamEmoji={answeringTeamEmoji}
           round={jokerRound}
           progress={jokerProgress}
           onGuess={handleJokerGuess}
@@ -844,12 +854,14 @@ export default function GameBoardPage() {
     if (activeQuestion.type === "timeline") {
       const timelineTeamId = getActiveTimelineTeamId();
       const timelineTeam = teams.find((t) => t.id === timelineTeamId);
+      const timelineTeamEmoji = timelineTeam?.badgeEmoji || "⭐️";
       return (
         <TimelineModal
           category={activeQuestion.category}
           centerYear={timelineCenterYear}
           currentTeamName={timelineTeam?.name}
           currentTeamColor={timelineTeam?.accentBase || "#f2c14f"}
+          currentTeamEmoji={timelineTeamEmoji}
           queue={timelineQueue ?? []}
           placedLeft={timelinePlacedLeft ?? []}
           placedRight={timelinePlacedRight ?? []}
@@ -873,8 +885,10 @@ export default function GameBoardPage() {
           question={activeQuestion}
           currentTeamName={currentTeam?.name}
           currentTeamColor={currentTeamColor}
+          currentTeamEmoji={currentTeamEmoji}
           answeringTeamName={answeringTeam?.name}
           answeringTeamColor={answeringTeamColor}
+          answeringTeamEmoji={answeringTeamEmoji}
           onRevealAnswer={() => setShowAnswer(true)}
           showAnswer={showAnswer}
           onCorrect={() => markAnswered(true)}
@@ -890,8 +904,10 @@ export default function GameBoardPage() {
         teams={teams}
         currentTeamName={currentTeam?.name}
         currentTeamColor={currentTeamColor}
+        currentTeamEmoji={currentTeamEmoji}
         answeringTeamName={answeringTeam?.name}
         answeringTeamColor={answeringTeamColor}
+        answeringTeamEmoji={answeringTeamEmoji}
         onClose={closeModal}
         onRevealAnswer={() => setShowAnswer(true)}
         showAnswer={showAnswer}
