@@ -40,7 +40,11 @@ export function McqModal({
   const hasFour =
     rawOptions.length >= 4 && rawOptions.slice(2).some((o) => (o ?? "").trim() !== "");
   const optionCount = hasFour ? 4 : Math.min(2, Math.max(2, rawOptions.length || 2));
-  const options = rawOptions.slice(0, optionCount);
+  const options = useMemo(() => {
+    const base = rawOptions.slice(0, optionCount);
+    while (base.length < optionCount) base.push("");
+    return base;
+  }, [rawOptions, optionCount]);
   const palette = ["#d94444", "#2c9b61", "#8a5adf", "#f2c14f"];
 const optionColors = useMemo(() => {
   const arr = [...palette];
