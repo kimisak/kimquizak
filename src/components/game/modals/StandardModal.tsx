@@ -127,63 +127,19 @@ export function StandardModal({
                 borderRadius: "12px",
                 overflow: "hidden",
                 border: "1px solid rgba(255,255,255,0.12)",
-                minHeight: "200px",
-                background: "rgba(0,0,0,0.25)",
-                perspective: "1200px",
               }}
             >
-              <div
+              <img
+                src={frontImage.src}
+                alt={frontImage.alt}
                 style={{
-                  position: "relative",
-                  height: "100%",
-                  minHeight: "200px",
-                  transformStyle: "preserve-3d",
-                  transition: "transform 0.65s ease",
-                  transform: showAnswerImage && backImage ? "rotateY(180deg)" : "rotateY(0deg)",
+                  width: "100%",
+                  maxHeight: "520px",
+                  height: "auto",
+                  objectFit: "contain",
+                  display: "block",
                 }}
-              >
-                <div
-                  style={{
-                    position: "absolute",
-                    inset: 0,
-                    backfaceVisibility: "hidden",
-                  }}
-                >
-                  <img
-                    src={frontImage.src}
-                    alt={frontImage.alt}
-                    style={{
-                      width: "100%",
-                      maxHeight: "520px",
-                      height: "100%",
-                      objectFit: "contain",
-                      display: "block",
-                    }}
-                  />
-                </div>
-                {backImage && (
-                  <div
-                    style={{
-                      position: "absolute",
-                      inset: 0,
-                      backfaceVisibility: "hidden",
-                      transform: "rotateY(180deg)",
-                    }}
-                  >
-                    <img
-                      src={backImage.src}
-                      alt={backImage.alt}
-                      style={{
-                        width: "100%",
-                        maxHeight: "520px",
-                        height: "100%",
-                        objectFit: "contain",
-                        display: "block",
-                      }}
-                    />
-                  </div>
-                )}
-              </div>
+              />
             </div>
           )}
             <div
@@ -268,11 +224,12 @@ export function StandardModal({
                 borderRadius: "12px",
                 overflow: "hidden",
                 border: "1px solid rgba(255,255,255,0.12)",
+                position: "relative",
               }}
             >
               <img
-                src={backImage.src}
-                alt={backImage.alt}
+                src={showAnswerImage ? backImage.src : frontImage?.src || backImage.src}
+                alt={(showAnswerImage ? backImage.alt : frontImage?.alt) || backImage.alt}
                 style={{
                   width: "100%",
                   maxHeight: "520px",
@@ -281,6 +238,21 @@ export function StandardModal({
                   display: "block",
                 }}
               />
+              {frontImage && (
+                <button
+                  className="button secondary"
+                  onClick={() => setShowAnswerImage((prev) => !prev)}
+                  style={{
+                    position: "absolute",
+                    top: "10px",
+                    right: "10px",
+                    padding: "6px 10px",
+                    backdropFilter: "blur(6px)",
+                  }}
+                >
+                  {showAnswerImage ? "Show question image" : "Show answer image"}
+                </button>
+              )}
             </div>
           )}
           <div
