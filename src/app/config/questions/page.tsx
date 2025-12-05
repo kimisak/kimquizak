@@ -258,7 +258,7 @@ const McqFields = React.memo(function McqFields({
               setRotateOnMiss(next);
               persist(options, correctIndex, optionCount, next);
             }}
-            style={{ width: "16px", height: "16px" }}
+            style={{ width: "16px", height: "16px", cursor: "pointer" }}
           />
           Rotate teams on wrong answer
         </label>
@@ -1299,7 +1299,7 @@ const JokerFields = React.memo(function JokerFields({
               setRotateOnMiss(e.target.checked);
               persistSettings({ jokerRotateOnMiss: e.target.checked });
             }}
-            style={{ width: "16px", height: "16px" }}
+            style={{ width: "16px", height: "16px", cursor: "pointer" }}
           />
           Rotate teams on wrong guess
         </label>
@@ -1448,7 +1448,7 @@ const TimelineFields = React.memo(function TimelineFields({
             checked={rotateOnMiss}
             onChange={(e) => setRotateOnMiss(e.target.checked)}
             onBlur={persistSettings}
-            style={{ width: "16px", height: "16px" }}
+            style={{ width: "16px", height: "16px", cursor: "pointer" }}
           />
           Rotate teams on wrong guess
         </label>
