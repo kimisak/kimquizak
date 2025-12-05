@@ -446,6 +446,23 @@ export default function QuestionConfigPage() {
     });
   };
 
+  const moveQuestion = (category: string, points: PointValue, direction: -1 | 1) => {
+    const idx = POINT_VALUES.indexOf(points);
+    const targetPoints = POINT_VALUES[idx + direction];
+    if (idx === -1 || targetPoints === undefined) return;
+    setQuestions((prev) => {
+      const next = [...prev];
+      const fromIdx = next.findIndex((q) => q.category === category && q.points === points);
+      const toIdx = next.findIndex((q) => q.category === category && q.points === targetPoints);
+      if (fromIdx === -1 || toIdx === -1) return prev;
+      const fromQ = next[fromIdx];
+      const toQ = next[toIdx];
+      next[fromIdx] = { ...toQ, points };
+      next[toIdx] = { ...fromQ, points: targetPoints };
+      return next;
+    });
+  };
+
   const handleNewCategory = () => {
     if (!newCategory.trim()) return;
     const name = newCategory.trim();
@@ -1589,6 +1606,26 @@ const TimelineFields = React.memo(function TimelineFields({
                     >
                       <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                         <div style={{ fontWeight: 700 }}>{points} pts</div>
+                        <div style={{ display: "flex", gap: "6px" }}>
+                          <button
+                            className="button ghost"
+                            onClick={() => moveQuestion(category, points, -1)}
+                            disabled={POINT_VALUES.indexOf(points) === 0}
+                            style={{ padding: "4px 8px", lineHeight: 1, cursor: "pointer" }}
+                            aria-label="Move question to lower points"
+                          >
+                            ↑
+                          </button>
+                          <button
+                            className="button ghost"
+                            onClick={() => moveQuestion(category, points, 1)}
+                            disabled={POINT_VALUES.indexOf(points) === POINT_VALUES.length - 1}
+                            style={{ padding: "4px 8px", lineHeight: 1, cursor: "pointer" }}
+                            aria-label="Move question to higher points"
+                          >
+                            ↓
+                          </button>
+                        </div>
                       </div>
                       <div style={{ display: "flex", alignItems: "center", gap: "8px", justifyContent: "flex-end" }}>
                         {q?.answered && (
