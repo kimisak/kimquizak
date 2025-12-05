@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import type { Question, Team } from "@/lib/types";
 import { TeamPill } from "@/components/game/TeamPill";
+import { useMemo } from "react";
 
 type Props = {
   question: Question;
@@ -51,6 +52,19 @@ export function McqModal({
     return arr.slice(0, options.length);
   }, [question.id, options.length]);
 
+  const hasAnswerImage = Boolean(question.answerImageData);
+  const hasQuestionImage = Boolean(question.imageData);
+  const hasAnyImage = hasAnswerImage || hasQuestionImage;
+  const flipActive = resolved && hasAnswerImage;
+  const frontImage = hasQuestionImage
+    ? { src: question.imageData, alt: question.imageName || "Question image" }
+    : hasAnswerImage
+      ? { src: question.answerImageData, alt: question.answerImageName || "Answer image" }
+      : null;
+  const backImage = hasAnswerImage
+    ? { src: question.answerImageData, alt: question.answerImageName || "Answer image" }
+    : frontImage;
+
   return (
     <div
       className="card"
@@ -98,27 +112,65 @@ export function McqModal({
           {question.prompt}
         </div>
       )}
-      {question.imageData && (
-        <div
-          style={{
-            marginBottom: "14px",
-            borderRadius: "12px",
-            overflow: "hidden",
-            border: "1px solid rgba(255,255,255,0.1)",
-          }}
-        >
-          <img
-            src={question.imageData}
-            alt={question.imageName || "Question image"}
+      {hasAnyImage && frontImage && (
+        <div style={{ perspective: "1200px", marginBottom: "14px" }}>
+          <div
             style={{
-              width: "100%",
-              height: "auto",
-              display: "block",
-              maxHeight: "280px",
-              objectFit: "contain",
-              background: "rgba(0,0,0,0.3)",
+              position: "relative",
+              height: "280px",
+              transformStyle: "preserve-3d",
+              transition: "transform 0.65s ease",
+              transform: flipActive ? "rotateY(180deg)" : "rotateY(0deg)",
             }}
-          />
+          >
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                backfaceVisibility: "hidden",
+                borderRadius: "12px",
+                overflow: "hidden",
+                border: "1px solid rgba(255,255,255,0.1)",
+              }}
+            >
+              <img
+                src={frontImage.src ?? undefined}
+                alt={frontImage.alt ?? "Question image"}
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "contain",
+                  background: "rgba(0,0,0,0.3)",
+                  display: "block",
+                }}
+              />
+            </div>
+            {backImage && (
+              <div
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  backfaceVisibility: "hidden",
+                  transform: "rotateY(180deg)",
+                  borderRadius: "12px",
+                  overflow: "hidden",
+                  border: "1px solid rgba(255,255,255,0.1)",
+                }}
+              >
+                <img
+                  src={backImage.src ?? undefined}
+                  alt={backImage.alt ?? "Answer image"}
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "contain",
+                    background: "rgba(0,0,0,0.3)",
+                    display: "block",
+                  }}
+                />
+              </div>
+            )}
+          </div>
         </div>
       )}
       <div
@@ -188,29 +240,6 @@ export function McqModal({
           );
         })}
       </div>
-      {resolved && question.answerImageData && (
-        <div
-          style={{
-            marginTop: "14px",
-            borderRadius: "12px",
-            overflow: "hidden",
-            border: "1px solid rgba(255,255,255,0.1)",
-          }}
-        >
-          <img
-            src={question.answerImageData}
-            alt={question.answerImageName || "Answer image"}
-            style={{
-              width: "100%",
-              height: "auto",
-              display: "block",
-              maxHeight: "280px",
-              objectFit: "contain",
-              background: "rgba(0,0,0,0.3)",
-            }}
-          />
-        </div>
-      )}
       <div style={{ color: "var(--muted)", marginTop: "12px", fontSize: "0.95rem" }}>
         {resolved ? (
           <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
