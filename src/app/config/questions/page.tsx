@@ -1515,7 +1515,7 @@ const TimelineFields = React.memo(function TimelineFields({
             placeholder="e.g. Local Jokes"
           />
         </div>
-        <button className="button secondary" onClick={handleNewCategory}>
+        <button className="button secondary" onClick={handleNewCategory} style={{ cursor: "pointer" }}>
           + Add
         </button>
       </div>
