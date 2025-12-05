@@ -82,6 +82,9 @@ export function TimelineModal({
     return acc;
   }, []);
 
+  const remainingCount = queue.length;
+  const totalCount = combined.length + remainingCount - 1; // minus center pivot
+
   const renderDropZone = (slot: { index: number; onYear?: number }, size: "thin" | "wide" = "thin") => (
     <div
       onDragOver={(e) => e.preventDefault()}
@@ -242,8 +245,13 @@ export function TimelineModal({
                   boxShadow: "0 6px 14px rgba(0,0,0,0.25)",
                 }}
               >
-                <div style={{ fontWeight: 800, color: textColor }}>
-                  {formatYear(group.year)}
+                <div style={{ fontWeight: 800, color: textColor, display: "flex", justifyContent: "space-between", gap: "6px", alignItems: "center" }}>
+                  <span>{formatYear(group.year)}</span>
+                  {group.side !== "center" && totalCount > 0 && (
+                    <span style={{ color: "var(--muted)", fontSize: "0.82rem" }}>
+                      {totalCount - remainingCount} / {totalCount}
+                    </span>
+                  )}
                 </div>
                 <div style={{ display: "grid", gap: "6px", marginTop: "6px" }}>
                   {group.events.map((ev, i) => (
