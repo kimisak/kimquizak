@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { usePersistentState } from "@/hooks/usePersistentState";
-import { TEAM_STORAGE_KEY } from "@/lib/storage";
+import { TEAM_STORAGE_KEY, TURN_STATE_STORAGE_KEY } from "@/lib/storage";
 import type { Player, Team } from "@/lib/types";
 import { TeamPill } from "@/components/game/TeamPill";
 
@@ -232,6 +232,14 @@ export default function TeamConfigPage() {
     setTeams((prev) => prev.filter((team) => team.id !== teamId));
   };
 
+  const resetTurnOrder = () => {
+    try {
+      window.localStorage.removeItem(TURN_STATE_STORAGE_KEY);
+    } catch (err) {
+      console.error("Failed clearing turn order", err);
+    }
+  };
+
   return (
     <main className="card" style={{ padding: "24px" }}>
       <div
@@ -255,6 +263,9 @@ export default function TeamConfigPage() {
             disabled={isShuffling}
           >
             {shuffleLabel()}
+          </button>
+          <button className="button ghost" onClick={resetTurnOrder} title="Clears board turn order so you must spin again on the board">
+            Reset turn order
           </button>
           <button className="button primary" onClick={addTeam}>
             + Add team
