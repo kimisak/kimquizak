@@ -85,11 +85,11 @@ export function Leaderboard({ teams, onAdjust, onSet }: Props) {
                     border: `1px solid ${accent.glow}55`,
                     boxShadow: `0 3px 10px ${accent.base}45`,
                   }}
-                >
-                  #{idx + 1}
-                </div>
-                <div style={{ display: "grid", gap: "6px", minWidth: "220px", flex: 1 }}>
-                  <div
+              >
+                #{idx + 1}
+              </div>
+              <div style={{ display: "grid", gap: "6px", minWidth: "220px", flex: 1 }}>
+                <div
                     style={{
                       display: "flex",
                       alignItems: "center",
@@ -141,7 +141,7 @@ export function Leaderboard({ teams, onAdjust, onSet }: Props) {
                   <button
                     className="button ghost"
                     onClick={() => onAdjust(team.id, -100)}
-                    style={{ paddingInline: "12px" }}
+                    style={{ paddingInline: "12px", cursor: "pointer" }}
                   >
                     -100
                   </button>
@@ -162,7 +162,7 @@ export function Leaderboard({ teams, onAdjust, onSet }: Props) {
                   <button
                     className="button ghost"
                     onClick={() => onAdjust(team.id, 100)}
-                    style={{ paddingInline: "12px" }}
+                    style={{ paddingInline: "12px", cursor: "pointer" }}
                   >
                     +100
                   </button>

@@ -1183,13 +1183,13 @@ export default function GameBoardPage() {
                 )}
               </div>
               <button
-                className="button ghost"
-                onClick={startTurnOrder}
-                style={{ paddingInline: "8px", minWidth: "110px" }}
-                disabled={slotSpinning || teams.length === 0}
-              >
-                {slotSpinning ? "Spinning…" : "Spin!"}
-              </button>
+              className="button ghost"
+              onClick={startTurnOrder}
+              style={{ paddingInline: "8px", minWidth: "110px", cursor: "pointer" }}
+              disabled={slotSpinning || teams.length === 0}
+            >
+              {slotSpinning ? "Spinning…" : "Spin!"}
+            </button>
             </div>
           </div>
         </div>
