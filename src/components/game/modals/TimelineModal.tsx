@@ -167,7 +167,7 @@ export function TimelineModal({
         style={{
           display: "flex",
           gap: "12px",
-          alignItems: "flex-start",
+          alignItems: "center",
           flexWrap: "wrap",
           justifyContent: "center",
           marginBottom: "12px",
