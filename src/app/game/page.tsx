@@ -778,10 +778,11 @@ export default function GameBoardPage() {
     }
 
     if (remaining.length === 0) {
+      const rotateOnMiss = activeQuestion.timelineRotateOnMiss ?? true;
       let winner: string | null = null;
       if (correct) {
         winner = currentTeamId;
-      } else {
+      } else if (rotateOnMiss) {
         const orderList =
           turnOrder.length > 0 ? activeTurnOrder : teams.map((t) => t.id);
         if (orderList.length > 0) {
