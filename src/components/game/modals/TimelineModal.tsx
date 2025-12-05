@@ -128,8 +128,13 @@ export function TimelineModal({
             {category ? `${category} · Timeline` : "Timeline"}
           </div>
           {(basePoints || points) && (
-            <div style={{ fontWeight: 800, fontSize: "2rem" }}>
-              {basePoints ?? points} pts
+            <div style={{ display: "flex", alignItems: "baseline", gap: "10px", fontWeight: 800 }}>
+              <div style={{ fontSize: "2rem" }}>{basePoints ?? points} pts</div>
+              {typeof potentialScore === "number" && (
+                <span style={{ fontSize: "1rem", color: "var(--muted)" }}>
+                  Potential: {potentialScore} pts
+                </span>
+              )}
             </div>
           )}
           {title ? (
