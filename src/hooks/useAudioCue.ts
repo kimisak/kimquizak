@@ -125,6 +125,45 @@ export function useAudioCue() {
     osc2.stop(now + 0.6);
   };
 
+  const playJokerSparkle = () => {
+    const ctx = ensureCtx();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    const osc1 = ctx.createOscillator();
+    const osc2 = ctx.createOscillator();
+    const osc3 = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc1.type = "sine";
+    osc2.type = "triangle";
+    osc3.type = "sine";
+
+    osc1.frequency.setValueAtTime(660, now);
+    osc1.frequency.exponentialRampToValueAtTime(1200, now + 0.8);
+
+    osc2.frequency.setValueAtTime(880, now + 0.05);
+    osc2.frequency.exponentialRampToValueAtTime(1400, now + 0.9);
+
+    osc3.frequency.setValueAtTime(520, now + 0.1);
+    osc3.frequency.exponentialRampToValueAtTime(980, now + 1.1);
+
+    gain.gain.setValueAtTime(0.18, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 1.35);
+
+    osc1.connect(gain);
+    osc2.connect(gain);
+    osc3.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc1.start(now);
+    osc2.start(now + 0.02);
+    osc3.start(now + 0.05);
+
+    osc1.stop(now + 1.4);
+    osc2.stop(now + 1.4);
+    osc3.stop(now + 1.4);
+  };
+
   const playBigWin = () => {
     const ctx = ensureCtx();
     if (!ctx) return;
@@ -157,5 +196,6 @@ export function useAudioCue() {
     playDownbeat,
     playBigWin,
     playSlotResolve,
+    playJokerSparkle,
   };
 }

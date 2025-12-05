@@ -36,6 +36,7 @@ export default function GameBoardPage() {
     playDownbeat,
     playBigWin,
     playSlotResolve,
+    playJokerSparkle,
   } = useAudioCue();
   const [teams, setTeams] = usePersistentState<Team[]>(TEAM_STORAGE_KEY, []);
   const [questions, setQuestions] = usePersistentState<Question[]>(
@@ -281,6 +282,7 @@ export default function GameBoardPage() {
       if (minVal >= maxVal) {
         maxVal = minVal + 1;
       }
+      playJokerSparkle();
       const basePoints = question.points ?? 0;
       const maxScore = basePoints * 2;
       const computedIncrement =
