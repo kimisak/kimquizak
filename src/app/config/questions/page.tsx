@@ -230,7 +230,7 @@ const McqFields = React.memo(function McqFields({
                   setCorrectIndex(idx);
                   persist(options, idx);
                 }}
-                style={{ width: "16px", height: "16px" }}
+                style={{ width: "16px", height: "16px", cursor: "pointer" }}
               />
               Correct
             </label>
