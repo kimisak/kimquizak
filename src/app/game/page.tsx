@@ -714,6 +714,7 @@ export default function GameBoardPage() {
     if (!current || current.year === null || current.year === undefined) {
       return;
     }
+    const rotateOnMiss = activeQuestion.timelineRotateOnMiss ?? true;
 
     const remaining = (timelineQueue ?? []).slice(1);
 
@@ -763,7 +764,6 @@ export default function GameBoardPage() {
     } else {
       playDownbeat();
       // If teams are not rotating on miss, progressively lower the potential score.
-      const rotateOnMiss = activeQuestion.timelineRotateOnMiss ?? true;
       if (!rotateOnMiss) {
         const basePoints = activeQuestion.points ?? timelinePotential ?? 0;
         const eventCount = Math.max(1, activeQuestion.timelineEvents?.length ?? 1);
@@ -778,7 +778,6 @@ export default function GameBoardPage() {
     }
 
     if (remaining.length === 0) {
-      const rotateOnMiss = activeQuestion.timelineRotateOnMiss ?? true;
       let winner: string | null = null;
       if (correct) {
         winner = currentTeamId;
