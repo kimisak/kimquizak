@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { TEAM_STORAGE_KEY } from "@/lib/storage";
 import type { Player, Team } from "@/lib/types";
+import { TeamPill } from "@/components/game/TeamPill";
 
 const emojiOptions = [
   { emoji: "🎄", label: "Tree", base: "#0b8a3b", glow: "#d1fae5" },
@@ -11,6 +12,21 @@ const emojiOptions = [
   { emoji: "🔔", label: "Bell", base: "#b03060", glow: "#ffd6e0" },
   { emoji: "❄️", label: "Snow", base: "#0f4c75", glow: "#b0e0ff" },
   { emoji: "🎁", label: "Gift", base: "#b9001f", glow: "#f7c948" },
+  { emoji: "🕯️", label: "Candle", base: "#f4a259", glow: "#ffe8c2" },
+  { emoji: "🎅", label: "Santa", base: "#d62828", glow: "#ffb3b3" },
+  { emoji: "😇", label: "Angel", base: "#cbbaf0", glow: "#f2eaff" },
+  { emoji: "☃️", label: "Snowman", base: "#4ba3c7", glow: "#d9f2ff" },
+  { emoji: "🍷", label: "Wine", base: "#6b2737", glow: "#f5c3d0" },
+  { emoji: "🍺", label: "Beer", base: "#d19c1d", glow: "#ffeac2" },
+  { emoji: "🦌", label: "Reindeer", base: "#8b5a2b", glow: "#f3d6b3" },
+  { emoji: "🍪", label: "Cookie", base: "#c68642", glow: "#ffe3c4" },
+  { emoji: "🥛", label: "Milk", base: "#9bc4f5", glow: "#e9f5ff" },
+  { emoji: "🥕", label: "Carrot", base: "#f7931e", glow: "#ffe0b3" },
+  { emoji: "💝", label: "Heart Bow", base: "#ff5c8a", glow: "#ffd1e6" },
+  { emoji: "🛷", label: "Sleigh", base: "#b22234", glow: "#ffd7c2" },
+  { emoji: "📜", label: "Scroll", base: "#d7b468", glow: "#fff4cf" },
+  { emoji: "🍬", label: "Candy", base: "#ff6fb7", glow: "#ffd6ec" },
+  { emoji: "🌠", label: "Shooting Star", base: "#4f46e5", glow: "#c7d2fe" },
 ];
 
 function makeId(prefix: string) {
@@ -253,102 +269,179 @@ export default function TeamConfigPage() {
           gap: "16px",
         }}
       >
-        {teams.map((team) => (
-          <div
-            key={team.id}
-            className="card"
-            style={{ padding: "16px", borderColor: "rgba(255,255,255,0.14)" }}
-          >
+        {teams.map((team) => {
+          const colorBase = team.accentBase ?? "#f2c14f";
+          const colorGlow = team.accentGlow ?? "#ffe29f";
+          return (
             <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: "10px",
-                marginBottom: "12px",
-              }}
+              key={team.id}
+              className="card"
+              style={{ padding: "16px", borderColor: "rgba(255,255,255,0.14)", position: "relative" }}
             >
-              <div style={{ flex: 1 }}>
-                <label className="label">Team name</label>
-                <input
-                  className="input"
-                  value={team.name}
-                  onChange={(e) => handleTeamNameChange(team.id, e.target.value)}
-                  placeholder="Team name"
-                />
-              </div>
-              <div style={{ minWidth: "120px" }}>
-                <label className="label">Emoji</label>
-                <select
-                  className="input"
-                  value={team.badgeEmoji ?? ""}
-                  onChange={(e) => {
-                    const choice = emojiOptions.find((opt) => opt.emoji === e.target.value);
-                    setTeams((prev) =>
-                      prev.map((t) =>
-                        t.id === team.id
-                          ? {
-                              ...t,
-                              badgeEmoji: choice?.emoji ?? null,
-                              accentBase: choice?.base ?? t.accentBase ?? null,
-                              accentGlow: choice?.glow ?? t.accentGlow ?? null,
-                            }
-                          : t,
-                      ),
-                    );
-                  }}
-                >
-                  {emojiOptions.map((opt) => (
-                    <option key={opt.emoji} value={opt.emoji}>
-                      {opt.emoji} {opt.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
               <button
                 className="button ghost"
                 onClick={() => removeTeam(team.id)}
-                style={{ paddingInline: "10px" }}
+                style={{
+                  position: "absolute",
+                  top: "8px",
+                  right: "8px",
+                  width: "28px",
+                  height: "28px",
+                  borderRadius: "999px",
+                  display: "grid",
+                  placeItems: "center",
+                  padding: 0,
+                  lineHeight: 1,
+                }}
+                aria-label={`Remove ${team.name}`}
               >
                 ✕
               </button>
-            </div>
-
-            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-              <label className="label">Players</label>
-              {team.players.map((player: Player, idx: number) => (
-                <div
-                  key={player.id}
-                  style={{ display: "flex", gap: "8px", alignItems: "center" }}
-                >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "flex-end",
+                  justifyContent: "space-between",
+                  gap: "10px",
+                  marginBottom: "12px",
+                  flexWrap: "wrap",
+                }}
+              >
+                <div style={{ flex: 1, minWidth: "180px" }}>
+                  <label className="label">Team name</label>
                   <input
                     className="input"
-                    value={player.name}
-                    onChange={(e) =>
-                      handlePlayerNameChange(team.id, player.id, e.target.value)
-                    }
-                    placeholder={`Player ${idx + 1}`}
+                    value={team.name}
+                    onChange={(e) => handleTeamNameChange(team.id, e.target.value)}
+                    placeholder="Team name"
                   />
-                  <button
-                    className="button ghost"
-                    onClick={() => removePlayer(team.id, player.id)}
-                    style={{ paddingInline: "10px" }}
-                    aria-label={`Remove ${player.name}`}
-                  >
-                    –
-                  </button>
                 </div>
-              ))}
-              <button
-                className="button secondary"
-                onClick={() => addPlayer(team.id)}
-                style={{ width: "fit-content" }}
-              >
-                + Add player
-              </button>
+                <div style={{ minWidth: "140px" }}>
+                  <label className="label">Emoji</label>
+                  <select
+                    className="input"
+                    value={team.badgeEmoji ?? ""}
+                    onChange={(e) => {
+                      const choice = emojiOptions.find((opt) => opt.emoji === e.target.value);
+                      setTeams((prev) =>
+                        prev.map((t) =>
+                          t.id === team.id
+                            ? {
+                                ...t,
+                                badgeEmoji: choice?.emoji ?? null,
+                                accentBase: choice?.base ?? t.accentBase ?? null,
+                                accentGlow: choice?.glow ?? t.accentGlow ?? null,
+                              }
+                            : t,
+                        ),
+                      );
+                    }}
+                  >
+                    {emojiOptions.map((opt) => (
+                      <option key={opt.emoji} value={opt.emoji}>
+                        {opt.emoji} {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div style={{ minWidth: "320px", flex: 1 }}>
+                  <label className="label">Preview</label>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "12px",
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    <div
+                      aria-label="Team colors"
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        flexWrap: "wrap",
+                      }}
+                    >
+                      <span
+                        title={`Base ${colorBase}`}
+                        style={{
+                          width: "22px",
+                          height: "22px",
+                          borderRadius: "6px",
+                          background: colorBase,
+                          border: "1px solid rgba(255,255,255,0.22)",
+                          boxShadow: `0 0 0 2px ${colorBase}33`,
+                        }}
+                      />
+                      <span
+                        title={`Glow ${colorGlow}`}
+                        style={{
+                          width: "22px",
+                          height: "22px",
+                          borderRadius: "6px",
+                          background: colorGlow,
+                          border: "1px solid rgba(255,255,255,0.14)",
+                          boxShadow: `0 0 0 2px ${colorGlow}22`,
+                        }}
+                      />
+                      <span
+                        title="Accent gradient"
+                        style={{
+                          width: "46px",
+                          height: "22px",
+                          borderRadius: "999px",
+                          background: `linear-gradient(135deg, ${colorBase}, ${colorGlow})`,
+                          border: "1px solid rgba(255,255,255,0.18)",
+                          boxShadow: `0 2px 6px ${colorBase}3d`,
+                        }}
+                      />
+                    </div>
+                    <TeamPill
+                      name={team.name || "Team"}
+                      color={colorBase}
+                      emoji={team.badgeEmoji ?? "⭐️"}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                <label className="label">Players</label>
+                {team.players.map((player: Player, idx: number) => (
+                  <div
+                    key={player.id}
+                    style={{ display: "flex", gap: "8px", alignItems: "center" }}
+                  >
+                    <input
+                      className="input"
+                      value={player.name}
+                      onChange={(e) =>
+                        handlePlayerNameChange(team.id, player.id, e.target.value)
+                      }
+                      placeholder={`Player ${idx + 1}`}
+                    />
+                    <button
+                      className="button ghost"
+                      onClick={() => removePlayer(team.id, player.id)}
+                      style={{ paddingInline: "10px" }}
+                      aria-label={`Remove ${player.name}`}
+                    >
+                      –
+                    </button>
+                  </div>
+                ))}
+                <button
+                  className="button secondary"
+                  onClick={() => addPlayer(team.id)}
+                  style={{ width: "fit-content" }}
+                >
+                  + Add player
+                </button>
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </main>
   );

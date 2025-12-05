@@ -101,6 +101,30 @@ export function useAudioCue() {
     osc.stop(now + 0.32);
   };
 
+  const playSlotResolve = () => {
+    const ctx = ensureCtx();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    const osc1 = ctx.createOscillator();
+    const osc2 = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc1.type = "triangle";
+    osc2.type = "sine";
+    osc1.frequency.setValueAtTime(320, now);
+    osc1.frequency.exponentialRampToValueAtTime(540, now + 0.18);
+    osc2.frequency.setValueAtTime(210, now + 0.12);
+    osc2.frequency.linearRampToValueAtTime(330, now + 0.32);
+    gain.gain.setValueAtTime(0.22, now);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.55);
+    osc1.connect(gain);
+    osc2.connect(gain);
+    gain.connect(ctx.destination);
+    osc1.start(now);
+    osc2.start(now + 0.06);
+    osc1.stop(now + 0.6);
+    osc2.stop(now + 0.6);
+  };
+
   const playBigWin = () => {
     const ctx = ensureCtx();
     if (!ctx) return;
@@ -132,5 +156,6 @@ export function useAudioCue() {
     playSuccessChime,
     playDownbeat,
     playBigWin,
+    playSlotResolve,
   };
 }

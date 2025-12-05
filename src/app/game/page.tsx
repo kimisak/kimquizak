@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BoardGrid } from "@/components/game/BoardGrid";
 import { Leaderboard } from "@/components/game/Leaderboard";
 import { GeoguesserModal } from "@/components/game/modals/GeoguesserModal";
@@ -35,6 +35,7 @@ export default function GameBoardPage() {
     playSuccessChime,
     playDownbeat,
     playBigWin,
+    playSlotResolve,
   } = useAudioCue();
   const [teams, setTeams] = usePersistentState<Team[]>(TEAM_STORAGE_KEY, []);
   const [questions, setQuestions] = usePersistentState<Question[]>(
@@ -75,6 +76,10 @@ export default function GameBoardPage() {
     points: number;
   } | null>(null);
   const prevAnsweringTeamRef = useRef<string | null>(null);
+  const [slotFaces, setSlotFaces] = useState<Team[]>([]);
+  const [slotSpinning, setSlotSpinning] = useState(false);
+  const slotIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const slotTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { turnState, setOrder, advanceBoard, advanceLyrics, setTurnState } = useTurnState();
   const turnOrder = turnState.order;
@@ -104,6 +109,14 @@ export default function GameBoardPage() {
   const activeTurnOrder = useMemo(
     () => turnOrder.filter((id) => teams.some((t) => t.id === id)),
     [turnOrder, teams],
+  );
+
+  const orderTeamsById = useCallback(
+    (ids: string[]) =>
+      ids
+        .map((id) => teams.find((t) => t.id === id))
+        .filter((t): t is Team => Boolean(t)),
+    [teams],
   );
 
   const getBoardTeamId = () =>
@@ -145,11 +158,59 @@ export default function GameBoardPage() {
   const isRedLyric = (idx: number) =>
     activeQuestion?.type === "lyrics" && lyricsPattern.includes(idx);
 
+  useEffect(() => {
+    if (slotSpinning) return;
+    if (!teams.length) {
+      setSlotFaces([]);
+      return;
+    }
+    const orderedTeams =
+      activeTurnOrder.length > 0
+        ? orderTeamsById(activeTurnOrder)
+        : [...teams];
+    setSlotFaces(orderedTeams.slice(0, Math.min(3, orderedTeams.length)));
+  }, [teams, activeTurnOrder, slotSpinning, orderTeamsById]);
+
+  useEffect(() => {
+    return () => {
+      if (slotIntervalRef.current) {
+        clearInterval(slotIntervalRef.current);
+      }
+      if (slotTimeoutRef.current) {
+        clearTimeout(slotTimeoutRef.current);
+      }
+    };
+  }, []);
+
   const startTurnOrder = () => {
-    if (teams.length === 0) return;
-    const shuffled = shuffle([...teams].map((t) => t.id));
-    setOrder(shuffled);
-    setSelectedTeamId("");
+    if (teams.length === 0 || slotSpinning) return;
+    setSlotSpinning(true);
+    const spinDuration = 1800 + Math.random() * 600;
+    const tick = setInterval(() => {
+      setSlotFaces((prev) => {
+        if (!teams.length) return prev;
+        return shuffle([...teams]).slice(0, Math.min(3, teams.length));
+      });
+    }, 90);
+    slotIntervalRef.current = tick;
+
+    if (slotTimeoutRef.current) {
+      clearTimeout(slotTimeoutRef.current);
+    }
+    slotTimeoutRef.current = setTimeout(() => {
+      if (slotIntervalRef.current) {
+        clearInterval(slotIntervalRef.current);
+        slotIntervalRef.current = null;
+      }
+      const shuffled = shuffle([...teams].map((t) => t.id));
+      setOrder(shuffled);
+      setSelectedTeamId("");
+      const orderedTeams = orderTeamsById(shuffled);
+      setSlotFaces(orderedTeams.slice(0, Math.min(3, orderedTeams.length)));
+      setSlotSpinning(false);
+      playSlotResolve();
+      slotTimeoutRef.current = null;
+    }, spinDuration);
   };
 
   const resetTimelineState = () => {
@@ -919,6 +980,12 @@ export default function GameBoardPage() {
 
   return (
     <main style={{ display: "grid", gap: "18px" }}>
+      <style>
+        {`@keyframes slot-shimmer {
+            0% { transform: translateY(-110%); }
+            100% { transform: translateY(110%); }
+          }`}
+      </style>
       <section className="card" style={{ padding: "18px" }}>
         <div
           style={{
@@ -927,9 +994,10 @@ export default function GameBoardPage() {
             alignItems: "center",
             gap: "12px",
             marginBottom: "8px",
+            flexWrap: "wrap",
           }}
         >
-          <div>
+          <div style={{ flex: 1, minWidth: "220px" }}>
             <h1 style={{ margin: 0 }}>Game Board</h1>
             <p
               style={{
@@ -946,18 +1014,133 @@ export default function GameBoardPage() {
               <span>Adjust scores in the leaderboard panel.</span>
             </p>
           </div>
-          <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
-            {turnOrder.length > 0 && currentTeam ? (
-              <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "var(--muted)", fontSize: "0.95rem" }}>
-                <span>{activeQuestion?.type === "lyrics" ? "Lyrics turn" : "Board turn"}:</span>
-                <TeamPill name={currentTeam.name} color={currentTeamColor} emoji={currentTeamEmoji} />
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "flex-end",
+              gap: "10px",
+              minWidth: "280px",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "10px",
+                flexWrap: "wrap",
+                justifyContent: "flex-end",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "10px",
+                  padding: "8px 10px",
+                  border: "1px solid rgba(255,255,255,0.12)",
+                  borderRadius: "10px",
+                  background: "rgba(255,255,255,0.03)",
+                  boxShadow: slotSpinning ? "0 0 0 2px rgba(255,255,255,0.06)" : "none",
+                  minWidth: "260px",
+                  position: "relative",
+                }}
+              >
+                <span style={{ color: "var(--muted)", fontSize: "0.9rem", minWidth: "84px", textAlign: "right" }}>
+                  {slotSpinning ? "Spinning…" : "Board turn:"}
+                </span>
+                {teams.length === 0 ? (
+                  <span style={{ color: "var(--muted)", fontSize: "0.9rem" }}>Add teams to spin</span>
+                ) : (
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                    {(slotFaces.length > 0 ? slotFaces : teams.slice(0, Math.min(3, teams.length))).map((team, idx) => {
+                      const isActive = team?.id && currentTeam?.id && team.id === currentTeam.id;
+                      const cardWidth = isActive && !slotSpinning ? "78px" : "64px";
+                      const cardHeight = isActive && !slotSpinning ? "72px" : "58px";
+                      const scaleRest = isActive && !slotSpinning ? 1.08 : 0.92;
+                      const scaleSpin = isActive && !slotSpinning ? 1.02 : 0.96;
+                      const bob = slotSpinning ? (idx % 2 === 0 ? "-4px" : "4px") : "0px";
+                      const baseBorder =
+                        team?.accentBase
+                          ? `${team.accentBase}${isActive ? "cc" : "80"}`
+                          : "rgba(255,255,255,0.18)";
+                      const transformValue = slotSpinning
+                        ? `translateY(${bob}) scale(${scaleSpin})`
+                        : `scale(${scaleRest})`;
+                      return (
+                      <div
+                        key={team?.id ?? `slot-${idx}`}
+                        title={team?.name ?? "Team"}
+                        aria-label={team?.name ?? "Team"}
+                        style={{
+                          width: cardWidth,
+                          height: cardHeight,
+                          borderRadius: "8px",
+                          background: team?.accentGlow
+                            ? `${team.accentGlow}33`
+                            : "rgba(255,255,255,0.05)",
+                          border: isActive && !slotSpinning
+                            ? `2px solid ${baseBorder}`
+                            : `1px solid ${baseBorder}`,
+                          display: "grid",
+                          placeItems: "center",
+                          position: "relative",
+                          overflow: "hidden",
+                          transition: "transform 0.14s ease, box-shadow 0.14s ease, border-color 0.14s ease",
+                          boxShadow: slotSpinning
+                            ? "0 3px 12px rgba(0,0,0,0.2)"
+                            : isActive
+                              ? `0 6px 18px ${team?.accentBase ? `${team.accentBase}3d` : "rgba(0,0,0,0.3)"}`
+                              : "0 1px 4px rgba(0,0,0,0.18)",
+                          transform: transformValue,
+                          outline: isActive && !slotSpinning ? `2px solid ${team?.accentBase ?? "rgba(255,255,255,0.25)"}` : "none",
+                          outlineOffset: "2px",
+                          cursor: "pointer",
+                        }}
+                      >
+                        <div
+                          style={{
+                            position: "absolute",
+                            inset: 0,
+                            background: slotSpinning
+                              ? "linear-gradient(180deg, transparent 0%, rgba(255,255,255,0.08) 50%, transparent 100%)"
+                              : "none",
+                            animation: slotSpinning ? "slot-shimmer 0.65s linear infinite" : "none",
+                            pointerEvents: "none",
+                            willChange: "transform",
+                          }}
+                          aria-hidden
+                        />
+                        <div style={{ fontSize: isActive && !slotSpinning ? "26px" : "22px", marginTop: "2px" }}>{team?.badgeEmoji ?? "❔"}</div>
+                        <div
+                          style={{
+                            position: "absolute",
+                            bottom: "8px",
+                            left: "8px",
+                            right: "8px",
+                            height: "6px",
+                            borderRadius: "999px",
+                            background: team?.accentBase
+                              ? `linear-gradient(90deg, ${team.accentBase}, ${team.accentGlow ?? team.accentBase})`
+                              : "rgba(255,255,255,0.12)",
+                            boxShadow: team?.accentBase ? `0 0 0 2px ${team.accentBase}22` : "none",
+                          }}
+                        />
+                      </div>
+                    );
+                    })}
+                  </div>
+                )}
               </div>
-            ) : (
-              <span style={{ color: "var(--muted)", fontSize: "0.95rem" }}>Set random answer order</span>
-            )}
-            <button className="button ghost" onClick={startTurnOrder} style={{ paddingInline: "10px" }}>
-              Randomize order
-            </button>
+              <button
+                className="button ghost"
+                onClick={startTurnOrder}
+                style={{ paddingInline: "10px" }}
+                disabled={slotSpinning || teams.length === 0}
+              >
+                {slotSpinning ? "Spinning…" : "Randomize order"}
+              </button>
+            </div>
           </div>
         </div>
 
