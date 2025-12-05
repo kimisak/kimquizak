@@ -1501,7 +1501,7 @@ const TimelineFields = React.memo(function TimelineFields({
                           style={{ maxWidth: "180px", padding: "0.45rem 0.6rem" }}
                         >
                           <option value="standard">Standard</option>
-                          <option value="lyrics">Lyrics grid</option>
+                          <option value="lyrics">Text grid</option>
                           <option value="geoguesser">Geoguesser</option>
                           <option value="joker">Joker high/low</option>
                           <option value="timeline">Timeline</option>
