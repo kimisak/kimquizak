@@ -2,6 +2,7 @@
 
 import type { Question, Team } from "@/lib/types";
 import { TeamPill } from "@/components/game/TeamPill";
+import { useMemo, useState } from "react";
 
 type Props = {
   question: Question;
@@ -38,6 +39,23 @@ export function StandardModal({
   disableActions,
   flashKey,
 }: Props) {
+  const [showAnswerImage, setShowAnswerImage] = useState(false);
+  const frontImage = useMemo(() => {
+    if (question.imageData) {
+      return { src: question.imageData, alt: question.imageName || "Question image" };
+    }
+    if (question.answerImageData) {
+      return { src: question.answerImageData, alt: question.answerImageName || "Answer image" };
+    }
+    return null;
+  }, [question.imageData, question.imageName, question.answerImageData, question.answerImageName]);
+  const backImage = useMemo(() => {
+    if (question.answerImageData) {
+      return { src: question.answerImageData, alt: question.answerImageName || "Answer image" };
+    }
+    return frontImage;
+  }, [question.answerImageData, question.answerImageName, frontImage]);
+  const flipActive = showAnswer && Boolean(backImage);
   return (
     <>
       <div
@@ -102,42 +120,96 @@ export function StandardModal({
           <div style={{ fontSize: "2.2rem", lineHeight: 1.35 }}>
             {question.prompt || "No clue entered yet."}
           </div>
-          {question.imageData && (
+          {frontImage && (
             <div
               style={{
                 marginTop: "12px",
                 borderRadius: "12px",
                 overflow: "hidden",
                 border: "1px solid rgba(255,255,255,0.12)",
+                minHeight: "200px",
+                background: "rgba(0,0,0,0.25)",
+                perspective: "1200px",
               }}
             >
-              <img
-                src={question.imageData}
-                alt={question.imageName || "Question image"}
+              <div
                 style={{
-                  width: "100%",
-                  maxHeight: "520px",
-                  height: "auto",
-                  objectFit: "contain",
-                  display: "block",
+                  position: "relative",
+                  height: "100%",
+                  minHeight: "200px",
+                  transformStyle: "preserve-3d",
+                  transition: "transform 0.65s ease",
+                  transform: showAnswerImage && backImage ? "rotateY(180deg)" : "rotateY(0deg)",
                 }}
-              />
+              >
+                <div
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    backfaceVisibility: "hidden",
+                  }}
+                >
+                  <img
+                    src={frontImage.src}
+                    alt={frontImage.alt}
+                    style={{
+                      width: "100%",
+                      maxHeight: "520px",
+                      height: "100%",
+                      objectFit: "contain",
+                      display: "block",
+                    }}
+                  />
+                </div>
+                {backImage && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      inset: 0,
+                      backfaceVisibility: "hidden",
+                      transform: "rotateY(180deg)",
+                    }}
+                  >
+                    <img
+                      src={backImage.src}
+                      alt={backImage.alt}
+                      style={{
+                        width: "100%",
+                        maxHeight: "520px",
+                        height: "100%",
+                        objectFit: "contain",
+                        display: "block",
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
             </div>
           )}
-          <div
-            style={{
-              marginTop: "18px",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              gap: "10px",
-            }}
-          >
-            <button className="button ghost" onClick={onClose}>
-              Close
-            </button>
-            <button className="button primary" onClick={onRevealAnswer}>
-              Reveal answer
+            <div
+              style={{
+                marginTop: "18px",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                gap: "10px",
+                flexWrap: "wrap",
+              }}
+            >
+              {backImage && (
+                <button
+                  className="button secondary"
+                  onClick={() => setShowAnswerImage((prev) => !prev)}
+                  style={{ minWidth: "160px" }}
+                >
+                  {showAnswerImage ? "Show question image" : "Show answer image"}
+                </button>
+              )}
+              <button className="button ghost" onClick={onClose}>
+                Close
+              </button>
+              <button className="button primary" onClick={onRevealAnswer}>
+                Reveal answer
             </button>
           </div>
         </div>
@@ -189,7 +261,7 @@ export function StandardModal({
               {question.answer || "No answer provided."}
             </div>
           </div>
-          {question.answerImageData && (
+          {backImage && (
             <div
               style={{
                 marginTop: "14px",
@@ -199,8 +271,8 @@ export function StandardModal({
               }}
             >
               <img
-                src={question.answerImageData}
-                alt={question.answerImageName || "Answer image"}
+                src={backImage.src}
+                alt={backImage.alt}
                 style={{
                   width: "100%",
                   maxHeight: "520px",
