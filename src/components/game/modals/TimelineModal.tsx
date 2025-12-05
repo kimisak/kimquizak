@@ -276,10 +276,21 @@ export function TimelineModal({
           }}
         >
           {winnerName ? (
-            <span>
-              Congrats, <strong style={{ color: "#f2c14f" }}>{winnerName}</strong> earned{" "}
-              <strong style={{ color: "#f2c14f" }}>{potentialScore ?? points ?? 0}</strong> points!
-            </span>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+              <span>Congrats,</span>
+              {winnerTeamId ? (
+                <TeamPill
+                  name={winnerName}
+                  color={winnerTeamColor ?? "#f2c14f"}
+                  emoji={winnerTeamEmoji ?? "⭐️"}
+                />
+              ) : (
+                <strong style={{ color: "#f2c14f" }}>{winnerName}</strong>
+              )}
+              <span>
+                earned <strong style={{ color: "#f2c14f" }}>{potentialScore ?? points ?? 0}</strong> points!
+              </span>
+            </div>
           ) : noWinner ? (
             <span style={{ color: "#f2c14f", fontWeight: 700 }}>No team earned points.</span>
           ) : (
