@@ -60,6 +60,8 @@ const McqFields = React.memo(function McqFields({
   points,
   q,
   upsertQuestion,
+  handleImageChange,
+  handleAnswerImageChange,
 }: FieldProps) {
   const [optionCount, setOptionCount] = useState<number>(
     Math.max(2, Math.min(4, q?.mcqOptions?.length || 2)),
@@ -137,6 +139,85 @@ const McqFields = React.memo(function McqFields({
         }}
         placeholder="Question text"
       />
+      <label className="label" style={{ marginTop: "8px" }}>
+        Question image (optional)
+      </label>
+      <label className="input" style={{ display: "inline-flex", alignItems: "center", gap: "8px", width: "fit-content", cursor: "pointer", padding: "0.6rem 0.8rem" }}>
+        <input
+          type="file"
+          accept="image/*"
+          onChange={(e) =>
+            handleImageChange?.(
+              category,
+              points,
+              e.target.files?.[0] ?? null,
+            )
+          }
+          style={{ display: "none" }}
+        />
+        <span style={{ fontWeight: 600 }}>⬆️ Upload</span>
+      </label>
+      {q?.imageData && (
+        <div
+          style={{
+            marginTop: "10px",
+            borderRadius: "10px",
+            overflow: "hidden",
+            border: "1px solid rgba(255,255,255,0.1)",
+            position: "relative",
+          }}
+        >
+          <button
+            onClick={() =>
+              upsertQuestion(category, points, {
+                imageData: null,
+                imageName: null,
+              })
+            }
+            aria-label="Remove image"
+            style={{
+              position: "absolute",
+              top: "8px",
+              right: "8px",
+              width: "28px",
+              height: "28px",
+              borderRadius: "50%",
+              border: "1px solid rgba(255,255,255,0.2)",
+              background: "rgba(0,0,0,0.35)",
+              color: "#fff",
+              display: "grid",
+              placeItems: "center",
+              cursor: "pointer",
+              zIndex: 2,
+            }}
+          >
+            ×
+          </button>
+          <img
+            src={q.imageData}
+            alt={q.imageName || "Question image"}
+            style={{
+              width: "100%",
+              height: "auto",
+              display: "block",
+              maxHeight: "240px",
+              objectFit: "contain",
+            }}
+          />
+          {q.imageName && (
+            <div
+              style={{
+                padding: "6px 10px",
+                fontSize: "0.9rem",
+                color: "var(--muted)",
+                background: "rgba(255,255,255,0.03)",
+              }}
+            >
+              {q.imageName}
+            </div>
+          )}
+        </div>
+      )}
       <div style={{ display: "grid", gap: "8px", marginTop: "8px" }}>
         {options.slice(0, optionCount).map((opt, idx) => (
           <div key={idx} style={{ display: "grid", gap: "6px" }}>
@@ -185,6 +266,85 @@ const McqFields = React.memo(function McqFields({
       <div style={{ color: "var(--muted)", fontSize: "0.9rem", marginTop: "6px" }}>
         Two or four options. If rotation is on (only for 4-option mode), wrong answers pass to the next team; first correct wins the points.
       </div>
+      <label className="label" style={{ marginTop: "10px" }}>
+        Answer image (optional)
+      </label>
+      <label className="input" style={{ display: "inline-flex", alignItems: "center", gap: "8px", width: "fit-content", cursor: "pointer", padding: "0.6rem 0.8rem" }}>
+        <input
+          type="file"
+          accept="image/*"
+          onChange={(e) =>
+            handleAnswerImageChange?.(
+              category,
+              points,
+              e.target.files?.[0] ?? null,
+            )
+          }
+          style={{ display: "none" }}
+        />
+        <span style={{ fontWeight: 600 }}>⬆️ Upload</span>
+      </label>
+      {q?.answerImageData && (
+        <div
+          style={{
+            marginTop: "10px",
+            borderRadius: "10px",
+            overflow: "hidden",
+            border: "1px solid rgba(255,255,255,0.1)",
+            position: "relative",
+          }}
+        >
+          <button
+            onClick={() =>
+              upsertQuestion(category, points, {
+                answerImageData: null,
+                answerImageName: null,
+              })
+            }
+            aria-label="Remove answer image"
+            style={{
+              position: "absolute",
+              top: "8px",
+              right: "8px",
+              width: "28px",
+              height: "28px",
+              borderRadius: "50%",
+              border: "1px solid rgba(255,255,255,0.2)",
+              background: "rgba(0,0,0,0.35)",
+              color: "#fff",
+              display: "grid",
+              placeItems: "center",
+              cursor: "pointer",
+              zIndex: 2,
+            }}
+          >
+            ×
+          </button>
+          <img
+            src={q.answerImageData}
+            alt={q.answerImageName || "Answer image"}
+            style={{
+              width: "100%",
+              height: "auto",
+              display: "block",
+              maxHeight: "240px",
+              objectFit: "contain",
+            }}
+          />
+          {q.answerImageName && (
+            <div
+              style={{
+                padding: "6px 10px",
+                fontSize: "0.9rem",
+                color: "var(--muted)",
+                background: "rgba(255,255,255,0.03)",
+              }}
+            >
+              {q.answerImageName}
+            </div>
+          )}
+        </div>
+      )}
     </>
   );
 });
@@ -1510,6 +1670,8 @@ const TimelineFields = React.memo(function TimelineFields({
                         points={points}
                         q={q}
                         upsertQuestion={upsertQuestion}
+                        handleImageChange={handleImageChange}
+                        handleAnswerImageChange={handleAnswerImageChange}
                       />
                     )}
                     {(q?.type ?? "standard") === "audio" && (

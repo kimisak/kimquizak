@@ -98,6 +98,29 @@ export function McqModal({
           {question.prompt}
         </div>
       )}
+      {question.imageData && (
+        <div
+          style={{
+            marginBottom: "14px",
+            borderRadius: "12px",
+            overflow: "hidden",
+            border: "1px solid rgba(255,255,255,0.1)",
+          }}
+        >
+          <img
+            src={question.imageData}
+            alt={question.imageName || "Question image"}
+            style={{
+              width: "100%",
+              height: "auto",
+              display: "block",
+              maxHeight: "280px",
+              objectFit: "contain",
+              background: "rgba(0,0,0,0.3)",
+            }}
+          />
+        </div>
+      )}
       <div
         style={{
           display: "grid",
@@ -165,6 +188,29 @@ export function McqModal({
           );
         })}
       </div>
+      {resolved && question.answerImageData && (
+        <div
+          style={{
+            marginTop: "14px",
+            borderRadius: "12px",
+            overflow: "hidden",
+            border: "1px solid rgba(255,255,255,0.1)",
+          }}
+        >
+          <img
+            src={question.answerImageData}
+            alt={question.answerImageName || "Answer image"}
+            style={{
+              width: "100%",
+              height: "auto",
+              display: "block",
+              maxHeight: "280px",
+              objectFit: "contain",
+              background: "rgba(0,0,0,0.3)",
+            }}
+          />
+        </div>
+      )}
       <div style={{ color: "var(--muted)", marginTop: "12px", fontSize: "0.95rem" }}>
         {resolved ? (
           <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
