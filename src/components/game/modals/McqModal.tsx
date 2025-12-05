@@ -135,13 +135,13 @@ const optionColors = useMemo(() => {
                 borderRadius: "12px",
                 overflow: "hidden",
                 border: "1px solid rgba(255,255,255,0.1)",
-                filter: blurFront ? "blur(6px) brightness(0.7)" : "none",
+                filter: blurFront ? "blur(14px) brightness(0.5)" : "none",
               }}
-            >
-              <img
-                src={frontImage.src ?? undefined}
-                alt={frontImage.alt ?? "Question image"}
-                style={{
+              >
+                <img
+                  src={frontImage.src ?? undefined}
+                  alt={frontImage.alt ?? "Question image"}
+                  style={{
                   width: "100%",
                   height: "100%",
                   objectFit: "contain",
@@ -156,10 +156,11 @@ const optionColors = useMemo(() => {
                     inset: 0,
                     display: "grid",
                     placeItems: "center",
-                    background: "rgba(0,0,0,0.35)",
+                    background: "linear-gradient(135deg, rgba(0,0,0,0.45), rgba(0,0,0,0.65))",
                     color: "#e2e8f0",
                     fontWeight: 700,
                     letterSpacing: "0.02em",
+                    textTransform: "uppercase",
                   }}
                 >
                   Answer hidden
