@@ -46,11 +46,12 @@ export function McqModal({
     return base;
   }, [rawOptions, optionCount]);
   const palette = ["#d94444", "#2c9b61", "#8a5adf", "#f2c14f"];
-const optionColors = useMemo(() => {
-  const arr = [...palette];
-  for (let i = arr.length - 1; i > 0; i -= 1) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
+  const rotateOnMiss = question.mcqRotateOnMiss ?? hasFour;
+  const optionColors = useMemo(() => {
+    const arr = [...palette];
+    for (let i = arr.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
   }
   return arr.slice(0, options.length);
 }, [question.id, options.length]);
@@ -100,6 +101,13 @@ const optionColors = useMemo(() => {
           <div style={{ fontSize: "2rem", fontWeight: 800 }}>
             {question.points} pts
           </div>
+          {hasFour && (
+            <div style={{ color: "var(--muted)", fontSize: "0.95rem", display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+              <span style={{ padding: "4px 8px", borderRadius: "10px", border: "1px solid rgba(255,255,255,0.14)" }}>
+                Rotation on miss: {rotateOnMiss ? "On" : "Off"}
+              </span>
+            </div>
+          )}
           {answeringTeamName && !resolved && (
             <TeamPill label="Answering" name={answeringTeamName} color={answeringTeamColor} emoji={answeringTeamEmoji} />
           )}
@@ -285,9 +293,9 @@ const optionColors = useMemo(() => {
             </span>
           </div>
         ) : options.length === 4 ? (
-          eliminated.length > 0
+          rotateOnMiss
             ? "Wrong answers pass to the next team. First correct wins the points."
-            : "First correct wins the points. If enabled, wrong answers pass to the next team."
+            : "Wrong answers stay with the current team. First correct wins the points."
         ) : (
           "Two-option mode: a wrong answer ends the question and costs points."
         )}
