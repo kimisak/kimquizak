@@ -519,9 +519,6 @@ export default function GameBoardPage() {
     );
     if (activeTurnOrder.length > 0 && activeQuestion.type !== "audio") {
       advanceBoard();
-      if (activeQuestion.type !== "lyrics") {
-        // keep lyrics order as-is for non-lyrics
-      }
     }
     setLastGuessTeamId("");
     closeModal();
