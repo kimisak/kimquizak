@@ -88,7 +88,9 @@ function buildDefaultQuestions(): Question[] {
     {
       ...base(300),
       type: "lyrics",
-      prompt: "Fullfør linjene fra den norske julesangen.",
+      prompt: "Gjett sangen!",
+      answerVideoUrl: "https://www.youtube.com/embed/_uv74o8hG30?si=6SvaaogCRd80KARm&start=6",
+      answerVideoAutoplay: false,
       lyricsSegments: [
         "På låven sitter nissen",
         "med sin julegrøt så god, så god og søt",
@@ -101,8 +103,8 @@ function buildDefaultQuestions(): Question[] {
       ...base(400),
       type: "timeline",
       prompt: "Plasser hendelsene om norske juletradisjoner i riktig rekkefølge.",
-      timelineCenterYear: 1985,
-      timelineCenterLabel: "Midten av 1900-tallet",
+      timelineCenterYear: 1950,
+      timelineCenterLabel: "Midten av 1900-tallet (1950)",
       timelineTitle: "Jul i Norge",
       timelineEvents: [
         {
@@ -132,11 +134,10 @@ function buildDefaultQuestions(): Question[] {
       type: "geoguesser",
       prompt: "Hvor i Norge er dette ikoniske julepyntede stedet?",
       mapEmbedUrl:
-        "https://www.openstreetmap.org/export/embed.html?bbox=5.3211%2C60.3975%2C5.3273%2C60.4013&layer=mapnik&marker=60.3994%2C5.3242",
-      answerLocationLabel: "Bryggen i Bergen",
-      answerLocationUrl:
-        "https://www.openstreetmap.org/?mlat=60.3994&mlon=5.3242#map=17/60.3994/5.3242",
-      answer: "Bryggen i Bergen",
+        "https://www.google.com/maps/embed?pb=!4v1765183753215!6m8!1m7!1sGxcEs3hTQa28F2Pdbjsm6g!2m2!1d60.39321104609752!2d5.324059880868293!3f167.38348572852502!4f14.484171742486694!5f0.7820865974627469",
+      answerLocationLabel: "Torgallmenningen, Bergen",
+      answerLocationUrl: "https://maps.google.com/?q=60.39321104609752,5.324059880868293",
+      answer: "Torgallmenningen, Bergen",
     },
   ];
 }
