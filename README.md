@@ -39,3 +39,4 @@ Prod: https://julebord-games.vercel.app/
 - No secrets or API keys are required; everything runs client-side.
 - Images are kept in `localStorage`; large images may bloat storage limits—prefer smaller uploads.
 - Built by Codex as the developer, with a human acting as product owner and QA lead.
+- Tested in Microsoft Edge; iframes may behave differently in other browsers (e.g., embed autoplay quirks).
