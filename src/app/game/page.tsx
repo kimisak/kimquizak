@@ -20,13 +20,12 @@ import { usePersistentState } from "@/hooks/usePersistentState";
 import { useTurnState } from "@/hooks/useTurnState";
 import { generateRedPattern, shuffle } from "@/lib/redPattern";
 import { QUESTION_STORAGE_KEY, TEAM_STORAGE_KEY } from "@/lib/storage";
-import { type Question, type Team } from "@/lib/types";
+import { type Question, type Team, type TimelineEvent } from "@/lib/types";
 
 type ActiveQuestion = Question & { category: string };
-type PlacedTimelineEvent =
-  | (Question["timelineEvents"] extends (infer U)[] ? U : never) & {
-      status?: "correct" | "wrong";
-    };
+type PlacedTimelineEvent = TimelineEvent & {
+  status?: "correct" | "wrong";
+};
 export default function GameBoardPage() {
   const {
     playSadBlip,
