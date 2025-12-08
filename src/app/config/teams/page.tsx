@@ -37,11 +37,11 @@ function createDefaultTeams(): Team[] {
   return [
     {
       id: makeId("team"),
-      name: "Fir Spruce",
+      name: "Pepperkakelaget",
       score: 0,
-      badgeEmoji: emojiOptions[0].emoji,
-      accentBase: emojiOptions[0].base,
-      accentGlow: emojiOptions[0].glow,
+      badgeEmoji: emojiOptions[12].emoji,
+      accentBase: emojiOptions[12].base,
+      accentGlow: emojiOptions[12].glow,
       players: [
         { id: makeId("p"), name: "Player 1" },
         { id: makeId("p"), name: "Player 2" },
@@ -50,11 +50,11 @@ function createDefaultTeams(): Team[] {
     },
     {
       id: makeId("team"),
-      name: "Pepperkake",
+      name: "Stjerneskudd",
       score: 0,
-      badgeEmoji: emojiOptions[1].emoji,
-      accentBase: emojiOptions[1].base,
-      accentGlow: emojiOptions[1].glow,
+      badgeEmoji: emojiOptions[19].emoji,
+      accentBase: emojiOptions[19].base,
+      accentGlow: emojiOptions[19].glow,
       players: [
         { id: makeId("p"), name: "Player 1" },
         { id: makeId("p"), name: "Player 2" },
@@ -63,7 +63,7 @@ function createDefaultTeams(): Team[] {
     },
     {
       id: makeId("team"),
-      name: "Reindeer Crew",
+      name: "Bjelleklang",
       score: 0,
       badgeEmoji: emojiOptions[2].emoji,
       accentBase: emojiOptions[2].base,
