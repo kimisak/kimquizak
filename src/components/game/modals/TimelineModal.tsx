@@ -63,7 +63,14 @@ export function TimelineModal({
 
   const combined = [
     ...placedLeft.map((e) => ({ ...e, side: "left" as const })),
-    { id: "__center", text: "Center", year: centerYear, side: "center" as const, timelineText: undefined },
+    {
+      id: "__center",
+      text: "Center",
+      year: centerYear,
+      side: "center" as const,
+      timelineText: undefined,
+      status: undefined,
+    },
     ...placedRight.map((e) => ({ ...e, side: "right" as const })),
   ].sort((a, b) => (a.year ?? 0) - (b.year ?? 0));
 
