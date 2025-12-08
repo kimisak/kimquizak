@@ -58,9 +58,7 @@ export function McqModal({
   const flipActive = resolved && hasAnswerImage;
   const frontImage = hasQuestionImage
     ? { src: question.imageData, alt: question.imageName || "Question image" }
-    : hasAnswerImage
-      ? { src: question.answerImageData, alt: question.answerImageName || "Answer image" }
-      : null;
+    : null;
   const backImage = hasAnswerImage
     ? { src: question.answerImageData, alt: question.answerImageName || "Answer image" }
     : frontImage;

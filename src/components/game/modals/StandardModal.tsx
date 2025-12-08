@@ -44,9 +44,6 @@ export function StandardModal({
     if (question.imageData) {
       return { src: question.imageData, alt: question.imageName || "Question image" };
     }
-    if (question.answerImageData) {
-      return { src: question.answerImageData, alt: question.answerImageName || "Answer image" };
-    }
     return null;
   }, [question.imageData, question.imageName, question.answerImageData, question.answerImageName]);
   const backImage = useMemo(() => {
