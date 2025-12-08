@@ -1046,7 +1046,7 @@ const LyricsFields = React.memo(function LyricsFields(props: FieldProps) {
         placeholder="Optional intro or clue"
       />
       <label className="label" style={{ marginTop: "8px" }}>
-        Answer video URL (YouTube embed or share link)
+        Answer video URL (YouTube embed link, not share)
       </label>
       <input
         className="input"
@@ -1178,8 +1178,26 @@ const GeoguesserFields = React.memo(function GeoguesserFields({
         }}
         placeholder="Optional hint or instructions"
       />
-      <label className="label" style={{ marginTop: "8px" }}>
-        Google Maps Street View embed URL
+      <label className="label" style={{ marginTop: "8px", display: "flex", alignItems: "center", gap: "8px" }}>
+        <span>Google Maps Street View embed URL</span>
+        <span
+          title="Find a place in Street View that does not show the street address on the road - this may be difficult."
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: "18px",
+            height: "18px",
+            borderRadius: "50%",
+            border: "1px solid rgba(255,255,255,0.3)",
+            fontSize: "12px",
+            cursor: "help",
+            color: "var(--muted)",
+            background: "rgba(255,255,255,0.05)",
+          }}
+        >
+          i
+        </span>
       </label>
       <input
         className="input"
