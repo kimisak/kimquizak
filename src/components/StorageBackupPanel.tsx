@@ -6,6 +6,11 @@ import {
   parseBackupPayload,
   persistBackupToLocalStorage,
 } from "@/lib/backup";
+import {
+  QUESTION_STORAGE_KEY,
+  TEAM_STORAGE_KEY,
+  TURN_STATE_STORAGE_KEY,
+} from "@/lib/storage";
 
 type Tone = "muted" | "success" | "error";
 
@@ -65,6 +70,24 @@ export function StorageBackupPanel() {
     reader.readAsText(file);
   };
 
+  const handleClearAll = () => {
+    if (typeof window === "undefined") return;
+    const confirmed = window.confirm(
+      "This will erase all local data (teams, questions, progress) stored in your browser. Continue?",
+    );
+    if (!confirmed) return;
+    try {
+      window.localStorage.removeItem(TEAM_STORAGE_KEY);
+      window.localStorage.removeItem(QUESTION_STORAGE_KEY);
+      window.localStorage.removeItem(TURN_STATE_STORAGE_KEY);
+      updateStatus("Local data cleared. Reloading...", "success");
+      setTimeout(() => window.location.reload(), 350);
+    } catch (err) {
+      console.error("Failed to clear storage", err);
+      updateStatus("Could not clear local data.", "error");
+    }
+  };
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
       <div>
@@ -90,6 +113,14 @@ export function StorageBackupPanel() {
             onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)}
           />
         </label>
+        <button
+          className="button ghost"
+          type="button"
+          onClick={handleClearAll}
+          style={{ borderColor: "rgba(255, 99, 99, 0.4)", color: "#fca5a5" }}
+        >
+          🗑️ Clear local data
+        </button>
       </div>
       {status ? (
         <div
