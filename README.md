@@ -17,6 +17,15 @@ Prod: https://julebord-games.vercel.app/
 - `Config / Questions`: add categories and question types (standard, text grid, geoguesser, joker, timeline, MCQ, audio); upload optional images where supported.
 - `Game`: spin the slot machine to set board turn order, play tiles, and track scores/answers.
 
+## Question types (cheat sheet)
+- **Standard**: prompt + answer; optional question/answer images.
+- **MCQ**: 2 or 4 options. Rotation on wrong only applies in 4-option mode if enabled.
+- **Text grid (lyrics)**: one word/segment per line. Answer video must be a YouTube *embed* URL (not a share link). Rotation can depend on red tiles.
+- **Geoguesser**: Google Maps Street View *embed* URL (share → embed); avoid views with visible street addresses. Optional hint, timer, unlock cost, and answer link/label.
+- **Timeline**: events with years. Center year/label configurable. Rotation on miss optional.
+- **Audio**: hidden YouTube *embed* URL plus start/stop seconds; plays once, then locks.
+- **Joker high/low**: configurable count, min/max, increment, and rotation on miss.
+
 ## Persistence
 - Local-only: teams (`julebord_teams_v1`), questions (`julebord_questions_v1`), and turn state (`julebord_turn_state_v1`) are saved in `localStorage`.
 - Reset turn order from the Teams config if you need a fresh spin.
