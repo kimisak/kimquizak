@@ -10,6 +10,7 @@ npm run dev
 ```
 
 Open http://localhost:3000 and use the config pages to add teams and questions.
+Prod: https://julebord-games.vercel.app/
 
 ## Main flows
 - `Config / Teams`: set team names, colors/emojis, players; reset turn order.
