@@ -226,7 +226,7 @@ export function StandardModal({
                   display: "block",
                 }}
               />
-              {frontImage && (
+              {frontImage && question.answerImageData && (
                 <button
                   className="button secondary"
                   onClick={() => setShowAnswerImage((prev) => !prev)}
