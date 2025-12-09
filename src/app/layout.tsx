@@ -3,7 +3,7 @@ import Link from "next/link";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Julebord Jeopardy",
+  title: "Julebord Games",
   description: "Party board and config for the Christmas table games",
 };
 
