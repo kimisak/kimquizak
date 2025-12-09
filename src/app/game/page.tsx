@@ -1068,6 +1068,20 @@ export default function GameBoardPage() {
         >
           <div style={{ flex: 1, minWidth: "220px" }}>
             <h1 style={{ margin: 0 }}>Game Board</h1>
+            <p
+              style={{
+                color: "var(--muted)",
+                marginTop: "6px",
+                lineHeight: 1.4,
+                minHeight: "60px",
+                display: "grid",
+                alignItems: "center",
+              }}
+            >
+              <span>Click a tile to open the question.</span>
+              <span>Wrong answers subtract points.</span>
+              <span>Adjust scores in the leaderboard panel.</span>
+            </p>
           </div>
           <div
             style={{

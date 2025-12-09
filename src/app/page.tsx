@@ -9,7 +9,7 @@ export default function Home() {
       }}
     >
       <h1 style={{ fontSize: "2.4rem", marginBottom: "10px" }}>
-        Julebord Jeopardy
+        Julebord Games
       </h1>
       <p style={{ color: "var(--muted)", marginBottom: "20px" }}>
         Configure teams, enter categories and clues, then run the board from one
