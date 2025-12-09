@@ -1604,7 +1604,7 @@ const TimelineFields = React.memo(function TimelineFields({
                       outline: isDragOver ? "2px dashed rgba(255,255,255,0.5)" : "none",
                       opacity: isDragging ? 0.6 : 1,
                       transition: "outline 0.15s ease, opacity 0.15s ease",
-                      cursor: "grab",
+                      cursor: "default",
                     }}
                   >
                     <div
