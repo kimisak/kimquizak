@@ -58,7 +58,7 @@ export default function RootLayout({
                 target="_blank"
                 rel="noreferrer"
               >
-                <span style={{ marginRight: "6px" }}>🐙</span> GitHub
+                Source code
               </a>
             </nav>
           </header>
