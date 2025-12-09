@@ -39,7 +39,7 @@ export default function RootLayout({
                   padding: "10px 14px",
                   borderRadius: "999px",
                   border: "1px solid rgba(255,255,255,0.18)",
-                  background: "rgba(255,255,255,0.05)",
+                  background: "transparent",
                   textDecoration: "none",
                   display: "inline-flex",
                   alignItems: "center",
