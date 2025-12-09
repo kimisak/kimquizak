@@ -15,7 +15,7 @@ Prod: https://julebord-games.vercel.app/
 ## Main flows
 - `Config / Teams`: set team names, colors/emojis, players; reset turn order.
 - `Config / Questions`: add categories (tabbed, one at a time) and question types (standard, text grid, geoguesser, joker, timeline, MCQ, audio); upload optional images where supported. Drag questions within a category to reorder point slots.
-- `Game`: spin the slot machine to set board turn order, play tiles, and track scores/answers. Pre-spin tiles give a small bounce/boing; spinning plays a short chime loop.
+- `Game`: spin the slot machine to set board turn order, play tiles, and track scores/answers. Pre-spin tiles give a small bounce/boing; spinning plays a short chime loop. Board turn advances after each resolved question.
 
 ## Question types (cheat sheet)
 - **Standard**: prompt + answer; optional question/answer images.
@@ -23,7 +23,7 @@ Prod: https://julebord-games.vercel.app/
 - **Text grid (lyrics)**: one word/segment per line. Answer video must be a YouTube *embed* URL (not a share link). Red tiles rotate to the next team and shave the pot; “Next team” button available for hosts on wrong guesses.
 - **Geoguesser**: Google Maps Street View *embed* URL (share → embed); avoid views with visible street addresses. Optional hint, timer, unlock cost, and answer link/label. Unlock caps reward and adds to the penalty on a miss.
 - **Timeline**: events with years. Center year/label configurable. Rotation on miss optional.
-- **Audio**: hidden YouTube *embed* URL plus start/stop seconds; plays once, then locks; board turn advances after scoring.
+- **Audio**: hidden YouTube *embed* URL plus start/stop seconds; plays once, then locks.
 - **Joker high/low**: configurable count, min/max, increment, and rotation on miss.
 
 ## Persistence
