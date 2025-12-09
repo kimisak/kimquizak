@@ -88,6 +88,24 @@ export function StorageBackupPanel() {
     }
   };
 
+  const handleLoadExample = async () => {
+    try {
+      const mod = await import("../../default_questions.json");
+      const payloadRaw = (mod as any).default ?? mod;
+      const payload = parseBackupPayload(JSON.stringify(payloadRaw));
+      persistBackupToLocalStorage(payload);
+      updateStatus("Example data loaded. Reloading...", "success");
+      setTimeout(() => window.location.reload(), 350);
+    } catch (err) {
+      console.error("Failed to load example data", err);
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Could not load example data from default_questions.json.";
+      updateStatus(message, "error");
+    }
+  };
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
       <div>
@@ -120,6 +138,9 @@ export function StorageBackupPanel() {
           style={{ borderColor: "rgba(255, 99, 99, 0.4)", color: "#fca5a5" }}
         >
           🗑️ Clear local data
+        </button>
+        <button className="button secondary" type="button" onClick={handleLoadExample}>
+          ✨ Add example data
         </button>
       </div>
       {status ? (
