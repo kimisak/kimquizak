@@ -1534,6 +1534,7 @@ const TimelineFields = React.memo(function TimelineFields({
                     : "rgba(255,255,255,0.04)",
                   fontWeight: isActive ? 700 : 600,
                   whiteSpace: "nowrap",
+                  cursor: "pointer",
                 }}
               >
                 {label || cat}
