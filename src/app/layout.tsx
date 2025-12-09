@@ -52,6 +52,14 @@ export default function RootLayout({
               <Link className="button secondary" href="/game">
                 Game board
               </Link>
+              <a
+                className="button ghost"
+                href="https://github.com/kimisak/Julebord-Games"
+                target="_blank"
+                rel="noreferrer"
+              >
+                <span style={{ marginRight: "6px" }}>🐙</span> GitHub
+              </a>
             </nav>
           </header>
           {children}
