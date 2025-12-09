@@ -31,7 +31,22 @@ export default function RootLayout({
             }}
           >
             <div style={{ display: "flex", alignItems: "baseline", gap: "10px" }}>
-              <Link href="/" style={{ fontSize: "1.7rem", fontWeight: 800 }}>
+              <Link
+                href="/"
+                style={{
+                  fontSize: "1.7rem",
+                  fontWeight: 800,
+                  padding: "8px 12px",
+                  borderRadius: "12px",
+                  border: "1px solid rgba(255,255,255,0.12)",
+                  background: "rgba(255,255,255,0.04)",
+                  textDecoration: "none",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  transition: "border-color 0.15s ease, background 0.15s ease",
+                }}
+              >
                 🎄 Julebord Games
               </Link>
             </div>
