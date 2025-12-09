@@ -1606,36 +1606,6 @@ const TimelineFields = React.memo(function TimelineFields({
                       transition: "outline 0.15s ease, opacity 0.15s ease",
                       cursor: "grab",
                     }}
-                    draggable
-                    onDragStart={(e) => {
-                      setDragging({ category, points });
-                      setDragOver(points);
-                      e.dataTransfer?.setData("text/plain", `${category}-${points}`);
-                    }}
-                    onDragEnter={(e) => {
-                      e.preventDefault();
-                      if (dragging?.category === category) {
-                        setDragOver(points);
-                      }
-                    }}
-                    onDragOver={(e) => {
-                      e.preventDefault();
-                      if (dragging?.category === category) {
-                        setDragOver(points);
-                      }
-                    }}
-                    onDrop={(e) => {
-                      e.preventDefault();
-                      if (dragging?.category === category) {
-                        moveQuestionTo(category, dragging.points, points);
-                      }
-                      setDragOver(null);
-                      setDragging(null);
-                    }}
-                    onDragEnd={() => {
-                      setDragOver(null);
-                      setDragging(null);
-                    }}
                   >
                     <div
                       style={{
@@ -1657,6 +1627,36 @@ const TimelineFields = React.memo(function TimelineFields({
                         cursor: "grab",
                       }}
                       title="Drag to reorder this question within the category"
+                      draggable
+                      onDragStart={(e) => {
+                        setDragging({ category, points });
+                        setDragOver(points);
+                        e.dataTransfer?.setData("text/plain", `${category}-${points}`);
+                      }}
+                      onDragEnter={(e) => {
+                        e.preventDefault();
+                        if (dragging?.category === category) {
+                          setDragOver(points);
+                        }
+                      }}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        if (dragging?.category === category) {
+                          setDragOver(points);
+                        }
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        if (dragging?.category === category) {
+                          moveQuestionTo(category, dragging.points, points);
+                        }
+                        setDragOver(null);
+                        setDragging(null);
+                      }}
+                      onDragEnd={() => {
+                        setDragOver(null);
+                        setDragging(null);
+                      }}
                     >
                       ⇅ Drag to reorder
                     </div>
