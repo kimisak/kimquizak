@@ -44,7 +44,6 @@ export function GeoguesserModal({
   const lockDisabled = timerUsed ? true : !mapLocked && countdownSeconds !== null;
   const unlockCost = question.geoUnlockCost ?? 0;
   const unlockDuration = question.geoTimerSeconds ?? 10;
-
   return (
     <>
       <div
@@ -131,10 +130,17 @@ export function GeoguesserModal({
                   </button>
                 </div>
                 <div style={{ color: "var(--muted)", fontSize: "0.9rem", textAlign: "right" }}>
-                  Unlocking deducts{" "}
-                  <strong style={{ color: "#f7c948" }}>{unlockCost} pts</strong> from this question
-                  and opens the map for{" "}
-                  <strong style={{ color: "#f7c948" }}>{unlockDuration}s</strong>.
+                  {unlockCost > 0 ? (
+                    <>
+                      Unlocking caps the reward by <strong style={{ color: "#f7c948" }}>{unlockCost} pts</strong> and adds the same{" "}
+                      <strong style={{ color: "#f7c948" }}>{unlockCost} pts</strong> to the penalty if wrong. Map opens for{" "}
+                      <strong style={{ color: "#f7c948" }}>{unlockDuration}s</strong>.
+                    </>
+                  ) : (
+                    <>
+                      Unlocking opens the map for <strong style={{ color: "#f7c948" }}>{unlockDuration}s</strong>.
+                    </>
+                  )}
                 </div>
               </div>
             )}

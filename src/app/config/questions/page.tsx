@@ -43,7 +43,6 @@ const McqFields = React.memo(function McqFields({
     return base.slice(0, 4).concat(new Array(Math.max(0, 4 - base.length)).fill(""));
   });
   const [correctIndex, setCorrectIndex] = useState<number>(q?.mcqCorrectIndex ?? 0);
-  const [rotateOnMiss, setRotateOnMiss] = useState<boolean>(q?.mcqRotateOnMiss ?? true);
 
   useEffect(() => {
     const id = setTimeout(() => {
@@ -52,25 +51,22 @@ const McqFields = React.memo(function McqFields({
       setOptions(normalized);
       setOptionCount(Math.max(2, Math.min(4, q?.mcqOptions?.length || 2)));
       setCorrectIndex(q?.mcqCorrectIndex ?? 0);
-      setRotateOnMiss(q?.mcqRotateOnMiss ?? true);
     }, 0);
     return () => clearTimeout(id);
-  }, [q?.mcqOptions, q?.mcqCorrectIndex, q?.mcqRotateOnMiss]);
+  }, [q?.mcqOptions, q?.mcqCorrectIndex]);
 
   const persist = (
     opts: string[],
     correct: number,
     countOverride?: number,
-    rotateOverride?: boolean,
   ) => {
     const count = countOverride ?? optionCount;
     const trimmed = opts.slice(0, count).map((o) => o.trim());
     const boundedCorrect = Math.min(trimmed.length - 1, Math.max(0, correct));
-    const rotateValue = rotateOverride ?? rotateOnMiss;
     upsertQuestion(category, points, {
       mcqOptions: trimmed,
       mcqCorrectIndex: boundedCorrect,
-      mcqRotateOnMiss: count >= 4 ? rotateValue : false,
+      mcqRotateOnMiss: false,
     });
   };
 
@@ -90,7 +86,7 @@ const McqFields = React.memo(function McqFields({
           setOptions(padded);
           const boundedCorrect = Math.min(next - 1, Math.max(0, correctIndex));
           setCorrectIndex(boundedCorrect);
-          persist(padded, boundedCorrect, next, rotateOnMiss);
+          persist(padded, boundedCorrect, next);
         }}
         style={{ maxWidth: "140px", cursor: "pointer" }}
       >
@@ -223,23 +219,8 @@ const McqFields = React.memo(function McqFields({
           </div>
         ))}
       </div>
-      {optionCount === 4 && (
-        <label className="label" style={{ marginTop: "10px", display: "flex", alignItems: "center", gap: "8px" }}>
-          <input
-            type="checkbox"
-            checked={rotateOnMiss}
-            onChange={(e) => {
-              const next = e.target.checked;
-              setRotateOnMiss(next);
-              persist(options, correctIndex, optionCount, next);
-            }}
-            style={{ width: "16px", height: "16px", cursor: "pointer" }}
-          />
-          Rotate teams on wrong answer
-        </label>
-      )}
       <div style={{ color: "var(--muted)", fontSize: "0.9rem", marginTop: "6px" }}>
-        Two or four options. If rotation is on (only for 4-option mode), wrong answers pass to the next team; first correct wins the points.
+        Two or four options. The team that picked the question must answer; a wrong answer ends the question and costs the points.
       </div>
       <label className="label" style={{ marginTop: "10px" }}>
         Answer image (optional)

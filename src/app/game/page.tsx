@@ -56,6 +56,7 @@ export default function GameBoardPage() {
   const [geoTimerUsed, setGeoTimerUsed] = useState(false);
   const [geoPotential, setGeoPotential] = useState<number>(0);
   const [geoCostApplied, setGeoCostApplied] = useState(false);
+  const [lyricsPotential, setLyricsPotential] = useState<number>(0);
   const [jokerRound, setJokerRound] = useState<JokerRound | null>(null);
   const [jokerProgress, setJokerProgress] = useState<JokerProgress | null>(null);
   const [showJokerConfetti, setShowJokerConfetti] = useState(false);
@@ -360,6 +361,7 @@ export default function GameBoardPage() {
     if (normalized.type === "lyrics") {
       const len = normalized.lyricsSegments?.length ?? 0;
       setLyricsRevealed(new Array(len).fill(false));
+      setLyricsPotential(normalized.points ?? 0);
       const boardId =
         activeTurnOrder.length > 0
           ? activeTurnOrder[boardTurnIndex % activeTurnOrder.length]
@@ -367,6 +369,7 @@ export default function GameBoardPage() {
       setSelectedTeamId(boardId);
     } else {
       setLyricsRevealed([]);
+      setLyricsPotential(0);
       const boardId =
         activeTurnOrder.length > 0
           ? activeTurnOrder[boardTurnIndex % activeTurnOrder.length]
@@ -387,6 +390,7 @@ export default function GameBoardPage() {
     setGeoTimerUsed(false);
     setGeoPotential(0);
     setGeoCostApplied(false);
+    setLyricsPotential(0);
     setJokerRound(null);
     setJokerProgress(null);
     setShowJokerConfetti(false);
@@ -413,8 +417,21 @@ export default function GameBoardPage() {
     }
     if (isRedLyric(idx)) {
       playSadBlip();
+      const redCount = Math.max(1, lyricsPattern.length);
+      const basePoints = activeQuestion?.points ?? 0;
+      const totalTiles = Math.max(1, activeQuestion?.lyricsSegments?.length ?? 1);
+      const totalRedLoss = (basePoints * redCount) / totalTiles;
+      const perRedDecrement = Math.max(1, Math.round(totalRedLoss / redCount));
+      const minPot = Math.max(0, Math.round(basePoints - totalRedLoss));
+      setLyricsPotential((prev) => Math.max(minPot, prev - perRedDecrement));
       advanceLyrics();
     }
+  };
+
+  const handleLyricsNextTeam = () => {
+    if (!activeQuestion || activeQuestion.type !== "lyrics") return;
+    playSadBlip();
+    advanceLyrics();
   };
 
   useEffect(() => {
@@ -495,15 +512,24 @@ export default function GameBoardPage() {
 
   const markAnswered = (correct: boolean) => {
     if (!activeQuestion) return;
+    const basePoints = activeQuestion.points ?? 0;
     const teamIdToScore =
       activeQuestion.type === "lyrics"
         ? getLyricsTeamId()
         : lastGuessTeamId || selectedTeamId || getBoardTeamId();
 
-    const geoguessValue =
+    const rewardPoints =
       activeQuestion.type === "geoguesser"
         ? Math.max(0, geoPotential)
-        : activeQuestion.points;
+        : activeQuestion.type === "lyrics"
+          ? Math.max(0, lyricsPotential || basePoints)
+          : basePoints;
+    const penaltyPoints =
+      activeQuestion.type === "geoguesser"
+        ? basePoints + (geoCostApplied ? activeQuestion.geoUnlockCost ?? 0 : 0)
+        : activeQuestion.type === "lyrics"
+          ? basePoints
+          : basePoints;
 
     if (teamIdToScore) {
       setTeams((prev) =>
@@ -511,7 +537,7 @@ export default function GameBoardPage() {
           team.id === teamIdToScore
             ? {
                 ...team,
-                score: team.score + (correct ? geoguessValue : -geoguessValue),
+                score: team.score + (correct ? rewardPoints : -penaltyPoints),
               }
             : team,
         ),
@@ -522,7 +548,7 @@ export default function GameBoardPage() {
         q.id === activeQuestion.id ? { ...q, answered: true } : q,
       ),
     );
-    if (activeTurnOrder.length > 0 && activeQuestion.type !== "audio") {
+    if (activeTurnOrder.length > 0) {
       advanceBoard();
     }
     setLastGuessTeamId("");
@@ -629,7 +655,6 @@ export default function GameBoardPage() {
     if (!activeQuestion || activeQuestion.type !== "mcq") return;
     const opts = activeQuestion.mcqOptions ?? [];
     if (!opts.length) return;
-    if (mcqEliminated.includes(idx)) return;
     if (mcqResolved) return;
     const currentTeamId = lastGuessTeamId || selectedTeamId || getBoardTeamId();
     if (currentTeamId) {
@@ -637,8 +662,6 @@ export default function GameBoardPage() {
     }
     const correctIdx = activeQuestion.mcqCorrectIndex ?? 0;
     const isCorrect = idx === correctIdx;
-    const hasFour =
-      opts.length >= 4 && opts.slice(2).some((o) => (o ?? "").trim() !== "");
     if (isCorrect) {
       playSuccessChime();
       if (currentTeamId) {
@@ -667,49 +690,27 @@ export default function GameBoardPage() {
       setMcqResolved(true);
     } else {
       playDownbeat();
-      const rotateEnabled = activeQuestion.mcqRotateOnMiss ?? true;
-      if (!hasFour || !rotateEnabled) {
-        if (currentTeamId) {
-          const penalty = activeQuestion.points ?? 0;
-          setTeams((prev) =>
-            prev.map((team) =>
-              team.id === currentTeamId
-                ? { ...team, score: team.score - penalty }
-                : team,
-            ),
-          );
-          const team = teams.find((t) => t.id === currentTeamId);
-          setMcqResolvedInfo({
-            teamName: team?.name ?? "Team",
-            points: -penalty,
-          });
-        }
-        setQuestions((prev) =>
-          prev.map((q) =>
-            q.id === activeQuestion.id ? { ...q, answered: true } : q,
+      if (currentTeamId) {
+        const penalty = activeQuestion.points ?? 0;
+        setTeams((prev) =>
+          prev.map((team) =>
+            team.id === currentTeamId
+              ? { ...team, score: team.score - penalty }
+              : team,
           ),
         );
-        setMcqResolved(true);
-      } else {
-        setMcqEliminated((prev) => [...prev, idx]);
-        const rotate = activeQuestion.mcqRotateOnMiss ?? true;
-        if (rotate) {
-          const orderList =
-            activeTurnOrder.length > 0 ? activeTurnOrder : teams.map((t) => t.id);
-          if (orderList.length > 0) {
-            const currentIdx = orderList.findIndex((id) => id === currentTeamId);
-            const nextId =
-              currentIdx >= 0
-                ? orderList[(currentIdx + 1) % orderList.length]
-                : orderList[0];
-            setSelectedTeamId(nextId);
-            setLastGuessTeamId(nextId);
-            if (activeTurnOrder.length > 0) {
-              advanceBoard();
-            }
-          }
-        }
+        const team = teams.find((t) => t.id === currentTeamId);
+        setMcqResolvedInfo({
+          teamName: team?.name ?? "Team",
+          points: -penalty,
+        });
       }
+      setQuestions((prev) =>
+        prev.map((q) =>
+          q.id === activeQuestion.id ? { ...q, answered: true } : q,
+        ),
+      );
+      setMcqResolved(true);
     }
   };
 
@@ -872,6 +873,9 @@ export default function GameBoardPage() {
           answeringTeamColor={answeringTeamColor}
           answeringTeamEmoji={answeringTeamEmoji}
           answerVideoUrl={answerVideoUrl}
+          potentialPoints={lyricsPotential || activeQuestion.points}
+          basePoints={activeQuestion.points}
+          onNextTeam={handleLyricsNextTeam}
           onCorrect={() => markAnswered(true)}
           onWrong={() => markAnswered(false)}
           disableActions={!answeringTeam}

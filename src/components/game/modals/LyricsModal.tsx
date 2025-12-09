@@ -25,6 +25,9 @@ type Props = {
   disableActions?: boolean;
   onClose: () => void;
   flashKey?: number;
+  potentialPoints?: number;
+  basePoints?: number;
+  onNextTeam?: () => void;
 };
 
 export function LyricsModal({
@@ -48,7 +51,11 @@ export function LyricsModal({
   disableActions,
   onClose,
   flashKey,
+  potentialPoints,
+  basePoints,
+  onNextTeam,
 }: Props) {
+  const currentPot = potentialPoints ?? question.points ?? 0;
   return (
     <>
       <div
@@ -100,6 +107,9 @@ export function LyricsModal({
             <div style={{ fontSize: "2rem", fontWeight: 800 }}>
               {question.points} pts
             </div>
+            <div style={{ color: "var(--muted)", fontSize: "0.95rem" }}>
+              Current pot: <strong style={{ color: "#f7c948" }}>{currentPot} pts</strong>. Red tiles trim a slice of the pot (total loss capped at the red-share of the board); a wrong guess still loses {basePoints ?? question.points} pts.
+            </div>
             {answeringTeamName && (
               <TeamPill
                 label="Answering"
@@ -108,13 +118,16 @@ export function LyricsModal({
                 emoji={answeringTeamEmoji}
               />
             )}
+            </div>
           </div>
-        </div>
           {question.prompt && (
             <div style={{ marginBottom: "10px", fontWeight: 700, fontSize: "1.15rem", lineHeight: 1.35 }}>
               {question.prompt}
             </div>
           )}
+          <div style={{ color: "var(--muted)", marginBottom: "8px", fontSize: "0.95rem" }}>
+            Red tiles pass play to the next team and remove a fixed slice of the pot. The selecting team must eventually guess or reveal.
+          </div>
           <div
             style={{
               display: "grid",
@@ -172,10 +185,28 @@ export function LyricsModal({
             style={{
               marginTop: "18px",
               display: "flex",
-              justifyContent: "flex-end",
+              justifyContent: "space-between",
+              alignItems: "center",
               gap: "10px",
             }}
           >
+            <div style={{ display: "flex", gap: "8px" }}>
+              {onNextTeam && (
+                <button
+                  className="button secondary"
+                  onClick={onNextTeam}
+                  disabled={disableActions}
+                  style={{
+                    opacity: disableActions ? 0.6 : 1,
+                    background:
+                      "linear-gradient(135deg, rgba(238,174,202,0.16), rgba(148,187,233,0.12))",
+                    borderColor: "rgba(255,255,255,0.24)",
+                  }}
+                >
+                  Next team (wrong guess)
+                </button>
+              )}
+            </div>
             <button className="button primary" onClick={onRevealAnswer}>
               Reveal answer
             </button>

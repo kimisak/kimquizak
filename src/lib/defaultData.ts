@@ -123,7 +123,7 @@ export function buildDefaultQuestions(): Question[] {
       prompt: "Hvor mange slag julekaker sier tradisjonen at man bør bake?",
       mcqOptions: ["7 slag", "9 slag", "11 slag", "13 slag"],
       mcqCorrectIndex: 0,
-      mcqRotateOnMiss: true,
+      mcqRotateOnMiss: false,
       answer: "7 slag",
     },
     {
