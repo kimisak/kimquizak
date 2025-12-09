@@ -29,6 +29,7 @@ Prod: https://julebord-games.vercel.app/
 ## Persistence
 - Local-only: teams (`julebord_teams_v1`), questions (`julebord_questions_v1`), and turn state (`julebord_turn_state_v1`) are saved in `localStorage`.
 - Reset turn order from the Teams config if you need a fresh spin.
+- Example data: click “Add example data” in the Backup & restore panel on the home page to load `default_questions.json` (bundled) into localStorage.
 
 ## Scripts
 - `npm run dev` – start dev server
