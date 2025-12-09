@@ -108,7 +108,7 @@ export function LyricsModal({
               {question.points} pts
             </div>
             <div style={{ color: "var(--muted)", fontSize: "0.95rem" }}>
-              Current pot: <strong style={{ color: "#f7c948" }}>{currentPot} pts</strong>. Red tiles trim a slice of the pot (total loss capped at the red-share of the board); a wrong guess still loses {basePoints ?? question.points} pts.
+              Current pot: <strong style={{ color: "#f7c948" }}>{currentPot} pts</strong>. Red tiles pass play and shave the pot; a wrong guess loses {basePoints ?? question.points} pts.
             </div>
             {answeringTeamName && (
               <TeamPill
@@ -126,7 +126,7 @@ export function LyricsModal({
             </div>
           )}
           <div style={{ color: "var(--muted)", marginBottom: "8px", fontSize: "0.95rem" }}>
-            Red tiles pass play to the next team and remove a fixed slice of the pot. The selecting team must eventually guess or reveal.
+            Red tiles rotate turn and chip away at the pot. The team in control must eventually guess or reveal.
           </div>
           <div
             style={{

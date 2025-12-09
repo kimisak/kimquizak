@@ -312,6 +312,9 @@ export default function QuestionConfigPage() {
   );
   const [newCategory, setNewCategory] = useState("");
   const [categoryNames, setCategoryNames] = useState<Record<string, string>>({});
+  const [activeCategory, setActiveCategory] = useState<string | null>(null);
+  const [dragging, setDragging] = useState<{ category: string; points: PointValue } | null>(null);
+  const [dragOver, setDragOver] = useState<PointValue | null>(null);
 
   useEffect(() => {
     setIsClient(true);
@@ -343,6 +346,13 @@ export default function QuestionConfigPage() {
         }
       });
       return next;
+    });
+  }, [categories]);
+
+  useEffect(() => {
+    setActiveCategory((prev) => {
+      if (prev && categories.includes(prev)) return prev;
+      return categories[0] ?? null;
     });
   }, [categories]);
 
@@ -402,19 +412,17 @@ export default function QuestionConfigPage() {
     });
   };
 
-  const moveQuestion = (category: string, points: PointValue, direction: -1 | 1) => {
-    const idx = POINT_VALUES.indexOf(points);
-    const targetPoints = POINT_VALUES[idx + direction];
-    if (idx === -1 || targetPoints === undefined) return;
+  const moveQuestionTo = (category: string, fromPoints: PointValue, toPoints: PointValue) => {
+    if (fromPoints === toPoints) return;
     setQuestions((prev) => {
       const next = [...prev];
-      const fromIdx = next.findIndex((q) => q.category === category && q.points === points);
-      const toIdx = next.findIndex((q) => q.category === category && q.points === targetPoints);
+      const fromIdx = next.findIndex((q) => q.category === category && q.points === fromPoints);
+      const toIdx = next.findIndex((q) => q.category === category && q.points === toPoints);
       if (fromIdx === -1 || toIdx === -1) return prev;
       const fromQ = next[fromIdx];
       const toQ = next[toIdx];
-      next[fromIdx] = { ...toQ, points };
-      next[toIdx] = { ...fromQ, points: targetPoints };
+      next[fromIdx] = { ...toQ, points: fromPoints };
+      next[toIdx] = { ...fromQ, points: toPoints };
       return next;
     });
   };
@@ -463,10 +471,20 @@ export default function QuestionConfigPage() {
       return [...prev, ...additions];
     });
     setNewCategory("");
+    setActiveCategory(name);
   };
 
   const deleteCategory = (category: string) => {
     setQuestions((prev) => prev.filter((q) => q.category !== category));
+    setActiveCategory((prevActive) => {
+      if (!prevActive) return null;
+      if (prevActive !== category) return prevActive;
+      const idx = categories.findIndex((c) => c === category);
+      if (idx === -1) return categories[0] ?? null;
+      const left = categories[idx - 1];
+      const right = categories[idx + 1];
+      return right ?? left ?? categories[0] ?? null;
+    });
   };
 
   const renameCategory = (oldName: string, newNameRaw: string) => {
@@ -1490,8 +1508,46 @@ const TimelineFields = React.memo(function TimelineFields({
         </button>
       </div>
 
+      {categories.length > 0 && (
+        <div
+          className="card"
+          style={{
+            padding: "10px",
+            marginBottom: "16px",
+            display: "flex",
+            gap: "8px",
+            alignItems: "center",
+            overflowX: "auto",
+            scrollbarWidth: "thin",
+          }}
+        >
+          {categories.map((cat) => {
+            const isActive = activeCategory === cat;
+            const label = categoryNames[cat] ?? cat;
+            return (
+              <button
+                key={cat}
+                className="button ghost"
+                onClick={() => setActiveCategory(cat)}
+                style={{
+                  padding: "8px 12px",
+                  borderColor: isActive ? "rgba(255,255,255,0.6)" : "rgba(255,255,255,0.16)",
+                  background: isActive
+                    ? "linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0.04))"
+                    : "rgba(255,255,255,0.04)",
+                  fontWeight: isActive ? 700 : 600,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {label || cat}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-        {categories.map((category) => (
+        {(activeCategory ? categories.filter((c) => c === activeCategory) : categories).map((category) => (
           <div
             key={category}
             className="card"
@@ -1539,6 +1595,8 @@ const TimelineFields = React.memo(function TimelineFields({
             >
               {POINT_VALUES.map((points) => {
                 const q = getQuestion(category, points);
+                const isDragging = dragging?.category === category && dragging.points === points;
+                const isDragOver = dragOver === points && dragging?.category === category;
                 return (
                   <div
                     key={`${category}-${points}`}
@@ -1546,38 +1604,78 @@ const TimelineFields = React.memo(function TimelineFields({
                     style={{
                       padding: "12px",
                       borderColor: "rgba(255,255,255,0.08)",
+                      outline: isDragOver ? "2px dashed rgba(255,255,255,0.5)" : "none",
+                      opacity: isDragging ? 0.6 : 1,
+                      transition: "outline 0.15s ease, opacity 0.15s ease",
+                      cursor: "grab",
+                    }}
+                    draggable
+                    onDragStart={(e) => {
+                      setDragging({ category, points });
+                      setDragOver(points);
+                      e.dataTransfer?.setData("text/plain", `${category}-${points}`);
+                    }}
+                    onDragEnter={(e) => {
+                      e.preventDefault();
+                      if (dragging?.category === category) {
+                        setDragOver(points);
+                      }
+                    }}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      if (dragging?.category === category) {
+                        setDragOver(points);
+                      }
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      if (dragging?.category === category) {
+                        moveQuestionTo(category, dragging.points, points);
+                      }
+                      setDragOver(null);
+                      setDragging(null);
+                    }}
+                    onDragEnd={() => {
+                      setDragOver(null);
+                      setDragging(null);
                     }}
                   >
                     <div
                       style={{
-                        display: "grid",
-                        gridTemplateColumns: "1fr auto",
+                        height: "28px",
+                        margin: "-12px -12px 10px",
+                        borderRadius: "10px 10px 6px 6px",
+                        background: isDragging
+                          ? "linear-gradient(90deg, rgba(255,255,255,0.3), rgba(255,255,255,0.12))"
+                          : "linear-gradient(90deg, rgba(255,255,255,0.12), rgba(255,255,255,0.05))",
+                        border: "1px solid rgba(255,255,255,0.14)",
+                        boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
+                        position: "relative",
+                        display: "flex",
                         alignItems: "center",
+                        justifyContent: "center",
+                        color: "var(--muted)",
+                        fontWeight: 700,
+                        letterSpacing: "0.04em",
+                        cursor: "grab",
+                      }}
+                      title="Drag to reorder this question within the category"
+                    >
+                      ⇅ Drag to reorder
+                    </div>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
                         gap: "12px",
                         marginBottom: "8px",
                       }}
                     >
-                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
                         <div style={{ fontWeight: 700 }}>{points} pts</div>
-                        <div style={{ display: "flex", gap: "6px" }}>
-                          <button
-                            className="button ghost"
-                            onClick={() => moveQuestion(category, points, -1)}
-                            disabled={POINT_VALUES.indexOf(points) === 0}
-                            style={{ padding: "4px 8px", lineHeight: 1, cursor: "pointer" }}
-                            aria-label="Move question to lower points"
-                          >
-                            ↑
-                          </button>
-                          <button
-                            className="button ghost"
-                            onClick={() => moveQuestion(category, points, 1)}
-                            disabled={POINT_VALUES.indexOf(points) === POINT_VALUES.length - 1}
-                            style={{ padding: "4px 8px", lineHeight: 1, cursor: "pointer" }}
-                            aria-label="Move question to higher points"
-                          >
-                            ↓
-                          </button>
+                        <div style={{ color: "var(--muted)", fontWeight: 700, fontSize: "0.9rem" }}>
+                          Drag to reorder
                         </div>
                       </div>
                       <div style={{ display: "flex", alignItems: "center", gap: "8px", justifyContent: "flex-end" }}>
