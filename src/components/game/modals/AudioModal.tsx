@@ -214,6 +214,7 @@ export function AudioModal({
             display: "grid",
             gridTemplateRows: "auto 1fr auto",
             overflowY: "auto",
+            pointerEvents: showAnswer ? "none" : "auto",
           }}
         >
           <div
