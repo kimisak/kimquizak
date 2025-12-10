@@ -1720,28 +1720,8 @@ const TimelineFields = React.memo(function TimelineFields({
                         flexWrap: "wrap",
                       }}
                     >
-                      <div style={{ display: "flex", alignItems: "center", gap: "8px", justifyContent: "space-between", flexWrap: "wrap", width: "100%" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-                          <div style={{ fontWeight: 700 }}>{points} pts</div>
-                        </div>
-                        {isMobile && (
-                          <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-                            <button
-                              className="button ghost compact"
-                              onClick={() => bumpQuestion(category, points, -1)}
-                              disabled={POINT_VALUES.indexOf(points) === 0}
-                            >
-                              ↑ Move up
-                            </button>
-                            <button
-                              className="button ghost compact"
-                              onClick={() => bumpQuestion(category, points, 1)}
-                              disabled={POINT_VALUES.indexOf(points) === POINT_VALUES.length - 1}
-                            >
-                              ↓ Move down
-                            </button>
-                          </div>
-                        )}
+                      <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+                        <div style={{ fontWeight: 700 }}>{points} pts</div>
                       </div>
                       <div style={{ display: "flex", alignItems: "center", gap: "8px", justifyContent: "flex-end", flexWrap: "wrap" }}>
                         {q?.answered && (
