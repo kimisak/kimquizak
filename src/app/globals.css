@@ -113,3 +113,25 @@ select.input option {
   background: #0f1622;
   color: var(--foreground);
 }
+
+@media (max-width: 900px) {
+  body {
+    font-size: 15px;
+  }
+  .card {
+    border-radius: 12px;
+  }
+}
+
+@media (max-width: 768px) {
+  h1 {
+    font-size: 1.7rem;
+  }
+  .button {
+    padding: 0.7rem 1rem;
+    font-size: 0.95rem;
+  }
+  .card {
+    border-radius: 12px;
+  }
+}

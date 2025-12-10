@@ -19,7 +19,7 @@ export default function RootLayout({
           style={{
             maxWidth: "1200px",
             margin: "0 auto",
-            padding: "32px 28px 64px",
+            padding: "clamp(20px, 4vw, 32px) clamp(14px, 4vw, 28px) 64px",
           }}
         >
           <header
@@ -28,9 +28,11 @@ export default function RootLayout({
               alignItems: "center",
               justifyContent: "space-between",
               marginBottom: "28px",
+              gap: "12px",
+              flexWrap: "wrap",
             }}
           >
-            <div style={{ display: "flex", alignItems: "baseline", gap: "10px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
               <Link
                 href="/"
                 style={{
@@ -56,6 +58,8 @@ export default function RootLayout({
                 gap: "12px",
                 flexWrap: "wrap",
                 justifyContent: "flex-end",
+                overflowX: "auto",
+                paddingBottom: "4px",
               }}
             >
               <Link className="button ghost" href="/config/teams">
