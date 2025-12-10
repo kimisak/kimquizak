@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from "react";
 import { POINT_VALUES, type Question } from "@/lib/types";
 
 type Props = {
@@ -9,8 +10,18 @@ type Props = {
 };
 
 export function BoardGrid({ categories, questions, onOpen }: Props) {
-  // Split categories into rows of two on small screens; fall back to full grid on larger.
-  const isMobile = typeof window !== "undefined" ? window.innerWidth <= 768 : false;
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const check = () => {
+      if (typeof window === "undefined") return;
+      setIsMobile(window.innerWidth <= 768);
+    };
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
+
   const useSplit = isMobile && categories.length > 2;
 
   if (useSplit) {
