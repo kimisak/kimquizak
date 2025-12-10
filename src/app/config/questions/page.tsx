@@ -1700,8 +1700,10 @@ const TimelineFields = React.memo(function TimelineFields({
                         flexWrap: "wrap",
                       }}
                     >
-                      <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-                        <div style={{ fontWeight: 700 }}>{points} pts</div>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px", justifyContent: "space-between", flexWrap: "wrap", width: "100%" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+                          <div style={{ fontWeight: 700 }}>{points} pts</div>
+                        </div>
                         {isMobile && (
                           <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
                             <button
