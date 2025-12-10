@@ -1685,10 +1685,30 @@ const TimelineFields = React.memo(function TimelineFields({
                     ) : (
                       <div
                         style={{
-                          height: "28px",
+                          display: "flex",
+                          justifyContent: "flex-end",
+                          gap: "6px",
+                          padding: "6px",
                           margin: "-12px -12px 10px",
                         }}
-                      />
+                      >
+                        <button
+                          className="button ghost compact"
+                          onClick={() => bumpQuestion(category, points, -1)}
+                          disabled={POINT_VALUES.indexOf(points) === 0}
+                          style={{ width: "100%" }}
+                        >
+                          ↑ Move up
+                        </button>
+                        <button
+                          className="button ghost compact"
+                          onClick={() => bumpQuestion(category, points, 1)}
+                          disabled={POINT_VALUES.indexOf(points) === POINT_VALUES.length - 1}
+                          style={{ width: "100%" }}
+                        >
+                          ↓ Move down
+                        </button>
+                      </div>
                     )}
                     <div
                       style={{
