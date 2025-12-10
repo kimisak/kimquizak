@@ -315,6 +315,7 @@ export default function QuestionConfigPage() {
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [dragging, setDragging] = useState<{ category: string; points: PointValue } | null>(null);
   const [dragOver, setDragOver] = useState<PointValue | null>(null);
+  const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
     setIsClient(true);
@@ -352,6 +353,16 @@ export default function QuestionConfigPage() {
       return categories[0] ?? null;
     });
   }, [categories]);
+
+  useEffect(() => {
+    const update = () => {
+      if (typeof window === "undefined") return;
+      setIsMobile(window.innerWidth <= 768);
+    };
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
 
   const upsertQuestion = (
     category: string,
@@ -422,6 +433,13 @@ export default function QuestionConfigPage() {
       next[toIdx] = { ...fromQ, points: toPoints };
       return next;
     });
+  };
+
+  const bumpQuestion = (category: string, points: PointValue, direction: -1 | 1) => {
+    const idx = POINT_VALUES.indexOf(points);
+    const target = POINT_VALUES[idx + direction];
+    if (idx === -1 || target === undefined) return;
+    moveQuestionTo(category, points, target);
   };
 
   const handleNewCategory = () => {
@@ -1577,7 +1595,7 @@ const TimelineFields = React.memo(function TimelineFields({
                 />
               </div>
               <button
-                className="button ghost"
+                className="button ghost compact"
                 onClick={() => deleteCategory(category)}
                 style={{ cursor: "pointer" }}
               >
@@ -1595,6 +1613,7 @@ const TimelineFields = React.memo(function TimelineFields({
                 const q = getQuestion(category, points);
                 const isDragging = dragging?.category === category && dragging.points === points;
                 const isDragOver = dragOver === points && dragging?.category === category;
+                const canDrag = !isMobile;
                 return (
                   <div
                     key={`${category}-${points}`}
@@ -1608,59 +1627,68 @@ const TimelineFields = React.memo(function TimelineFields({
                       cursor: "default",
                     }}
                   >
-                    <div
-                      style={{
-                        height: "28px",
-                        margin: "-12px -12px 10px",
-                        borderRadius: "10px 10px 6px 6px",
-                        background: isDragging
-                          ? "linear-gradient(90deg, rgba(255,255,255,0.3), rgba(255,255,255,0.12))"
-                          : "linear-gradient(90deg, rgba(255,255,255,0.12), rgba(255,255,255,0.05))",
-                        border: "1px solid rgba(255,255,255,0.14)",
-                        boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
-                        position: "relative",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        color: "var(--muted)",
-                        fontWeight: 700,
-                        letterSpacing: "0.04em",
-                        cursor: "grab",
-                      }}
-                      title="Drag to reorder this question within the category"
-                      draggable
-                      onDragStart={(e) => {
-                        setDragging({ category, points });
-                        setDragOver(points);
-                        e.dataTransfer?.setData("text/plain", `${category}-${points}`);
-                      }}
-                      onDragEnter={(e) => {
-                        e.preventDefault();
-                        if (dragging?.category === category) {
+                    {canDrag ? (
+                      <div
+                        style={{
+                          height: "28px",
+                          margin: "-12px -12px 10px",
+                          borderRadius: "10px 10px 6px 6px",
+                          background: isDragging
+                            ? "linear-gradient(90deg, rgba(255,255,255,0.3), rgba(255,255,255,0.12))"
+                            : "linear-gradient(90deg, rgba(255,255,255,0.12), rgba(255,255,255,0.05))",
+                          border: "1px solid rgba(255,255,255,0.14)",
+                          boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
+                          position: "relative",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          color: "var(--muted)",
+                          fontWeight: 700,
+                          letterSpacing: "0.04em",
+                          cursor: "grab",
+                        }}
+                        title="Drag to reorder this question within the category"
+                        draggable
+                        onDragStart={(e) => {
+                          setDragging({ category, points });
                           setDragOver(points);
-                        }
-                      }}
-                      onDragOver={(e) => {
-                        e.preventDefault();
-                        if (dragging?.category === category) {
-                          setDragOver(points);
-                        }
-                      }}
-                      onDrop={(e) => {
-                        e.preventDefault();
-                        if (dragging?.category === category) {
-                          moveQuestionTo(category, dragging.points, points);
-                        }
-                        setDragOver(null);
-                        setDragging(null);
-                      }}
-                      onDragEnd={() => {
-                        setDragOver(null);
-                        setDragging(null);
-                      }}
-                    >
-                      ⇅ Drag to reorder
-                    </div>
+                          e.dataTransfer?.setData("text/plain", `${category}-${points}`);
+                        }}
+                        onDragEnter={(e) => {
+                          e.preventDefault();
+                          if (dragging?.category === category) {
+                            setDragOver(points);
+                          }
+                        }}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          if (dragging?.category === category) {
+                            setDragOver(points);
+                          }
+                        }}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          if (dragging?.category === category) {
+                            moveQuestionTo(category, dragging.points, points);
+                          }
+                          setDragOver(null);
+                          setDragging(null);
+                        }}
+                        onDragEnd={() => {
+                          setDragOver(null);
+                          setDragging(null);
+                        }}
+                      >
+                        ⇅ Drag to reorder
+                      </div>
+                    ) : (
+                      <div
+                        style={{
+                          height: "28px",
+                          margin: "-12px -12px 10px",
+                        }}
+                      />
+                    )}
                     <div
                       style={{
                         display: "flex",
@@ -1668,12 +1696,31 @@ const TimelineFields = React.memo(function TimelineFields({
                         justifyContent: "space-between",
                         gap: "12px",
                         marginBottom: "8px",
+                        flexWrap: "wrap",
                       }}
                     >
                         <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
                         <div style={{ fontWeight: 700 }}>{points} pts</div>
                       </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: "8px", justifyContent: "flex-end" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px", justifyContent: "flex-end", flexWrap: "wrap" }}>
+                        {isMobile && (
+                          <div style={{ display: "flex", gap: "6px" }}>
+                            <button
+                              className="button ghost compact"
+                              onClick={() => bumpQuestion(category, points, -1)}
+                              disabled={POINT_VALUES.indexOf(points) === 0}
+                            >
+                              ↑ Move up
+                            </button>
+                            <button
+                              className="button ghost compact"
+                              onClick={() => bumpQuestion(category, points, 1)}
+                              disabled={POINT_VALUES.indexOf(points) === POINT_VALUES.length - 1}
+                            >
+                              ↓ Move down
+                            </button>
+                          </div>
+                        )}
                         {q?.answered && (
                           <span style={{ color: "#f2c14f", fontSize: "0.9rem" }}>
                             marked answered

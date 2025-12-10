@@ -87,6 +87,11 @@ a {
   border-color: rgba(255, 255, 255, 0.16);
 }
 
+.button.compact {
+  padding: 0.6rem 0.9rem;
+  font-size: 0.95rem;
+}
+
 .input {
   width: 100%;
   padding: 0.75rem 1rem;
@@ -130,6 +135,10 @@ select.input option {
   .button {
     padding: 0.7rem 1rem;
     font-size: 0.95rem;
+  }
+  .button.compact {
+    padding: 0.55rem 0.85rem;
+    font-size: 0.9rem;
   }
   .card {
     border-radius: 12px;

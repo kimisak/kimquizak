@@ -13,7 +13,7 @@ export function BoardGrid({ categories, questions, onOpen }: Props) {
     <div
       style={{
         display: "grid",
-        gridTemplateColumns: `repeat(${categories.length}, minmax(120px, 1fr))`,
+        gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
         gap: "8px",
       }}
     >
