@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from "react";
 import type { Team } from "@/lib/types";
 
 type Props = {
