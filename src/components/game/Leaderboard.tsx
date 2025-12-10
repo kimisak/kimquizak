@@ -9,6 +9,18 @@ type Props = {
 };
 
 export function Leaderboard({ teams, onAdjust, onSet }: Props) {
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const check = () => {
+      if (typeof window === "undefined") return;
+      setIsMobile(window.innerWidth <= 768);
+    };
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
+
   const accents = [
     { base: "#b9001f", glow: "#f7c948" }, // deep red + gold
     { base: "#0b8a3b", glow: "#d1fae5" }, // evergreen + mint
@@ -47,7 +59,7 @@ export function Leaderboard({ teams, onAdjust, onSet }: Props) {
           Add teams first in the Teams page.
         </div>
       ) : (
-        <div style={{ display: "grid", gap: "10px" }}>
+        <div style={{ display: "grid", gap: "10px", overflowX: isMobile ? "auto" : "visible", paddingBottom: isMobile ? "4px" : undefined }}>
           {teams.map((team, idx) => {
             const accent =
               team.accentBase && team.accentGlow
@@ -64,8 +76,9 @@ export function Leaderboard({ teams, onAdjust, onSet }: Props) {
                 style={{
                   padding: "12px",
                   display: "flex",
-                  alignItems: "center",
+                  alignItems: isMobile ? "flex-start" : "center",
                   gap: "12px",
+                  flexWrap: isMobile ? "wrap" : "nowrap",
                   borderColor: `${accent.base}40`,
                   background: "rgba(255,255,255,0.03)",
                   borderLeft: `4px solid ${accent.base}`,
@@ -88,7 +101,7 @@ export function Leaderboard({ teams, onAdjust, onSet }: Props) {
               >
                 #{idx + 1}
               </div>
-              <div style={{ display: "grid", gap: "6px", minWidth: "220px", flex: 1 }}>
+              <div style={{ display: "grid", gap: "6px", minWidth: "180px", flex: 1 }}>
                 <div
                     style={{
                       display: "flex",
@@ -134,8 +147,10 @@ export function Leaderboard({ teams, onAdjust, onSet }: Props) {
                     alignItems: "center",
                     gap: "8px",
                     fontWeight: 800,
-                    minWidth: "170px",
-                    marginLeft: "auto",
+                    minWidth: isMobile ? "100%" : "170px",
+                    marginLeft: isMobile ? 0 : "auto",
+                    flexWrap: isMobile ? "wrap" : "nowrap",
+                    justifyContent: isMobile ? "space-between" : "flex-end",
                   }}
                 >
                   <button

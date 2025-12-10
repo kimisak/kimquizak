@@ -179,17 +179,19 @@ export default function TeamConfigPage() {
         style={{
           display: "flex",
           justifyContent: "space-between",
-          alignItems: "center",
+          alignItems: "flex-start",
           marginBottom: "16px",
+          gap: "12px",
+          flexWrap: "wrap",
         }}
       >
-        <div>
+        <div style={{ flex: 1, minWidth: "260px" }}>
           <h1 style={{ margin: 0 }}>Teams & Players</h1>
           <p style={{ color: "var(--muted)", marginTop: "6px" }}>
             Aim for 3–5 teams. All changes are saved locally.
           </p>
         </div>
-        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", marginLeft: "auto", justifyContent: "flex-end" }}>
           <button
             className="button ghost"
             onClick={startShuffling}
