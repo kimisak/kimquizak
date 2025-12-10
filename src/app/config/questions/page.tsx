@@ -1597,9 +1597,10 @@ const TimelineFields = React.memo(function TimelineFields({
               <button
                 className="button ghost compact"
                 onClick={() => deleteCategory(category)}
-                style={{ cursor: "pointer" }}
+                style={{ cursor: "pointer", paddingInline: "10px" }}
+                aria-label={`Delete ${category}`}
               >
-                Delete category
+                ✕
               </button>
             </div>
             <div
