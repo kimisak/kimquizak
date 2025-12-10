@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from "react";
 import { POINT_VALUES, type Question } from "@/lib/types";
 
 type Props = {
@@ -9,11 +10,25 @@ type Props = {
 };
 
 export function BoardGrid({ categories, questions, onOpen }: Props) {
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const check = () => {
+      if (typeof window === "undefined") return;
+      setIsMobile(window.innerWidth <= 768);
+    };
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
+
+  const columnCount = isMobile ? Math.min(2, Math.max(1, categories.length)) : Math.max(1, categories.length);
+
   return (
     <div
       style={{
         display: "grid",
-        gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+        gridTemplateColumns: `repeat(${columnCount}, minmax(140px, 1fr))`,
         gap: "8px",
       }}
     >
