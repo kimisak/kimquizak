@@ -15,7 +15,7 @@ export function BoardGrid({ categories, questions, onOpen }: Props) {
   useEffect(() => {
     const check = () => {
       if (typeof window === "undefined") return;
-      setIsMobile(window.innerWidth <= 768);
+      setIsMobile(window.innerWidth <= 915);
     };
     check();
     window.addEventListener("resize", check);
