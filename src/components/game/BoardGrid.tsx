@@ -16,10 +16,16 @@ export function BoardGrid({ categories, questions, onOpen }: Props) {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const handleResize = () => setIsMobile(window.innerWidth <= 700);
-    handleResize();
+    const mql = window.matchMedia("(max-width: 700px)");
+    const update = () => setIsMobile(mql.matches);
+    update();
+    mql.addEventListener("change", update);
+    const handleResize = () => update();
     window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
+    return () => {
+      mql.removeEventListener("change", update);
+      window.removeEventListener("resize", handleResize);
+    };
   }, []);
 
   const useSplit = isMobile && categories.length > 2;
