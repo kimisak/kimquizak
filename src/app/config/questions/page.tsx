@@ -1532,8 +1532,7 @@ const TimelineFields = React.memo(function TimelineFields({
             display: "flex",
             gap: "8px",
             alignItems: "center",
-            overflowX: "auto",
-            scrollbarWidth: "thin",
+            flexWrap: "wrap",
           }}
         >
           {categories.map((cat) => {
