@@ -10,18 +10,16 @@ type Props = {
 };
 
 export function BoardGrid({ categories, questions, onOpen }: Props) {
-  const [isMobile, setIsMobile] = useState(false);
+  const [isMobile, setIsMobile] = useState(
+    typeof window !== "undefined" ? window.innerWidth <= 700 : false,
+  );
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const mq = window.matchMedia("(max-width: 700px)");
-    const listener = (e: MediaQueryListEvent | MediaQueryList) => {
-      setIsMobile(e.matches);
-    };
-    // Set initial
-    listener(mq);
-    mq.addEventListener("change", listener);
-    return () => mq.removeEventListener("change", listener as EventListener);
+    const handleResize = () => setIsMobile(window.innerWidth <= 700);
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
   }, []);
 
   const useSplit = isMobile && categories.length > 2;
