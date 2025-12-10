@@ -1580,7 +1580,7 @@ const TimelineFields = React.memo(function TimelineFields({
               <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
                 <input
                   className="input"
-                  style={{ width: "220px" }}
+                  style={{ width: "100%", minWidth: "220px" }}
                   value={categoryNames[category] ?? category}
                   onChange={(e) =>
                     setCategoryNames((prev) => ({
