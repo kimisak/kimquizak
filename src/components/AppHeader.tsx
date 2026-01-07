@@ -27,21 +27,26 @@ export function AppHeader() {
       <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
         <Link
           href="/"
+          aria-label={title}
           style={{
-            fontSize: "1.7rem",
-            fontWeight: 800,
-            padding: "10px 14px",
-            borderRadius: "999px",
-            border: "1px solid rgba(255,255,255,0.18)",
-            background: "transparent",
             textDecoration: "none",
             display: "inline-flex",
             alignItems: "center",
-            gap: "8px",
-            transition: "border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease",
+            gap: "12px",
           }}
         >
-          🎯 {title}
+          <img
+            src="/kimquizak-logo.svg"
+            alt="kimquizak"
+            width={260}
+            height={86}
+            style={{
+              display: "block",
+              objectFit: "contain",
+              maxWidth: "70vw",
+              height: "auto",
+            }}
+          />
         </Link>
       </div>
       <nav
