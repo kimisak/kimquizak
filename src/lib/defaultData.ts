@@ -1,41 +1,106 @@
-import { POINT_VALUES, type PointValue, type Question, type Team } from "@/lib/types";
+import { type PointValue, type Question, type Team } from "@/lib/types";
 
 export function makeId(prefix: string) {
   return `${prefix}-${(globalThis.crypto?.randomUUID?.() ?? Math.random().toString(16).slice(2))}`;
 }
 
-export const emojiOptions = [
-  { emoji: "🎄", label: "Tree", base: "#0b8a3b", glow: "#d1fae5" },
-  { emoji: "⭐️", label: "Star", base: "#b8860b", glow: "#ffe29f" },
-  { emoji: "🔔", label: "Bell", base: "#b03060", glow: "#ffd6e0" },
-  { emoji: "❄️", label: "Snow", base: "#0f4c75", glow: "#b0e0ff" },
-  { emoji: "🎁", label: "Gift", base: "#b9001f", glow: "#f7c948" },
-  { emoji: "🕯️", label: "Candle", base: "#f4a259", glow: "#ffe8c2" },
-  { emoji: "🎅", label: "Santa", base: "#d62828", glow: "#ffb3b3" },
-  { emoji: "😇", label: "Angel", base: "#cbbaf0", glow: "#f2eaff" },
-  { emoji: "☃️", label: "Snowman", base: "#4ba3c7", glow: "#d9f2ff" },
-  { emoji: "🍷", label: "Wine", base: "#6b2737", glow: "#f5c3d0" },
-  { emoji: "🍺", label: "Beer", base: "#d19c1d", glow: "#ffeac2" },
-  { emoji: "🦌", label: "Reindeer", base: "#8b5a2b", glow: "#f3d6b3" },
-  { emoji: "🍪", label: "Cookie", base: "#c68642", glow: "#ffe3c4" },
-  { emoji: "🥛", label: "Milk", base: "#9bc4f5", glow: "#e9f5ff" },
-  { emoji: "🥕", label: "Carrot", base: "#f7931e", glow: "#ffe0b3" },
-  { emoji: "💝", label: "Heart Bow", base: "#ff5c8a", glow: "#ffd1e6" },
-  { emoji: "🛷", label: "Sleigh", base: "#b22234", glow: "#ffd7c2" },
-  { emoji: "📜", label: "Scroll", base: "#d7b468", glow: "#fff4cf" },
-  { emoji: "🍬", label: "Candy", base: "#ff6fb7", glow: "#ffd6ec" },
-  { emoji: "🌠", label: "Shooting Star", base: "#4f46e5", glow: "#c7d2fe" },
+export type EmojiOption = {
+  emoji: string;
+  label: string;
+  base: string;
+  glow: string;
+};
+
+export type TeamTheme = {
+  id: string;
+  label: string;
+  description: string;
+  options: EmojiOption[];
+};
+
+export const teamThemes: TeamTheme[] = [
+  {
+    id: "studio",
+    label: "Studio",
+    description: "Gold-to-white core with colorful, polished accents.",
+    options: [
+      { emoji: "🎯", label: "Target", base: "#f59e0b", glow: "#fff1c1" },
+      { emoji: "🧠", label: "Mind", base: "#f8fafc", glow: "#ffffff" },
+      { emoji: "📘", label: "Book", base: "#2563eb", glow: "#dbeafe" },
+      { emoji: "🚀", label: "Rocket", base: "#ef4444", glow: "#fecaca" },
+      { emoji: "🧩", label: "Puzzle", base: "#10b981", glow: "#bbf7d0" },
+      { emoji: "🎲", label: "Dice", base: "#9333ea", glow: "#e9d5ff" },
+      { emoji: "🪄", label: "Wand", base: "#ec4899", glow: "#fbcfe8" },
+      { emoji: "🛰️", label: "Orbit", base: "#06b6d4", glow: "#a5f3fc" },
+    ],
+  },
+  {
+    id: "coast",
+    label: "Coast",
+    description: "Ocean blues and sunlit accents.",
+    options: [
+      { emoji: "🌊", label: "Wave", base: "#2563eb", glow: "#bfdbfe" },
+      { emoji: "🐚", label: "Shell", base: "#f59e0b", glow: "#fde68a" },
+      { emoji: "🐬", label: "Dolphin", base: "#0ea5e9", glow: "#bae6fd" },
+      { emoji: "🏖️", label: "Beach", base: "#f97316", glow: "#fed7aa" },
+      { emoji: "🪸", label: "Coral", base: "#f43f5e", glow: "#fecdd3" },
+      { emoji: "⚓️", label: "Anchor", base: "#0f172a", glow: "#cbd5f5" },
+      { emoji: "⛵️", label: "Sail", base: "#14b8a6", glow: "#99f6e4" },
+      { emoji: "🧭", label: "Compass", base: "#84cc16", glow: "#d9f99d" },
+    ],
+  },
+  {
+    id: "arcade",
+    label: "Arcade",
+    description: "High-energy neon, perfect for late-night rounds.",
+    options: [
+      { emoji: "👾", label: "Arcade", base: "#7c3aed", glow: "#c4b5fd" },
+      { emoji: "🕹️", label: "Joystick", base: "#22c55e", glow: "#bbf7d0" },
+      { emoji: "⚡️", label: "Bolt", base: "#eab308", glow: "#fef08a" },
+      { emoji: "🎮", label: "Controller", base: "#3b82f6", glow: "#bfdbfe" },
+      { emoji: "🧪", label: "Potion", base: "#14b8a6", glow: "#99f6e4" },
+      { emoji: "🪩", label: "Disco", base: "#f43f5e", glow: "#fecdd3" },
+      { emoji: "💿", label: "Disk", base: "#0f172a", glow: "#e2e8f0" },
+      { emoji: "📼", label: "Tape", base: "#f97316", glow: "#fed7aa" },
+    ],
+  },
+  {
+    id: "jul",
+    label: "Jul",
+    description: "Classic festive reds, greens, and winter sparkle.",
+    options: [
+      { emoji: "🎄", label: "Tree", base: "#0b8a3b", glow: "#d1fae5" },
+      { emoji: "🎁", label: "Gift", base: "#b9001f", glow: "#f7c948" },
+      { emoji: "🔔", label: "Bell", base: "#b03060", glow: "#ffd6e0" },
+      { emoji: "❄️", label: "Snow", base: "#0f4c75", glow: "#b0e0ff" },
+      { emoji: "⭐️", label: "Star", base: "#b8860b", glow: "#ffe29f" },
+      { emoji: "🕯️", label: "Candle", base: "#f4a259", glow: "#ffe8c2" },
+      { emoji: "🎅", label: "Santa", base: "#d62828", glow: "#ffb3b3" },
+      { emoji: "☃️", label: "Snowman", base: "#4ba3c7", glow: "#d9f2ff" },
+    ],
+  },
 ];
 
-export function buildDefaultTeams(): Team[] {
+export const DEFAULT_THEME_ID = "studio";
+
+export function getThemeById(themeId?: string) {
+  return teamThemes.find((theme) => theme.id === themeId) ?? teamThemes[0];
+}
+
+export function getThemeOptions(themeId?: string) {
+  return getThemeById(themeId).options;
+}
+
+export function buildDefaultTeams(themeId?: string): Team[] {
+  const options = getThemeOptions(themeId);
   return [
     {
       id: makeId("team"),
-      name: "Pepperkakelaget",
+      name: "Team Aurora",
       score: 0,
-      badgeEmoji: emojiOptions[12].emoji,
-      accentBase: emojiOptions[12].base,
-      accentGlow: emojiOptions[12].glow,
+      badgeEmoji: options[0].emoji,
+      accentBase: options[0].base,
+      accentGlow: options[0].glow,
       players: [
         { id: makeId("p"), name: "Player 1" },
         { id: makeId("p"), name: "Player 2" },
@@ -44,11 +109,11 @@ export function buildDefaultTeams(): Team[] {
     },
     {
       id: makeId("team"),
-      name: "Stjerneskudd",
+      name: "Team Horizon",
       score: 0,
-      badgeEmoji: emojiOptions[19].emoji,
-      accentBase: emojiOptions[19].base,
-      accentGlow: emojiOptions[19].glow,
+      badgeEmoji: options[1].emoji,
+      accentBase: options[1].base,
+      accentGlow: options[1].glow,
       players: [
         { id: makeId("p"), name: "Player 1" },
         { id: makeId("p"), name: "Player 2" },
@@ -57,11 +122,11 @@ export function buildDefaultTeams(): Team[] {
     },
     {
       id: makeId("team"),
-      name: "Bjelleklang",
+      name: "Team Nova",
       score: 0,
-      badgeEmoji: emojiOptions[2].emoji,
-      accentBase: emojiOptions[2].base,
-      accentGlow: emojiOptions[2].glow,
+      badgeEmoji: options[2].emoji,
+      accentBase: options[2].base,
+      accentGlow: options[2].glow,
       players: [
         { id: makeId("p"), name: "Player 1" },
         { id: makeId("p"), name: "Player 2" },

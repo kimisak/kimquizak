@@ -17,9 +17,15 @@ import { AudioModal } from "@/components/game/modals/AudioModal";
 import { TeamPill } from "@/components/game/TeamPill";
 import { useAudioCue } from "@/hooks/useAudioCue";
 import { usePersistentState } from "@/hooks/usePersistentState";
+import { useSettings } from "@/hooks/useSettings";
 import { useTurnState } from "@/hooks/useTurnState";
 import { generateRedPattern, shuffle } from "@/lib/redPattern";
-import { QUESTION_STORAGE_KEY, TEAM_STORAGE_KEY } from "@/lib/storage";
+import {
+  LEGACY_QUESTION_STORAGE_KEY,
+  LEGACY_TEAM_STORAGE_KEY,
+  QUESTION_STORAGE_KEY,
+  TEAM_STORAGE_KEY,
+} from "@/lib/storage";
 import { type Question, type Team, type TimelineEvent } from "@/lib/types";
 import { buildDefaultTeams } from "@/lib/defaultData";
 
@@ -28,6 +34,7 @@ type PlacedTimelineEvent = TimelineEvent & {
   status?: "correct" | "wrong";
 };
 export default function GameBoardPage() {
+  const [settings] = useSettings();
   const {
     playSadBlip,
     playCountdownBeep,
@@ -41,10 +48,15 @@ export default function GameBoardPage() {
     startSlotSpinLoop,
     stopSlotSpinLoop,
   } = useAudioCue();
-  const [teams, setTeams] = usePersistentState<Team[]>(TEAM_STORAGE_KEY, []);
+  const [teams, setTeams] = usePersistentState<Team[]>(
+    TEAM_STORAGE_KEY,
+    [],
+    [LEGACY_TEAM_STORAGE_KEY],
+  );
   const [questions, setQuestions] = usePersistentState<Question[]>(
     QUESTION_STORAGE_KEY,
     [],
+    [LEGACY_QUESTION_STORAGE_KEY],
   );
   const [activeQuestion, setActiveQuestion] = useState<ActiveQuestion | null>(
     null,
@@ -92,8 +104,10 @@ export default function GameBoardPage() {
   const slotSpinStopRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
-    setTeams((prev) => (prev.length === 0 ? buildDefaultTeams() : prev));
-  }, [setTeams, setQuestions]);
+    setTeams((prev) =>
+      prev.length === 0 ? buildDefaultTeams(settings.themeId) : prev,
+    );
+  }, [setTeams, setQuestions, settings.themeId]);
 
   const { turnState, setOrder, advanceBoard, advanceLyrics, setTurnState } = useTurnState();
   const turnOrder = turnState.order;

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { usePersistentState } from "@/hooks/usePersistentState";
-import { QUESTION_STORAGE_KEY } from "@/lib/storage";
+import { LEGACY_QUESTION_STORAGE_KEY, QUESTION_STORAGE_KEY } from "@/lib/storage";
 import { POINT_VALUES, type PointValue, type Question } from "@/lib/types";
 import { makeId } from "@/lib/defaultData";
 
@@ -309,6 +309,7 @@ export default function QuestionConfigPage() {
   const [questions, setQuestions] = usePersistentState<Question[]>(
     QUESTION_STORAGE_KEY,
     [],
+    [LEGACY_QUESTION_STORAGE_KEY],
   );
   const [newCategory, setNewCategory] = useState("");
   const [categoryNames, setCategoryNames] = useState<Record<string, string>>({});

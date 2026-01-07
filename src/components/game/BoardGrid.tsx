@@ -1,7 +1,9 @@
 'use client';
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { POINT_VALUES, type Question } from "@/lib/types";
+import { useSettings } from "@/hooks/useSettings";
+import { getThemeById } from "@/lib/defaultData";
 
 type Props = {
   categories: string[];
@@ -10,9 +12,29 @@ type Props = {
 };
 
 export function BoardGrid({ categories, questions, onOpen }: Props) {
+  const [settings] = useSettings();
   const [isMobile, setIsMobile] = useState(
     typeof window !== "undefined" ? window.innerWidth <= 700 : false,
   );
+
+  const headerBackground = useMemo(() => {
+    const theme = getThemeById(settings.themeId);
+    const base = theme.options[0]?.base ?? "#3b82f6";
+    const accent = theme.options[1]?.base ?? theme.options[0]?.glow ?? "#14b8a6";
+
+    const toRgba = (hex: string, alpha: number) => {
+      const clean = hex.replace("#", "");
+      const full = clean.length === 3 ? clean.split("").map((c) => c + c).join("") : clean;
+      const num = Number.parseInt(full, 16);
+      if (Number.isNaN(num)) return `rgba(59,130,246,${alpha})`;
+      const r = (num >> 16) & 255;
+      const g = (num >> 8) & 255;
+      const b = num & 255;
+      return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    };
+
+    return `linear-gradient(135deg, ${toRgba(base, 0.55)}, ${toRgba(accent, 0.55)})`;
+  }, [settings.themeId]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -54,8 +76,7 @@ export function BoardGrid({ categories, questions, onOpen }: Props) {
                 fontWeight: 700,
                 letterSpacing: "0.02em",
                 textTransform: "uppercase",
-                background:
-                  "linear-gradient(135deg, rgba(207,45,45,0.5), rgba(28,111,77,0.5))",
+                background: headerBackground,
               }}
             >
               {category}
@@ -155,8 +176,7 @@ export function BoardGrid({ categories, questions, onOpen }: Props) {
             fontWeight: 700,
             letterSpacing: "0.02em",
             textTransform: "uppercase",
-            background:
-              "linear-gradient(135deg, rgba(207,45,45,0.5), rgba(28,111,77,0.5))",
+            background: headerBackground,
           }}
         >
           {category}

@@ -1,6 +1,6 @@
-# Julebord Games
+# kimquizak
 
-Lightweight holiday party game board built with Next.js 16 (App Router + TypeScript). Configure teams and categories, then run the game with a slot-machine turn order picker, question modals, timelines, audio clips, text grids, and more. State (teams, questions, turn order) is stored in the browser via `localStorage`.
+Lightweight quiz game board built with Next.js 16 (App Router + TypeScript). Configure teams and categories, then run the game with a slot-machine turn order picker, question modals, timelines, audio clips, text grids, and more. State (teams, questions, turn order, settings) is stored in the browser via `localStorage`.
 
 ## Quick start
 
@@ -10,10 +10,10 @@ npm run dev
 ```
 
 Open http://localhost:3000 and use the config pages to add teams and questions. The game starts empty (no default categories/questions), so add your own before playing.
-Prod: https://julebord-games.vercel.app/
+Prod: https://kimquizak.com/
 
 ## Main flows
-- `Config / Teams`: set team names, colors/emojis, players; reset turn order.
+- `Config / Teams`: set team names, colors/emojis, theme, players; reset turn order; adjust quiz title.
 - `Config / Questions`: add categories (tabbed, one at a time) and question types (standard, text grid, geoguesser, joker, timeline, MCQ, audio); upload optional images where supported. Drag questions within a category to reorder point slots.
 - `Game`: spin the slot machine to set board turn order, play tiles, and track scores/answers. Pre-spin tiles give a small bounce/boing; spinning plays a short chime loop. Board turn advances after each resolved question.
 
@@ -27,7 +27,7 @@ Prod: https://julebord-games.vercel.app/
 - **Joker high/low**: configurable count, min/max, increment, and rotation on miss.
 
 ## Persistence
-- Local-only: teams (`julebord_teams_v1`), questions (`julebord_questions_v1`), and turn state (`julebord_turn_state_v1`) are saved in `localStorage`.
+- Local-only: teams (`kimquizak_teams_v1`), questions (`kimquizak_questions_v1`), turn state (`kimquizak_turn_state_v1`), and settings (`kimquizak_settings_v1`) are saved in `localStorage`.
 - Reset turn order from the Teams config if you need a fresh spin.
 - Example data: click “Add example data” in the Backup & restore panel on the home page to load `default_questions.json` (bundled) into localStorage.
 

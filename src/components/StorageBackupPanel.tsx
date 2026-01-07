@@ -7,10 +7,14 @@ import {
   persistBackupToLocalStorage,
 } from "@/lib/backup";
 import {
+  LEGACY_QUESTION_STORAGE_KEY,
+  LEGACY_TEAM_STORAGE_KEY,
+  LEGACY_TURN_STATE_STORAGE_KEY,
   QUESTION_STORAGE_KEY,
   TEAM_STORAGE_KEY,
   TURN_STATE_STORAGE_KEY,
 } from "@/lib/storage";
+import { SETTINGS_STORAGE_KEY } from "@/lib/settings";
 
 type Tone = "muted" | "success" | "error";
 
@@ -34,7 +38,7 @@ export function StorageBackupPanel() {
       const safeTimestamp = payload.exportedAt.replace(/[:.]/g, "-");
       const link = document.createElement("a");
       link.href = url;
-      link.download = `julebord-backup-${safeTimestamp}.json`;
+      link.download = `kimquizak-backup-${safeTimestamp}.json`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -80,6 +84,10 @@ export function StorageBackupPanel() {
       window.localStorage.removeItem(TEAM_STORAGE_KEY);
       window.localStorage.removeItem(QUESTION_STORAGE_KEY);
       window.localStorage.removeItem(TURN_STATE_STORAGE_KEY);
+      window.localStorage.removeItem(SETTINGS_STORAGE_KEY);
+      window.localStorage.removeItem(LEGACY_TEAM_STORAGE_KEY);
+      window.localStorage.removeItem(LEGACY_QUESTION_STORAGE_KEY);
+      window.localStorage.removeItem(LEGACY_TURN_STATE_STORAGE_KEY);
       updateStatus("Local data cleared. Reloading...", "success");
       setTimeout(() => window.location.reload(), 350);
     } catch (err) {

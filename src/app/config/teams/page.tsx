@@ -1,17 +1,30 @@
 'use client';
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { usePersistentState } from "@/hooks/usePersistentState";
-import { TEAM_STORAGE_KEY, TURN_STATE_STORAGE_KEY } from "@/lib/storage";
+import { useSettings } from "@/hooks/useSettings";
+import {
+  LEGACY_TEAM_STORAGE_KEY,
+  LEGACY_TURN_STATE_STORAGE_KEY,
+  TEAM_STORAGE_KEY,
+  TURN_STATE_STORAGE_KEY,
+} from "@/lib/storage";
 import type { Player, Team } from "@/lib/types";
-import { emojiOptions, buildDefaultTeams, makeId } from "@/lib/defaultData";
+import {
+  buildDefaultTeams,
+  getThemeById,
+  getThemeOptions,
+  type EmojiOption,
+} from "@/lib/defaultData";
 import { TeamPill } from "@/components/game/TeamPill";
 
 export default function TeamConfigPage() {
   const [hydrated, setHydrated] = useState(false);
+  const [settings] = useSettings();
   const [teams, setTeams] = usePersistentState<Team[]>(
     TEAM_STORAGE_KEY,
     [],
+    [LEGACY_TEAM_STORAGE_KEY],
   );
   const [isShuffling, setIsShuffling] = useState(false);
   const [shuffleMillisLeft, setShuffleMillisLeft] = useState<number | null>(null);
@@ -20,11 +33,11 @@ export default function TeamConfigPage() {
     const id = setTimeout(() => {
       setHydrated(true);
       if (teams.length === 0) {
-        setTeams(buildDefaultTeams());
+        setTeams(buildDefaultTeams(settings.themeId));
       }
     }, 0);
     return () => clearTimeout(id);
-  }, [teams.length, setTeams]);
+  }, [teams.length, setTeams, settings.themeId]);
 
   const shuffleArray = <T,>(arr: T[]) => {
     const copy = [...arr];
@@ -143,15 +156,17 @@ export default function TeamConfigPage() {
   };
 
   const addTeam = () => {
+    const options = getThemeOptions(settings.themeId);
+    const pick = options[teams.length % options.length] ?? options[0];
     setTeams((prev) => [
       ...prev,
       {
         id: makeId("team"),
         name: `Team ${prev.length + 1}`,
         score: 0,
-        badgeEmoji: emojiOptions[prev.length % emojiOptions.length].emoji,
-        accentBase: emojiOptions[prev.length % emojiOptions.length].base,
-        accentGlow: emojiOptions[prev.length % emojiOptions.length].glow,
+        badgeEmoji: pick?.emoji,
+        accentBase: pick?.base,
+        accentGlow: pick?.glow,
         players: [
           { id: makeId("p"), name: "Player 1" },
           { id: makeId("p"), name: "Player 2" },
@@ -168,10 +183,14 @@ export default function TeamConfigPage() {
   const resetTurnOrder = () => {
     try {
       window.localStorage.removeItem(TURN_STATE_STORAGE_KEY);
+      window.localStorage.removeItem(LEGACY_TURN_STATE_STORAGE_KEY);
     } catch (err) {
       console.error("Failed clearing turn order", err);
     }
   };
+
+  const activeTheme = getThemeById(settings.themeId);
+  const emojiOptions = activeTheme.options;
 
   return (
     <main className="card" style={{ padding: "24px" }}>

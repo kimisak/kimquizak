@@ -1,7 +1,10 @@
 'use client';
 
 import { usePersistentState } from "@/hooks/usePersistentState";
-import { TURN_STATE_STORAGE_KEY } from "@/lib/storage";
+import {
+  LEGACY_TURN_STATE_STORAGE_KEY,
+  TURN_STATE_STORAGE_KEY,
+} from "@/lib/storage";
 import type { TurnState } from "@/lib/types";
 
 export function useTurnState() {
@@ -12,6 +15,7 @@ export function useTurnState() {
       boardIndex: 0,
       lyricsIndex: 0,
     },
+    [LEGACY_TURN_STATE_STORAGE_KEY],
   );
 
   const setOrder = (order: string[]) =>
