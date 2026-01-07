@@ -53,9 +53,9 @@ export default function Home() {
     setTeams((prev) => {
       if (prev.length === 0) return prev;
       return prev.map((team, idx) => {
-        const match =
-          team.badgeEmoji &&
-          options.find((opt) => opt.emoji === team.badgeEmoji);
+        const match = team.badgeEmoji
+          ? options.find((opt) => opt.emoji === team.badgeEmoji)
+          : undefined;
         const pick = match ?? options[idx % options.length] ?? options[0];
         return {
           ...team,
