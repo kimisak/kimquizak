@@ -66,7 +66,7 @@ export const teamThemes: TeamTheme[] = [
   },
   {
     id: "jul",
-    label: "Jul",
+    label: "Christmas",
     description: "Classic festive reds, greens, and winter sparkle.",
     options: [
       { emoji: "🎄", label: "Tree", base: "#0b8a3b", glow: "#d1fae5" },

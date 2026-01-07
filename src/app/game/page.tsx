@@ -28,6 +28,7 @@ import {
 } from "@/lib/storage";
 import { type Question, type Team, type TimelineEvent } from "@/lib/types";
 import { buildDefaultTeams } from "@/lib/defaultData";
+import { DEFAULT_SETTINGS } from "@/lib/settings";
 
 type ActiveQuestion = Question & { category: string };
 type PlacedTimelineEvent = TimelineEvent & {
@@ -87,6 +88,7 @@ export default function GameBoardPage() {
   const [timelinePotential, setTimelinePotential] = useState<number>(0);
   const [showFinalLeaderboard, setShowFinalLeaderboard] = useState(false);
   const [finalLeaderboardShown, setFinalLeaderboardShown] = useState(false);
+  const [hideBoardIntro, setHideBoardIntro] = useState(false);
   const [mcqEliminated, setMcqEliminated] = useState<number[]>([]);
   const [mcqResolved, setMcqResolved] = useState(false);
   const [mcqResolvedInfo, setMcqResolvedInfo] = useState<{
@@ -1081,21 +1083,35 @@ export default function GameBoardPage() {
           }}
         >
           <div style={{ flex: 1, minWidth: "220px" }}>
-            <h1 style={{ margin: 0 }}>Game Board</h1>
-            <p
-              style={{
-                color: "var(--muted)",
-                marginTop: "6px",
-                lineHeight: 1.4,
-                minHeight: "60px",
-                display: "grid",
-                alignItems: "center",
-              }}
-            >
-              <span>Click a tile to open the question.</span>
-              <span>Wrong answers subtract points.</span>
-              <span>Adjust scores in the leaderboard panel.</span>
-            </p>
+            <h1 style={{ margin: 0, fontSize: "2.2rem", fontWeight: 800 }}>
+              {settings.quizTitle || DEFAULT_SETTINGS.quizTitle}
+            </h1>
+            <div style={{ display: "flex", alignItems: "flex-start", gap: "10px", marginTop: "6px" }}>
+              {!hideBoardIntro && (
+                <p
+                  style={{
+                    color: "var(--muted)",
+                    margin: 0,
+                    lineHeight: 1.4,
+                    minHeight: "60px",
+                    display: "grid",
+                    alignItems: "center",
+                  }}
+                >
+                  <span>Click a tile to open the question.</span>
+                  <span>Wrong answers subtract points.</span>
+                  <span>Adjust scores in the leaderboard panel.</span>
+                </p>
+              )}
+              <button
+                className="button ghost compact"
+                type="button"
+                onClick={() => setHideBoardIntro((prev) => !prev)}
+                style={{ cursor: "pointer", height: "fit-content" }}
+              >
+                {hideBoardIntro ? "Show tips" : "Hide tips"}
+              </button>
+            </div>
           </div>
           <div
             style={{
