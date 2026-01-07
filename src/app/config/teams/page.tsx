@@ -14,6 +14,7 @@ import {
   buildDefaultTeams,
   getThemeById,
   getThemeOptions,
+  makeId,
   type EmojiOption,
 } from "@/lib/defaultData";
 import { TeamPill } from "@/components/game/TeamPill";
