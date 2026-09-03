@@ -1,221 +1,129 @@
 'use client';
 
+import Link from "next/link";
 import { StorageBackupPanel } from "@/components/StorageBackupPanel";
-import { useSettings } from "@/hooks/useSettings";
+import { TeamPill } from "@/components/game/TeamPill";
 import { usePersistentState } from "@/hooks/usePersistentState";
+import { useSettings } from "@/hooks/useSettings";
 import {
   getThemeById,
-  getThemeOptions,
   teamThemes,
   type EmojiOption,
 } from "@/lib/defaultData";
+import { reconcileTeamTheme } from "@/lib/teamPresentation";
+import { isQuestionReady } from "@/lib/questionValidation";
+import { DEFAULT_SETTINGS } from "@/lib/settings";
 import {
+  LEGACY_QUESTION_STORAGE_KEY,
   LEGACY_TEAM_STORAGE_KEY,
+  QUESTION_STORAGE_KEY,
   TEAM_STORAGE_KEY,
 } from "@/lib/storage";
-import { DEFAULT_SETTINGS } from "@/lib/settings";
-import type { Team } from "@/lib/types";
-import { TeamPill } from "@/components/game/TeamPill";
+import { POINT_VALUES, type Question, type Team } from "@/lib/types";
 
 export default function Home() {
   const [settings, setSettings] = useSettings();
-  const [teams, setTeams] = usePersistentState<Team[]>(
-    TEAM_STORAGE_KEY,
-    [],
-    [LEGACY_TEAM_STORAGE_KEY],
-  );
-
+  const [teams, setTeams] = usePersistentState<Team[]>(TEAM_STORAGE_KEY, [], [LEGACY_TEAM_STORAGE_KEY]);
+  const [questions] = usePersistentState<Question[]>(QUESTION_STORAGE_KEY, [], [LEGACY_QUESTION_STORAGE_KEY]);
   const activeTheme = getThemeById(settings.themeId);
   const emojiOptions = activeTheme.options;
-  const themePreview =
-    emojiOptions[0] ?? { emoji: "⭐️", label: "Star", base: "#3b82f6", glow: "#93c5fd" };
-  const toRgba = (hex: string, alpha: number) => {
-    const clean = hex.replace("#", "");
-    const full = clean.length === 3 ? clean.split("").map((c) => c + c).join("") : clean;
-    const num = Number.parseInt(full, 16);
-    if (Number.isNaN(num)) return `rgba(59,130,246,${alpha})`;
-    const r = (num >> 16) & 255;
-    const g = (num >> 8) & 255;
-    const b = num & 255;
-    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-  };
-  const themeGradient =
-    emojiOptions.length > 1
-      ? `linear-gradient(120deg, ${emojiOptions[0].base}, ${emojiOptions[1].base})`
-      : `linear-gradient(120deg, ${themePreview.base}, ${themePreview.glow})`;
-  const themeHeaderGradient =
-    emojiOptions.length > 1
-      ? `linear-gradient(135deg, ${toRgba(emojiOptions[0].base, 0.55)}, ${toRgba(emojiOptions[1].base, 0.55)})`
-      : `linear-gradient(135deg, ${toRgba(themePreview.base, 0.55)}, ${toRgba(themePreview.glow, 0.55)})`;
+  const concealCategoryHeaders = settings.hideCategoryHeadersAtStart !== false;
+  const previewCategories = Array.from(new Set(questions.map((question) => question.category))).slice(0, 4);
+  const monitorCategories = previewCategories.length ? previewCategories : ["Your board"];
 
   const applyThemeToTeams = (themeId: string) => {
-    const options = getThemeOptions(themeId);
-    setTeams((prev) => {
-      if (prev.length === 0) return prev;
-      return prev.map((team, idx) => {
-        const match = team.badgeEmoji
-          ? options.find((opt) => opt.emoji === team.badgeEmoji)
-          : undefined;
-        const pick = match ?? options[idx % options.length] ?? options[0];
-        return {
-          ...team,
-          badgeEmoji: pick?.emoji ?? team.badgeEmoji,
-          accentBase: pick?.base ?? team.accentBase,
-          accentGlow: pick?.glow ?? team.accentGlow,
-        };
-      });
-    });
+    setTeams((previous) => previous.map((team) => reconcileTeamTheme(team, themeId)));
   };
 
   return (
-    <main
-      className="card"
-      style={{
-        padding: "32px",
-      }}
-    >
-      <h1 style={{ fontSize: "2.4rem", marginBottom: "10px" }}>
-        {settings.quizTitle || DEFAULT_SETTINGS.quizTitle}
-      </h1>
-      <p style={{ color: "var(--muted)", marginBottom: "20px" }}>
-        Configure teams, enter categories and clues, then run the board from one
-        screen. All data stays in your browser (localStorage).
-      </p>
-      <div
-        className="card"
-        style={{
-          padding: "18px",
-          marginBottom: "20px",
-          borderColor: "rgba(255,255,255,0.12)",
-        }}
-      >
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
-            gap: "16px",
-            alignItems: "start",
-          }}
-        >
-          <div>
-            <label className="label">Quiz title</label>
-            <input
-              className="input"
-              value={settings.quizTitle}
-              onChange={(e) =>
-                setSettings((prev) => ({
-                  ...prev,
-                  quizTitle: e.target.value,
-                }))
-              }
-              placeholder={DEFAULT_SETTINGS.quizTitle}
-            />
-            <p style={{ color: "var(--muted)", marginTop: "6px", fontSize: "0.9rem" }}>
-              This headline appears on the home screen and the board.
-            </p>
+    <main className="home-page">
+      <section className="home-hero">
+        <div className="home-hero-copy">
+          <span className="eyebrow">LIVE QUIZ CONTROL ROOM</span>
+          <h1>{settings.quizTitle || DEFAULT_SETTINGS.quizTitle}</h1>
+          <p>Build the teams. Load the board. Command the room.</p>
+          <div className="hero-actions">
+            <Link className="button primary" href="/game">Enter game mode <span aria-hidden>→</span></Link>
+            <Link className="button ghost" href="/config/questions">Edit the board</Link>
           </div>
-          <div>
-            <label className="label">Team theme</label>
-            <div style={{ position: "relative" }}>
-              <select
-                className="input"
-                value={settings.themeId}
-                style={{
-                  paddingRight: "34px",
-                  cursor: "pointer",
-                  background: themeHeaderGradient,
-                  borderColor: "rgba(255,255,255,0.18)",
-                }}
-                onChange={(e) => {
-                  const nextTheme = e.target.value;
-                  setSettings((prev) => ({ ...prev, themeId: nextTheme }));
-                  applyThemeToTeams(nextTheme);
-                }}
+        </div>
+        <div className="home-monitor" aria-label="Preview of your quiz board opening state">
+          <div className="home-monitor-header"><span>BOARD PREVIEW</span><small>{questions.filter(isQuestionReady).length} clues ready</small></div>
+          <div className="mini-board" style={{ gridTemplateColumns: `repeat(${monitorCategories.length}, 1fr)` }}>
+            {monitorCategories.map((category, index) => (
+              <div
+                className={`mini-board-category${concealCategoryHeaders ? " concealed" : ""}`}
+                key={category}
               >
-                {teamThemes.map((theme) => (
-                  <option key={theme.id} value={theme.id}>
-                    {theme.label}
-                  </option>
-                ))}
-              </select>
-              <span
-                aria-hidden
-                style={{
-                  position: "absolute",
-                  right: "12px",
-                  top: "50%",
-                  transform: "translateY(-50%)",
-                  color: "var(--muted)",
-                  fontSize: "0.9rem",
-                  pointerEvents: "none",
-                }}
-              >
-                ▼
+                {concealCategoryHeaders ? `Reveal ${index + 1}` : category}
+              </div>
+            ))}
+            {POINT_VALUES.slice(0, 4).flatMap((points) => monitorCategories.map((category) => {
+              const question = questions.find((candidate) => candidate.category === category && candidate.points === points);
+              return <div className={`mini-board-cell${isQuestionReady(question) ? " ready" : ""}`} key={`${category}-${points}`}>{points}</div>;
+            }))}
+          </div>
+          <small className="home-monitor-caption">
+            OPENING PREVIEW · {concealCategoryHeaders ? "TITLES CONCEALED" : "TITLES VISIBLE"}
+          </small>
+        </div>
+      </section>
+
+      <ol className="workflow-strip">
+        <li><span>01</span><strong>Cast</strong><small>{teams.length} teams ready</small></li>
+        <li><span>02</span><strong>Write</strong><small>Build 100–500 clues</small></li>
+        <li><span>03</span><strong>Play</strong><small>Run the show live</small></li>
+      </ol>
+
+      <section className="home-control-panel">
+        <div className="section-heading"><span className="eyebrow">SHOW IDENTITY</span><h2>Name it. Color it.</h2></div>
+        <div className="home-settings-grid">
+          <div className="field-block">
+            <label className="label" htmlFor="quiz-title">Quiz title</label>
+            <input id="quiz-title" className="input title-input" value={settings.quizTitle} onChange={(event) => setSettings((previous) => ({ ...previous, quizTitle: event.target.value }))} placeholder={DEFAULT_SETTINGS.quizTitle} />
+            <small>Shown on the host dashboard and game board.</small>
+          </div>
+          <div className="field-block">
+            <label className="label" htmlFor="team-theme">Team palette</label>
+            <select id="team-theme" className="input" value={settings.themeId} onChange={(event) => {
+              const nextTheme = event.target.value;
+              setSettings((previous) => ({ ...previous, themeId: nextTheme }));
+              applyThemeToTeams(nextTheme);
+            }}>
+              {teamThemes.map((theme) => <option key={theme.id} value={theme.id}>{theme.label}</option>)}
+            </select>
+            <div className="theme-cast">
+              {emojiOptions.map((option: EmojiOption) => <TeamPill key={option.emoji} name={option.label} color={option.base} emoji={option.emoji} />)}
+            </div>
+            <small>{activeTheme.description}</small>
+          </div>
+          <div className="field-block board-reveal-setting">
+            <label htmlFor="hide-category-headers">
+              <input
+                id="hide-category-headers"
+                type="checkbox"
+                checked={concealCategoryHeaders}
+                onChange={(event) => setSettings((previous) => ({
+                  ...previous,
+                  hideCategoryHeadersAtStart: event.target.checked,
+                }))}
+              />
+              <span>
+                <strong>Stage the category reveal</strong>
+                <small>Begin with category titles concealed. Click each header on the game board to reveal it.</small>
               </span>
-            </div>
-            <div
-              style={{
-                marginTop: "10px",
-                display: "flex",
-                flexWrap: "wrap",
-                gap: "8px",
-              }}
-            >
-              {emojiOptions.map((opt: EmojiOption) => (
-                <TeamPill
-                  key={opt.emoji}
-                  name={opt.label}
-                  color={opt.base}
-                  emoji={opt.emoji}
-                />
-              ))}
-            </div>
-            <p style={{ color: "var(--muted)", marginTop: "6px", fontSize: "0.9rem" }}>
-              {activeTheme.description}
-            </p>
+            </label>
           </div>
         </div>
-      </div>
-      <div
-        style={{
-          display: "grid",
-          gap: "16px",
-          gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
-        }}
-      >
-        <div className="card" style={{ padding: "16px 18px" }}>
-          <div style={{ fontWeight: 700, marginBottom: "6px" }}>1) Teams</div>
-          <p style={{ color: "var(--muted)", margin: "0 0 12px" }}>
-            Create 3–5 teams, name them, and list the players.
-          </p>
-          <a className="button secondary" href="/config/teams">
-            Open team config
-          </a>
-        </div>
-        <div className="card" style={{ padding: "16px 18px" }}>
-          <div style={{ fontWeight: 700, marginBottom: "6px" }}>
-            2) Categories & clues
-          </div>
-          <p style={{ color: "var(--muted)", margin: "0 0 12px" }}>
-            Enter questions and answers for 100–500 points for each category.
-          </p>
-          <a className="button secondary" href="/config/questions">
-            Open question config
-          </a>
-        </div>
-        <div className="card" style={{ padding: "16px 18px" }}>
-          <div style={{ fontWeight: 700, marginBottom: "6px" }}>3) Play</div>
-          <p style={{ color: "var(--muted)", margin: "0 0 12px" }}>
-            Run the game board, show the modal, and score teams live.
-          </p>
-          <a className="button primary" href="/game">
-            Go to board
-          </a>
-        </div>
-      </div>
-      <div className="card" style={{ padding: "16px 18px", marginTop: "16px" }}>
-        <StorageBackupPanel />
-      </div>
+      </section>
+
+      <section className="home-route-grid" aria-label="Setup workflow">
+        <Link href="/config/teams" className="route-card route-card-blue"><span>01 / CAST</span><strong>Teams & players</strong><p>Name the squads, assign colors, shuffle the room.</p><b>Configure teams →</b></Link>
+        <Link href="/config/questions" className="route-card route-card-acid"><span>02 / WRITE</span><strong>Categories & clues</strong><p>Compose every format from audio to your timeline.</p><b>Build the board →</b></Link>
+        <Link href="/game" className="route-card route-card-orange"><span>03 / LIVE</span><strong>Game board</strong><p>Spin the order, open clues and keep the score.</p><b>Start the show →</b></Link>
+      </section>
+
+      <section className="backup-drawer"><StorageBackupPanel /></section>
     </main>
   );
 }

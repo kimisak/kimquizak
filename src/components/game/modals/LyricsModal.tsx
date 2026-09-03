@@ -59,7 +59,7 @@ export function LyricsModal({
   return (
     <>
       <div
-        className={`flip-inner ${showAnswer ? "flipped" : ""}`}
+        className={`flip-inner round-stage round-lyrics ${showAnswer ? "flipped" : ""}`}
         style={{
           position: "relative",
           width: "100%",

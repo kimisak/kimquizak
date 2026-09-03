@@ -22,10 +22,10 @@ export const teamThemes: TeamTheme[] = [
   {
     id: "studio",
     label: "Studio",
-    description: "Gold-to-white core with colorful, polished accents.",
+    description: "Gold and slate foundations with colorful, polished accents.",
     options: [
       { emoji: "🎯", label: "Target", base: "#f59e0b", glow: "#fff1c1" },
-      { emoji: "🧠", label: "Mind", base: "#f8fafc", glow: "#ffffff" },
+      { emoji: "🧠", label: "Mind", base: "#64748b", glow: "#e2e8f0" },
       { emoji: "📘", label: "Book", base: "#2563eb", glow: "#dbeafe" },
       { emoji: "🚀", label: "Rocket", base: "#ef4444", glow: "#fecaca" },
       { emoji: "🧩", label: "Puzzle", base: "#10b981", glow: "#bbf7d0" },
@@ -40,9 +40,9 @@ export const teamThemes: TeamTheme[] = [
     description: "Ocean blues and sunlit accents.",
     options: [
       { emoji: "🌊", label: "Wave", base: "#2563eb", glow: "#bfdbfe" },
-      { emoji: "🐚", label: "Shell", base: "#f59e0b", glow: "#fde68a" },
+      { emoji: "🐚", label: "Shell", base: "#9a6818", glow: "#fde68a" },
       { emoji: "🐬", label: "Dolphin", base: "#0ea5e9", glow: "#bae6fd" },
-      { emoji: "🏖️", label: "Beach", base: "#f97316", glow: "#fed7aa" },
+      { emoji: "🏖️", label: "Beach", base: "#e35d0a", glow: "#fed7aa" },
       { emoji: "🪸", label: "Coral", base: "#f43f5e", glow: "#fecdd3" },
       { emoji: "⚓️", label: "Anchor", base: "#0f172a", glow: "#cbd5f5" },
       { emoji: "⛵️", label: "Sail", base: "#14b8a6", glow: "#99f6e4" },
@@ -70,13 +70,13 @@ export const teamThemes: TeamTheme[] = [
     description: "Classic festive reds, greens, and winter sparkle.",
     options: [
       { emoji: "🎄", label: "Tree", base: "#0b8a3b", glow: "#d1fae5" },
-      { emoji: "🎁", label: "Gift", base: "#b9001f", glow: "#f7c948" },
-      { emoji: "🔔", label: "Bell", base: "#b03060", glow: "#ffd6e0" },
-      { emoji: "❄️", label: "Snow", base: "#0f4c75", glow: "#b0e0ff" },
-      { emoji: "⭐️", label: "Star", base: "#b8860b", glow: "#ffe29f" },
-      { emoji: "🕯️", label: "Candle", base: "#f4a259", glow: "#ffe8c2" },
-      { emoji: "🎅", label: "Santa", base: "#d62828", glow: "#ffb3b3" },
-      { emoji: "☃️", label: "Snowman", base: "#4ba3c7", glow: "#d9f2ff" },
+      { emoji: "🎁", label: "Gift", base: "#8f1230", glow: "#f7c948" },
+      { emoji: "🔔", label: "Bell", base: "#9a6818", glow: "#f2cf78" },
+      { emoji: "❄️", label: "Snow", base: "#28afe3", glow: "#c9f2ff" },
+      { emoji: "⭐️", label: "Star", base: "#ffd84d", glow: "#fff7c2" },
+      { emoji: "🕯️", label: "Candle", base: "#7c3aed", glow: "#ddd6fe" },
+      { emoji: "🎅", label: "Santa", base: "#c6283d", glow: "#fecdd3" },
+      { emoji: "☃️", label: "Snowman", base: "#d97706", glow: "#fff7ed" },
     ],
   },
 ];
@@ -102,9 +102,9 @@ export function buildDefaultTeams(themeId?: string): Team[] {
       accentBase: options[0].base,
       accentGlow: options[0].glow,
       players: [
-        { id: makeId("p"), name: "Player 1" },
-        { id: makeId("p"), name: "Player 2" },
-        { id: makeId("p"), name: "Player 3" },
+        { id: makeId("p"), name: "", placeholder: "Player 1" },
+        { id: makeId("p"), name: "", placeholder: "Player 2" },
+        { id: makeId("p"), name: "", placeholder: "Player 3" },
       ],
     },
     {
@@ -115,9 +115,9 @@ export function buildDefaultTeams(themeId?: string): Team[] {
       accentBase: options[1].base,
       accentGlow: options[1].glow,
       players: [
-        { id: makeId("p"), name: "Player 1" },
-        { id: makeId("p"), name: "Player 2" },
-        { id: makeId("p"), name: "Player 3" },
+        { id: makeId("p"), name: "", placeholder: "Player 4" },
+        { id: makeId("p"), name: "", placeholder: "Player 5" },
+        { id: makeId("p"), name: "", placeholder: "Player 6" },
       ],
     },
     {
@@ -128,9 +128,9 @@ export function buildDefaultTeams(themeId?: string): Team[] {
       accentBase: options[2].base,
       accentGlow: options[2].glow,
       players: [
-        { id: makeId("p"), name: "Player 1" },
-        { id: makeId("p"), name: "Player 2" },
-        { id: makeId("p"), name: "Player 3" },
+        { id: makeId("p"), name: "", placeholder: "Player 7" },
+        { id: makeId("p"), name: "", placeholder: "Player 8" },
+        { id: makeId("p"), name: "", placeholder: "Player 9" },
       ],
     },
   ];

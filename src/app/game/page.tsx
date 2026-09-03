@@ -14,7 +14,7 @@ import { TimelineModal } from "@/components/game/modals/TimelineModal";
 import { LyricsModal } from "@/components/game/modals/LyricsModal";
 import { StandardModal } from "@/components/game/modals/StandardModal";
 import { AudioModal } from "@/components/game/modals/AudioModal";
-import { TeamPill } from "@/components/game/TeamPill";
+import { TurnOrderRail } from "@/components/game/TurnOrderRail";
 import { useAudioCue } from "@/hooks/useAudioCue";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { useSettings } from "@/hooks/useSettings";
@@ -24,11 +24,14 @@ import {
   LEGACY_QUESTION_STORAGE_KEY,
   LEGACY_TEAM_STORAGE_KEY,
   QUESTION_STORAGE_KEY,
+  SCORE_HISTORY_STORAGE_KEY,
   TEAM_STORAGE_KEY,
 } from "@/lib/storage";
-import { type Question, type Team, type TimelineEvent } from "@/lib/types";
-import { buildDefaultTeams } from "@/lib/defaultData";
+import { type Question, type ScoreTransaction, type Team, type TimelineEvent } from "@/lib/types";
+import { buildDefaultTeams, makeId } from "@/lib/defaultData";
 import { DEFAULT_SETTINGS } from "@/lib/settings";
+import { isQuestionReady } from "@/lib/questionValidation";
+import { getTeamAccent, reconcileTeamTheme } from "@/lib/teamPresentation";
 
 type ActiveQuestion = Question & { category: string };
 type PlacedTimelineEvent = TimelineEvent & {
@@ -45,7 +48,6 @@ export default function GameBoardPage() {
     playBigWin,
     playSlotResolve,
     playJokerSparkle,
-    playBoing,
     startSlotSpinLoop,
     stopSlotSpinLoop,
   } = useAudioCue();
@@ -59,12 +61,19 @@ export default function GameBoardPage() {
     [],
     [LEGACY_QUESTION_STORAGE_KEY],
   );
+  const [scoreHistory, setScoreHistory] = usePersistentState<ScoreTransaction[]>(
+    SCORE_HISTORY_STORAGE_KEY,
+    [],
+  );
   const [activeQuestion, setActiveQuestion] = useState<ActiveQuestion | null>(
     null,
   );
   const [lyricsRevealed, setLyricsRevealed] = useState<boolean[]>([]);
   const [lyricsPattern, setLyricsPattern] = useState<number[]>([]);
   const [showAnswer, setShowAnswer] = useState(false);
+  const [revealedCategories, setRevealedCategories] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [selectedTeamId, setSelectedTeamId] = useState<string>("");
   const [lastGuessTeamId, setLastGuessTeamId] = useState<string>("");
   const [mapLocked, setMapLocked] = useState(true);
@@ -88,7 +97,6 @@ export default function GameBoardPage() {
   const [timelinePotential, setTimelinePotential] = useState<number>(0);
   const [showFinalLeaderboard, setShowFinalLeaderboard] = useState(false);
   const [finalLeaderboardShown, setFinalLeaderboardShown] = useState(false);
-  const [hideBoardIntro, setHideBoardIntro] = useState(false);
   const [mcqEliminated, setMcqEliminated] = useState<number[]>([]);
   const [mcqResolved, setMcqResolved] = useState(false);
   const [mcqResolvedInfo, setMcqResolvedInfo] = useState<{
@@ -101,14 +109,21 @@ export default function GameBoardPage() {
   const slotIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const slotTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [slotCollapsed, setSlotCollapsed] = useState(false);
-  const [slotJumpId, setSlotJumpId] = useState<string | null>(null);
-  const [slotJumpKey, setSlotJumpKey] = useState<number>(0);
   const slotSpinStopRef = useRef<(() => void) | null>(null);
+  const gameModalRef = useRef<HTMLDivElement | null>(null);
+  const questionTriggerRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
-    setTeams((prev) =>
-      prev.length === 0 ? buildDefaultTeams(settings.themeId) : prev,
-    );
+    setTeams((prev) => {
+      if (prev.length === 0) return buildDefaultTeams(settings.themeId);
+      let changed = false;
+      const reconciled = prev.map((team) => {
+        const next = reconcileTeamTheme(team, settings.themeId);
+        if (next !== team) changed = true;
+        return next;
+      });
+      return changed ? reconciled : prev;
+    });
   }, [setTeams, setQuestions, settings.themeId]);
 
   const { turnState, setOrder, advanceBoard, advanceLyrics, setTurnState } = useTurnState();
@@ -133,7 +148,18 @@ export default function GameBoardPage() {
     [teams],
   );
   const boardComplete = useMemo(
-    () => questions.length > 0 && questions.every((q) => q.answered),
+    () => {
+      const playable = questions.filter(isQuestionReady);
+      return playable.length > 0 && playable.every((question) => question.answered);
+    },
+    [questions],
+  );
+  const playableQuestionCount = useMemo(
+    () => questions.filter(isQuestionReady).length,
+    [questions],
+  );
+  const answeredQuestionCount = useMemo(
+    () => questions.filter((question) => isQuestionReady(question) && question.answered).length,
     [questions],
   );
   const activeTurnOrder = useMemo(
@@ -158,6 +184,26 @@ export default function GameBoardPage() {
     [],
   );
 
+  const boardTurnOrderTeams = useMemo(
+    () => rotateTeams(orderTeamsById(activeTurnOrder), boardTurnIndex),
+    [activeTurnOrder, boardTurnIndex, orderTeamsById, rotateTeams],
+  );
+  const turnOrderRosterChanged =
+    turnOrder.length > 0 && teams.some((team) => !activeTurnOrder.includes(team.id));
+
+  useEffect(() => {
+    if (!turnOrder.length) return;
+    const teamIds = new Set(teams.map((team) => team.id));
+    const filteredOrder = turnOrder.filter((id) => teamIds.has(id));
+    if (filteredOrder.length === turnOrder.length) return;
+
+    setTurnState((previous) => ({
+      ...previous,
+      order: filteredOrder,
+      boardIndex: filteredOrder.length ? previous.boardIndex % filteredOrder.length : 0,
+      lyricsIndex: filteredOrder.length ? previous.lyricsIndex % filteredOrder.length : 0,
+    }));
+  }, [setTurnState, teams, turnOrder]);
   const getBoardTeamId = () =>
     activeTurnOrder.length > 0
       ? activeTurnOrder[boardTurnIndex % activeTurnOrder.length]
@@ -175,9 +221,9 @@ export default function GameBoardPage() {
       ? getLyricsTeamId()
       : lastGuessTeamId || selectedTeamId || getBoardTeamId();
   const answeringTeam = teams.find((t) => t.id === answeringTeamId);
-  const currentTeamColor = currentTeam?.accentBase || "#f2c14f";
+  const currentTeamColor = currentTeam ? getTeamAccent(currentTeam).base : "#c99c4a";
   const currentTeamEmoji = currentTeam?.badgeEmoji || "⭐️";
-  const answeringTeamColor = answeringTeam?.accentBase || "#81e6d9";
+  const answeringTeamColor = answeringTeam ? getTeamAccent(answeringTeam).base : "#3e7959";
   const answeringTeamEmoji = answeringTeam?.badgeEmoji || "⭐️";
 
   const allLyricsRevealed =
@@ -208,7 +254,7 @@ export default function GameBoardPage() {
       activeTurnOrder.length > 0
         ? rotateTeams(orderTeamsById(activeTurnOrder), boardTurnIndex)
         : [...teams];
-    setSlotFaces(orderedTeams.slice(0, Math.min(3, orderedTeams.length)));
+    setSlotFaces(orderedTeams);
     setSlotCollapsed(activeTurnOrder.length > 0);
   }, [teams, activeTurnOrder, slotSpinning, orderTeamsById, rotateTeams, boardTurnIndex]);
 
@@ -240,7 +286,7 @@ export default function GameBoardPage() {
     const tick = setInterval(() => {
       setSlotFaces((prev) => {
         if (!teams.length) return prev;
-        return shuffle([...teams]).slice(0, Math.min(3, teams.length));
+        return shuffle([...teams]);
       });
     }, 90);
     slotIntervalRef.current = tick;
@@ -257,7 +303,7 @@ export default function GameBoardPage() {
       setOrder(shuffled);
       setSelectedTeamId("");
       const orderedTeams = orderTeamsById(shuffled);
-      setSlotFaces(orderedTeams.slice(0, Math.min(3, orderedTeams.length)));
+      setSlotFaces(orderedTeams);
       setSlotSpinning(false);
       setSlotCollapsed(true);
       if (slotSpinStopRef.current) {
@@ -269,6 +315,19 @@ export default function GameBoardPage() {
       playSlotResolve();
       slotTimeoutRef.current = null;
     }, spinDuration);
+  };
+
+  const requestTurnOrderDraw = () => {
+    if (
+      activeTurnOrder.length > 0 &&
+      answeredQuestionCount > 0 &&
+      !window.confirm(
+        "Redrawing replaces the current team order and makes the first newly drawn team current. Scores and played questions are unchanged.",
+      )
+    ) {
+      return;
+    }
+    startTurnOrder();
   };
 
   const resetTimelineState = () => {
@@ -298,6 +357,7 @@ export default function GameBoardPage() {
   };
 
   const openQuestion = (question: Question) => {
+    questionTriggerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setJokerRound(null);
     setJokerProgress(null);
     resetTimelineState();
@@ -436,6 +496,47 @@ export default function GameBoardPage() {
     setMcqResolvedInfo(null);
   };
 
+  useEffect(() => {
+    if (!activeQuestion || !gameModalRef.current) return;
+    const dialog = gameModalRef.current;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    requestAnimationFrame(() => dialog.focus());
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        dialog.querySelector<HTMLButtonElement>(".game-modal-close")?.click();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const focusable = Array.from(dialog.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])',
+      )).filter((element) => !element.hidden && element.getAttribute("aria-hidden") !== "true");
+      if (!focusable.length) {
+        event.preventDefault();
+        dialog.focus();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", handleKeyDown);
+      requestAnimationFrame(() => questionTriggerRef.current?.focus());
+    };
+  }, [activeQuestion]);
+
   const handleRevealLine = (idx: number) => {
     setLyricsRevealed((prev) => {
       if (prev[idx]) return prev;
@@ -518,7 +619,8 @@ export default function GameBoardPage() {
     if (showFinalLeaderboard) return;
     if (finalLeaderboardShown) return;
     if (questions.length === 0) return;
-    const allAnswered = questions.every((q) => q.answered);
+    const playable = questions.filter(isQuestionReady);
+    const allAnswered = playable.length > 0 && playable.every((q) => q.answered);
     if (allAnswered) {
       setShowFinalLeaderboard(true);
       setFinalLeaderboardShown(true);
@@ -546,6 +648,51 @@ export default function GameBoardPage() {
     }
   };
 
+  const applyScoreChange = (
+    teamId: string,
+    delta: number,
+    reason: string,
+    questionId?: string,
+  ) => {
+    if (!teamId || !Number.isFinite(delta) || delta === 0) return;
+    const team = teams.find((candidate) => candidate.id === teamId);
+    if (!team) return;
+    setTeams((previous) =>
+      previous.map((candidate) =>
+        candidate.id === teamId
+          ? { ...candidate, score: candidate.score + delta }
+          : candidate,
+      ),
+    );
+    setScoreHistory((previous) => [
+      {
+        id: makeId("score"),
+        teamId,
+        teamName: team.name,
+        delta,
+        reason,
+        createdAt: new Date().toISOString(),
+        questionId,
+      },
+      ...previous,
+    ].slice(0, 100));
+  };
+
+  const undoScoreChange = (transactionId: string) => {
+    const transaction = scoreHistory.find((entry) => entry.id === transactionId);
+    if (!transaction) return;
+    setTeams((previous) =>
+      previous.map((team) =>
+        team.id === transaction.teamId
+          ? { ...team, score: team.score - transaction.delta }
+          : team,
+      ),
+    );
+    setScoreHistory((previous) =>
+      previous.filter((entry) => entry.id !== transactionId),
+    );
+  };
+
   const markAnswered = (correct: boolean) => {
     if (!activeQuestion) return;
     const basePoints = activeQuestion.points ?? 0;
@@ -568,15 +715,12 @@ export default function GameBoardPage() {
           : basePoints;
 
     if (teamIdToScore) {
-      setTeams((prev) =>
-        prev.map((team) =>
-          team.id === teamIdToScore
-            ? {
-                ...team,
-                score: team.score + (correct ? rewardPoints : -penaltyPoints),
-              }
-            : team,
-        ),
+      const delta = correct ? rewardPoints : -penaltyPoints;
+      applyScoreChange(
+        teamIdToScore,
+        delta,
+        `${activeQuestion.category} · ${activeQuestion.points} · ${correct ? "Correct" : "Wrong"}`,
+        activeQuestion.id,
       );
     }
     setQuestions((prev) =>
@@ -667,12 +811,11 @@ export default function GameBoardPage() {
     if (!jokerProgress) return;
     const teamId = answeringTeamId;
     if (teamId) {
-      setTeams((prev) =>
-        prev.map((team) =>
-          team.id === teamId
-            ? { ...team, score: team.score + Math.max(0, jokerProgress.score) }
-            : team,
-        ),
+      applyScoreChange(
+        teamId,
+        Math.max(0, jokerProgress.score),
+        `${activeQuestion.category} · Joker result`,
+        activeQuestion.id,
       );
     }
     setQuestions((prev) =>
@@ -702,12 +845,11 @@ export default function GameBoardPage() {
       playSuccessChime();
       if (currentTeamId) {
         const awarded = activeQuestion.points ?? 0;
-        setTeams((prev) =>
-          prev.map((team) =>
-            team.id === currentTeamId
-              ? { ...team, score: team.score + awarded }
-              : team,
-          ),
+        applyScoreChange(
+          currentTeamId,
+          awarded,
+          `${activeQuestion.category} · ${activeQuestion.points} · Multiple choice correct`,
+          activeQuestion.id,
         );
         const winnerTeam = teams.find((t) => t.id === currentTeamId);
         setMcqResolvedInfo({
@@ -728,12 +870,11 @@ export default function GameBoardPage() {
       playDownbeat();
       if (currentTeamId) {
         const penalty = activeQuestion.points ?? 0;
-        setTeams((prev) =>
-          prev.map((team) =>
-            team.id === currentTeamId
-              ? { ...team, score: team.score - penalty }
-              : team,
-          ),
+        applyScoreChange(
+          currentTeamId,
+          -penalty,
+          `${activeQuestion.category} · ${activeQuestion.points} · Multiple choice wrong`,
+          activeQuestion.id,
         );
         const team = teams.find((t) => t.id === currentTeamId);
         setMcqResolvedInfo({
@@ -843,10 +984,11 @@ export default function GameBoardPage() {
         setTimelineWinnerName(winnerTeam?.name ?? null);
         setTimelineWinnerId(winnerTeam?.id ?? null);
         setTimelineNoWinner(false);
-        setTeams((teamsPrev) =>
-          teamsPrev.map((t) =>
-            t.id === winner ? { ...t, score: t.score + timelinePotential } : t,
-          ),
+        applyScoreChange(
+          winner,
+          timelinePotential,
+          `${activeQuestion.category} · Timeline result`,
+          activeQuestion.id,
         );
       } else {
         setTimelineWinnerName(null);
@@ -863,20 +1005,14 @@ export default function GameBoardPage() {
     }
   };
 
-  const adjustScore = (teamId: string, delta: number) => {
-    setTeams((prev) =>
-      prev.map((team) =>
-        team.id === teamId ? { ...team, score: team.score + delta } : team,
-      ),
-    );
+  const adjustScore = (teamId: string, delta: number, reason = "Host adjustment") => {
+    applyScoreChange(teamId, delta, reason);
   };
 
   const setScore = (teamId: string, value: number) => {
-    setTeams((prev) =>
-      prev.map((team) =>
-        team.id === teamId ? { ...team, score: value } : team,
-      ),
-    );
+    const team = teams.find((candidate) => candidate.id === teamId);
+    if (!team || !Number.isFinite(value)) return;
+    applyScoreChange(teamId, value - team.score, "Host set score directly");
   };
 
   const renderModal = () => {
@@ -938,6 +1074,7 @@ export default function GameBoardPage() {
           disableActions={!answeringTeam}
           countdownSeconds={geoCountdown}
           timerUsed={geoTimerUsed}
+          potentialPoints={geoPotential}
         />
       );
     }
@@ -991,7 +1128,7 @@ export default function GameBoardPage() {
           category={activeQuestion.category}
           centerYear={timelineCenterYear}
           currentTeamName={timelineTeam?.name}
-          currentTeamColor={timelineTeam?.accentBase || "#f2c14f"}
+          currentTeamColor={timelineTeam ? getTeamAccent(timelineTeam).base : "#c99c4a"}
           currentTeamEmoji={timelineTeamEmoji}
           queue={timelineQueue ?? []}
           placedLeft={timelinePlacedLeft ?? []}
@@ -1057,227 +1194,76 @@ export default function GameBoardPage() {
   };
 
   return (
-    <main style={{ display: "grid", gap: "18px" }}>
-      <style>
-        {`@keyframes slot-shimmer {
-            0% { transform: translateY(-110%); }
-            100% { transform: translateY(110%); }
-          }
-          @keyframes slot-jump {
-            0% { transform: translateY(0) scale(1); }
-            25% { transform: translateY(-12px) scale(1.05); }
-            50% { transform: translateY(0px) scale(1); }
-            75% { transform: translateY(-6px) scale(1.02); }
-            100% { transform: translateY(0) scale(1); }
-          }`}
-      </style>
-      <section className="card" style={{ padding: "18px" }}>
+    <main className="game-page" style={{ display: "grid", gap: "14px" }}>
+      <div className="game-stage">
+      <section className="game-board-panel" style={{ padding: "6px" }}>
         <div
+          className="game-command-bar"
           style={{
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
             gap: "12px",
-            marginBottom: "8px",
+            marginBottom: "10px",
             flexWrap: "wrap",
           }}
         >
-          <div style={{ flex: 1, minWidth: "220px" }}>
-            <h1 style={{ margin: 0, fontSize: "2.2rem", fontWeight: 800 }}>
+          <div className="game-title-block" style={{ flex: 1, minWidth: "220px", display: "flex", alignItems: "baseline", gap: "12px", flexWrap: "wrap" }}>
+            <h1 style={{ margin: 0, fontSize: "1.45rem", fontWeight: 850 }}>
               {settings.quizTitle || DEFAULT_SETTINGS.quizTitle}
             </h1>
-            <div style={{ display: "flex", alignItems: "flex-start", gap: "10px", marginTop: "6px" }}>
-              {!hideBoardIntro && (
-                <p
-                  style={{
-                    color: "var(--muted)",
-                    margin: 0,
-                    lineHeight: 1.4,
-                    minHeight: "60px",
-                    display: "grid",
-                    alignItems: "center",
-                  }}
-                >
-                  <span>Click a tile to open the question.</span>
-                  <span>Wrong answers subtract points.</span>
-                  <span>Adjust scores in the leaderboard panel.</span>
-                </p>
-              )}
-              <button
-                className="button ghost compact"
-                type="button"
-                onClick={() => setHideBoardIntro((prev) => !prev)}
-                style={{ cursor: "pointer", height: "fit-content" }}
-              >
-                {hideBoardIntro ? "Show tips" : "Hide tips"}
-              </button>
-            </div>
+            <span style={{ color: "var(--muted)", fontSize: "0.9rem" }}>
+              {answeredQuestionCount}/{playableQuestionCount} played
+            </span>
           </div>
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "flex-end",
-              gap: "10px",
-              minWidth: "280px",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "10px",
-                flexWrap: "wrap",
-                justifyContent: "flex-end",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "10px",
-                  padding: "8px 10px",
-                  border: "1px solid rgba(255,255,255,0.12)",
-                  borderRadius: "10px",
-                  background: "rgba(255,255,255,0.03)",
-                  boxShadow: slotSpinning ? "0 0 0 2px rgba(255,255,255,0.06)" : "none",
-                  minWidth: "200px",
-                  position: "relative",
-                  justifyContent: "center",
-                }}
-              >
-                {slotSpinning && (
-                  <span style={{ color: "var(--muted)", fontSize: "0.9rem", minWidth: "84px", textAlign: "right" }}>
-                    Spinning…
-                  </span>
-                )}
-                {teams.length === 0 ? (
-                  <span style={{ color: "var(--muted)", fontSize: "0.9rem" }}>Add teams to spin</span>
-                ) : (
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-                    {slotCollapsed && !slotSpinning ? (
-                      currentTeam && (
-                        <div style={{ display: "flex", flexDirection: "column", gap: "4px", alignItems: "center", textAlign: "center" }}>
-                          <span style={{ color: "var(--muted)", fontSize: "0.85rem" }}>Board turn</span>
-                          <TeamPill
-                            name={currentTeam.name}
-                            color={currentTeam.accentBase ?? "#f2c14f"}
-                            emoji={currentTeam.badgeEmoji ?? "⭐️"}
-                          />
-                        </div>
-                      )
-                    ) : (
-                      (slotFaces.length > 0 ? slotFaces : teams.slice(0, Math.min(3, teams.length))).map((team, idx) => {
-                        const isActive = slotCollapsed && !slotSpinning && team?.id && currentTeam?.id && team.id === currentTeam.id;
-                        const cardWidth = isActive && !slotSpinning ? "78px" : "64px";
-                        const cardHeight = isActive && !slotSpinning ? "72px" : "58px";
-                        const scaleRest = isActive && !slotSpinning ? 1.08 : 0.92;
-                        const scaleSpin = isActive && !slotSpinning ? 1.02 : 0.96;
-                        const bob = slotSpinning ? (idx % 2 === 0 ? "-4px" : "4px") : "0px";
-                        const baseBorder =
-                          team?.accentBase
-                            ? `${team.accentBase}${isActive ? "cc" : "80"}`
-                            : "rgba(255,255,255,0.18)";
-                        const transformValue = slotSpinning
-                          ? `translateY(${bob}) scale(${scaleSpin})`
-                          : `scale(${scaleRest})`;
-                        const canJump = !slotSpinning && activeTurnOrder.length === 0;
-                        const isJumping = slotJumpId && slotJumpId === team?.id;
-                        return (
-                        <div
-                          key={team?.id ?? `slot-${idx}`}
-                          title={team?.name ?? "Team"}
-                          aria-label={team?.name ?? "Team"}
-                          style={{
-                            width: cardWidth,
-                            height: cardHeight,
-                            borderRadius: "8px",
-                            background: team?.accentGlow
-                              ? `${team.accentGlow}33`
-                              : "rgba(255,255,255,0.05)",
-                            border: isActive && !slotSpinning
-                              ? `2px solid ${baseBorder}`
-                              : `1px solid ${baseBorder}`,
-                            display: "grid",
-                            placeItems: "center",
-                            position: "relative",
-                            overflow: "hidden",
-                            transition: "transform 0.14s ease, box-shadow 0.14s ease, border-color 0.14s ease",
-                            boxShadow: slotSpinning
-                              ? "0 3px 12px rgba(0,0,0,0.2)"
-                              : isActive
-                                ? `0 6px 18px ${team?.accentBase ? `${team.accentBase}3d` : "rgba(0,0,0,0.3)"}`
-                                : "0 1px 4px rgba(0,0,0,0.18)",
-                            transform: transformValue,
-                            outline: isActive && !slotSpinning ? `2px solid ${team?.accentBase ?? "rgba(255,255,255,0.25)"}` : "none",
-                            outlineOffset: "2px",
-                            cursor: canJump ? "pointer" : "default",
-                          }}
-                          onClick={() => {
-                            if (!canJump || !team?.id) return;
-                            setSlotJumpId(team.id);
-                            setSlotJumpKey(Date.now());
-                            setTimeout(() => setSlotJumpId(null), 650);
-                            playBoing();
-                          }}
-                        >
-                          <div
-                            style={{
-                              position: "absolute",
-                              inset: 0,
-                              background: slotSpinning
-                                ? "linear-gradient(180deg, transparent 0%, rgba(255,255,255,0.08) 50%, transparent 100%)"
-                                : "none",
-                              animation: slotSpinning ? "slot-shimmer 0.65s linear infinite" : "none",
-                              pointerEvents: "none",
-                              willChange: "transform",
-                            }}
-                            aria-hidden
-                          />
-                          <div
-                            key={isJumping && canJump ? slotJumpKey : `emoji-${team?.id ?? idx}`}
-                            style={{
-                              fontSize: isActive && !slotSpinning ? "26px" : "22px",
-                              marginTop: "2px",
-                              animation:
-                                isJumping && canJump
-                                  ? `slot-jump 0.65s ease-out`
-                                  : "none",
-                              willChange: "transform",
-                            }}
-                          >
-                            {team?.badgeEmoji ?? "❔"}
-                          </div>
-                          <div
-                            style={{
-                              position: "absolute",
-                              bottom: "8px",
-                              left: "8px",
-                              right: "8px",
-                              height: "6px",
-                              borderRadius: "999px",
-                              background: team?.accentBase
-                                ? `linear-gradient(90deg, ${team.accentBase}, ${team.accentGlow ?? team.accentBase})`
-                                : "rgba(255,255,255,0.12)",
-                              boxShadow: team?.accentBase ? `0 0 0 2px ${team.accentBase}22` : "none",
-                            }}
-                          />
-                        </div>
-                      );
-                      })
-                    )}
-                  </div>
-                )}
-              </div>
-              <button
-              className="button ghost"
-              onClick={startTurnOrder}
-              style={{ paddingInline: "8px", minWidth: "110px", cursor: "pointer" }}
-              disabled={slotSpinning || teams.length === 0}
-            >
-              {slotSpinning ? "Spinning…" : "Spin!"}
-            </button>
+          <div className={`turn-draw${slotSpinning ? " spinning" : ""}${slotCollapsed && !slotSpinning ? " resolved" : ""}`}>
+            <div className="turn-draw-copy">
+              <span>Turn draw</span>
+              <small>{slotSpinning ? "Drawing…" : slotCollapsed ? "On the board" : "Pick the opening team"}</small>
             </div>
+            <div className="turn-reel" aria-live="off">
+              {teams.length === 0 ? (
+                <span className="turn-reel-empty">Add teams</span>
+              ) : slotCollapsed && !slotSpinning ? (
+                <TurnOrderRail teams={boardTurnOrderTeams} />
+              ) : (
+                <div className="turn-reel-window" aria-label="Teams in the turn draw">
+                  {(slotFaces.length > 0 ? slotFaces : teams).map((team, idx) => {
+                    const accent = team ? getTeamAccent(team) : undefined;
+                    return (
+                      <div
+                        className="turn-reel-token team-identity-surface"
+                        key={team?.id ?? `slot-${idx}`}
+                        data-emoji-surface={accent?.emojiSurface}
+                        style={{
+                          "--token-base": accent?.base ?? "#c99c4a",
+                          "--token-color": accent?.onLight ?? "#76531a",
+                          "--token-glow": accent?.glow ?? "#ead08d",
+                          "--token-tint": accent?.tint ?? "#f8e9c7",
+                          "--reel-delay": `${idx * 45}ms`,
+                        } as React.CSSProperties}
+                      >
+                        <span className="turn-reel-token-emoji team-identity-emoji">
+                          <span aria-hidden>{team?.badgeEmoji ?? "❔"}</span>
+                        </span>
+                        <span className="turn-reel-token-name">{team?.name ?? "Team"}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+            <button
+              className="turn-spin-button"
+              type="button"
+              onClick={requestTurnOrderDraw}
+              disabled={slotSpinning || teams.length === 0}
+              data-roster-changed={turnOrderRosterChanged || undefined}
+              title={turnOrderRosterChanged ? "Team list changed — redraw to include everyone" : undefined}
+            >
+              <span aria-hidden>{slotSpinning ? "•••" : "✦"}</span>
+              {slotSpinning ? "Drawing" : activeTurnOrder.length ? "Redraw" : "Spin"}
+            </button>
           </div>
         </div>
 
@@ -1287,31 +1273,31 @@ export default function GameBoardPage() {
           </div>
         ) : (
           <div style={{ position: "relative" }}>
-            <BoardGrid categories={categories} questions={questions} onOpen={openQuestion} />
+            <div inert={!activeTurnOrder.length ? true : undefined} aria-hidden={!activeTurnOrder.length || undefined}>
+              <BoardGrid
+                categories={categories}
+                questions={questions}
+                teams={teams}
+                scoreHistory={scoreHistory}
+                concealCategoryHeaders={settings.hideCategoryHeadersAtStart !== false}
+                revealedCategories={revealedCategories}
+                onRevealCategory={(category) =>
+                  setRevealedCategories((previous) => {
+                    const next = new Set(previous);
+                    next.add(category);
+                    return next;
+                  })
+                }
+                onOpen={openQuestion}
+              />
+            </div>
             {!activeTurnOrder.length && (
-              <div
-                style={{
-                  position: "absolute",
-                  inset: 0,
-                  background: "rgba(0,0,0,0.65)",
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: "10px",
-                  textAlign: "center",
-                  padding: "20px",
-                  zIndex: 2,
-                }}
-              >
-                <p style={{ margin: 0, color: "#e5e7eb", fontSize: "1rem", fontWeight: 600 }}>
-                  Spin the order before playing
-                </p>
-                <p style={{ margin: 0, color: "var(--muted)", fontSize: "0.95rem" }}>
-                  Use the slot machine to set the board turn order.
-                </p>
+              <div className="board-opening-slate">
+                <span className="board-opening-kicker">Tonight&apos;s quiz</span>
+                <h2>{settings.quizTitle || DEFAULT_SETTINGS.quizTitle}</h2>
+                <p>Draw the opening team to unlock the board.</p>
                 <button className="button primary" onClick={startTurnOrder} disabled={slotSpinning || teams.length === 0}>
-                  {slotSpinning ? "Spinning…" : "Spin now"}
+                  {slotSpinning ? "Drawing the turn…" : "Spin to begin"}
                 </button>
               </div>
             )}
@@ -1319,7 +1305,18 @@ export default function GameBoardPage() {
         )}
       </section>
 
-      <Leaderboard teams={sortedTeams} onAdjust={adjustScore} onSet={setScore} />
+      <div className="game-leaderboard-panel">
+        <Leaderboard
+          teams={sortedTeams}
+          onAdjust={adjustScore}
+          onSet={setScore}
+          history={scoreHistory}
+          onUndo={undoScoreChange}
+          compact
+          currentTeamId={currentTeam?.id}
+        />
+      </div>
+      </div>
       {boardComplete && finalLeaderboardShown && !showFinalLeaderboard && (
         <div style={{ display: "flex", justifyContent: "center" }}>
           <button
@@ -1334,6 +1331,7 @@ export default function GameBoardPage() {
 
       {activeQuestion && (
         <div
+          className="game-modal-overlay"
           style={{
             position: "fixed",
             inset: 0,
@@ -1346,7 +1344,6 @@ export default function GameBoardPage() {
             pointerEvents: "auto",
             overflowY: "auto",
           }}
-          onClick={closeModal}
         >
           {showJokerConfetti && (
             <div
@@ -1370,6 +1367,12 @@ export default function GameBoardPage() {
             </div>
           )}
           <div
+            className={`game-modal-shell type-${activeQuestion.type ?? "standard"}`}
+            ref={gameModalRef}
+            tabIndex={-1}
+            role="dialog"
+            aria-modal="true"
+            aria-label={`${activeQuestion.category}, ${activeQuestion.points} point question`}
             style={{
               position: "relative",
               width: "min(900px, 100%)",
@@ -1380,6 +1383,7 @@ export default function GameBoardPage() {
           >
             {renderModal()}
             <button
+              className="game-modal-close"
               onClick={closeModal}
               style={{
                 position: "absolute",
@@ -1403,6 +1407,10 @@ export default function GameBoardPage() {
       )}
       {showFinalLeaderboard && (
         <div
+          className="final-score-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="final-score-title"
           style={{
             position: "fixed",
             inset: 0,
@@ -1416,7 +1424,7 @@ export default function GameBoardPage() {
           onClick={closeFinalLeaderboard}
         >
           <div
-            className="card"
+            className="card final-score-card"
             style={{
               position: "relative",
               maxWidth: "760px",
@@ -1428,7 +1436,7 @@ export default function GameBoardPage() {
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div className="final-score-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div>
                 <div
                   style={{
@@ -1440,7 +1448,7 @@ export default function GameBoardPage() {
                 >
                   All questions answered
                 </div>
-                <h2 style={{ margin: "6px 0 2px", fontSize: "2.2rem" }}>Final leaderboard</h2>
+                <h2 id="final-score-title" style={{ margin: "6px 0 2px", fontSize: "2.2rem" }}>Final leaderboard</h2>
                 <div style={{ color: "var(--muted)" }}>Tap outside or hit close</div>
               </div>
               <button
@@ -1490,7 +1498,7 @@ export default function GameBoardPage() {
                           color: "var(--muted)",
                         }}
                       >
-                        {team.players.map((p) => (
+                        {team.players.filter((p) => p.name.trim()).map((p) => (
                           <span
                             key={p.id}
                             className="jumping-name"

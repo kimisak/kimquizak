@@ -65,7 +65,7 @@ export function McqModal({
 
   return (
     <div
-      className="card"
+      className="card round-stage round-mcq"
       style={{
         padding: "22px",
         background: "rgba(10, 12, 18, 0.96)",

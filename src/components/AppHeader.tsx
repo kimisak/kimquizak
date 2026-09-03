@@ -9,65 +9,34 @@ export function AppHeader() {
   const pathname = usePathname();
   const [settings] = useSettings();
   const isHome = pathname === "/";
-  const title = isHome
-    ? "kimquizak"
-    : settings.quizTitle || DEFAULT_SETTINGS.quizTitle;
+  const isGame = pathname === "/game";
+  const title = settings.quizTitle || DEFAULT_SETTINGS.quizTitle;
+
+  const navItems = [
+    { href: "/config/teams", number: "01", label: "Teams" },
+    { href: "/config/questions", number: "02", label: "Questions" },
+    { href: "/game", number: "03", label: "Play" },
+  ];
 
   return (
-    <header
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        marginBottom: "28px",
-        gap: "12px",
-        flexWrap: "wrap",
-      }}
-    >
-      <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-        <Link
-          href="/"
-          aria-label={title}
-          style={{
-            textDecoration: "none",
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "12px",
-          }}
-        >
-          <img
-            src="/kimquizak-logo.svg"
-            alt="kimquizak"
-            width={260}
-            height={86}
-            style={{
-              display: "block",
-              objectFit: "contain",
-              maxWidth: "70vw",
-              height: "auto",
-            }}
-          />
-        </Link>
-      </div>
-      <nav
-        style={{
-          display: "flex",
-          gap: "12px",
-          flexWrap: "wrap",
-          justifyContent: "flex-end",
-          overflowX: "auto",
-          paddingBottom: "4px",
-        }}
-      >
-        <Link className="button ghost" href="/config/teams">
-          Teams
-        </Link>
-        <Link className="button ghost" href="/config/questions">
-          Questions
-        </Link>
-        <Link className="button secondary" href="/game">
-          Game board
-        </Link>
+    <header className={`site-header${isGame ? " game-header" : ""}`}>
+      <Link href="/" aria-label={isHome ? "KimQuizak home" : `${title} — KimQuizak home`} className="brand-lockup">
+        <span className="brand-stamp" aria-hidden>KQ</span>
+        <span className="brand-wordmark">
+          <strong>KIMQUIZAK</strong>
+          <small>{isGame ? title : "HOST THE ROOM"}</small>
+        </span>
+      </Link>
+      <nav className="site-nav" aria-label="Primary navigation">
+        {navItems.map((item) => {
+          const active = pathname === item.href;
+          return (
+            <Link key={item.href} href={item.href} className={active ? "active" : ""} aria-current={active ? "page" : undefined}>
+              <span>{item.number}</span>
+              {item.label}
+            </Link>
+          );
+        })}
       </nav>
     </header>
   );

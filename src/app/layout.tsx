@@ -3,8 +3,8 @@ import "./globals.css";
 import { AppHeader } from "@/components/AppHeader";
 
 export const metadata: Metadata = {
-  title: "kimquizak",
-  description: "Quiz board and configuration toolkit for team game nights.",
+  title: "KimQuizak — host the room",
+  description: "A tactile quiz-show control room for teams, questions, and live play.",
 };
 
 export default function RootLayout({
@@ -14,14 +14,8 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className="antialiased">
-        <div
-          style={{
-            maxWidth: "1200px",
-            margin: "0 auto",
-            padding: "clamp(20px, 4vw, 32px) clamp(14px, 4vw, 28px) 64px",
-          }}
-        >
+      <body>
+        <div className="app-shell">
           <AppHeader />
           {children}
         </div>

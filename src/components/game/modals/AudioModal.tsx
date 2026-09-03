@@ -1,8 +1,13 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Question } from "@/lib/types";
 import { TeamPill } from "@/components/game/TeamPill";
+import { buildYouTubeEmbedUrl, extractYouTubeId, getYouTubeStartSeconds } from "@/lib/youtube";
+import {
+  loadYouTubePlayerApi,
+  type YouTubePlayer,
+} from "@/lib/youtubePlayer";
 
 type Props = {
   question: Question;
@@ -22,56 +27,6 @@ type Props = {
 
 const DEFAULT_STOP_SECONDS = 10;
 
-function normalizeUrl(raw: string): string {
-  // Some URLs may come in HTML-escaped (&amp;), so normalize them.
-  return raw.replace(/&amp;/g, "&");
-}
-
-function extractYouTubeId(url: string): string | null {
-  try {
-    const parsed = new URL(normalizeUrl(url));
-    if (parsed.hostname.includes("youtu.be")) {
-      return parsed.pathname.split("/").filter(Boolean)[0] ?? null;
-    }
-    if (parsed.searchParams.get("v")) {
-      return parsed.searchParams.get("v");
-    }
-    const parts = parsed.pathname.split("/").filter(Boolean);
-    if (parts[0] === "embed" && parts[1]) {
-      return parts[1];
-    }
-  } catch (e) {
-    return null;
-  }
-  return null;
-}
-
-function parseStartSeconds(url: string | null | undefined): number {
-  if (!url) return 0;
-  try {
-    const parsed = new URL(normalizeUrl(url));
-    const startParam = parsed.searchParams.get("start") || parsed.searchParams.get("t");
-    if (startParam) {
-      const match = startParam.match(/(\d+)/);
-      const val = match ? Number(match[1]) : Number(startParam);
-      if (Number.isFinite(val)) return Math.max(0, Math.floor(val));
-    }
-  } catch (e) {
-    return 0;
-  }
-  return 0;
-}
-
-function buildEmbedUrl(raw: string | null | undefined, startSeconds = 0) {
-  if (!raw) return "";
-  const normalized = normalizeUrl(raw);
-  const id = extractYouTubeId(raw);
-  const base = id ? `https://www.youtube.com/embed/${id}` : normalized;
-  const joiner = base.includes("?") ? "&" : "?";
-  const startParam = startSeconds > 0 ? `&start=${Math.max(0, Math.floor(startSeconds))}` : "";
-  return `${base}${joiner}enablejsapi=1&rel=0&playsinline=1${startParam}`;
-}
-
 export function AudioModal({
   question,
   answeringTeamName,
@@ -87,105 +42,171 @@ export function AudioModal({
   onClose,
   disableActions,
 }: Props) {
-  const iframeRef = useRef<HTMLIFrameElement | null>(null);
-  const stopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const playerHostRef = useRef<HTMLDivElement | null>(null);
+  const playerRef = useRef<YouTubePlayer | null>(null);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const playRequestedRef = useRef(false);
+  const playbackOriginRef = useRef<number | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [playerReady, setPlayerReady] = useState(false);
+  const [playerError, setPlayerError] = useState("");
+  const [hasPlayed, setHasPlayed] = useState(false);
   const [remaining, setRemaining] = useState<number>(question.audioStopSeconds ?? DEFAULT_STOP_SECONDS);
-  const [hiddenSrc, setHiddenSrc] = useState<string>("");
-  const [playKey, setPlayKey] = useState<number>(0);
 
   const stopAfter = useMemo(
     () => Math.max(1, question.audioStopSeconds ?? DEFAULT_STOP_SECONDS),
     [question.audioStopSeconds],
   );
   const startAt = useMemo(
-    () => Math.max(0, question.audioStartSeconds ?? parseStartSeconds(question.audioUrl)),
+    () => Math.max(0, question.audioStartSeconds ?? getYouTubeStartSeconds(question.audioUrl)),
     [question.audioStartSeconds, question.audioUrl],
   );
-  const embedUrl = useMemo(() => normalizeUrl(question.audioUrl || ""), [question.audioUrl]);
+  const embedUrl = useMemo(
+    () => buildYouTubeEmbedUrl(question.audioUrl, { startSeconds: startAt }),
+    [question.audioUrl, startAt],
+  );
+  const videoId = useMemo(() => extractYouTubeId(question.audioUrl), [question.audioUrl]);
+  const startAtRef = useRef(startAt);
+  const stopAfterRef = useRef(stopAfter);
 
-  const buildPlaySrc = () => {
-    const raw = question.audioUrl ? normalizeUrl(question.audioUrl) : "";
-    if (!raw) return "";
-    const joiner = raw.includes("?") ? "&" : "?";
-    return `${raw}${joiner}autoplay=1&playsinline=1&_ts=${Date.now()}`;
-  };
+  useEffect(() => {
+    startAtRef.current = startAt;
+    stopAfterRef.current = stopAfter;
+  }, [startAt, stopAfter]);
 
-  const stopPlayback = (keepRemaining = false) => {
-    if (stopTimerRef.current) {
-      clearTimeout(stopTimerRef.current);
-      stopTimerRef.current = null;
-    }
+  const clearPlaybackMonitor = useCallback(() => {
     if (tickRef.current) {
       clearInterval(tickRef.current);
       tickRef.current = null;
     }
-    setHiddenSrc("");
-    setPlayKey((k) => k + 1);
+  }, []);
+
+  const stopPlayback = useCallback((keepRemaining = false) => {
+    playRequestedRef.current = false;
+    clearPlaybackMonitor();
+    playerRef.current?.pauseVideo();
     setIsPlaying(false);
+    setIsLoading(false);
     if (!keepRemaining) {
       setRemaining(0);
     }
-  };
+  }, [clearPlaybackMonitor]);
+
+  const startPlaybackMonitor = useCallback(() => {
+    clearPlaybackMonitor();
+    tickRef.current = setInterval(() => {
+      const player = playerRef.current;
+      if (!player || !playRequestedRef.current) return;
+      const origin = playbackOriginRef.current;
+      if (origin == null) return;
+      const played = Math.max(0, player.getCurrentTime() - origin);
+      const left = Math.max(0, stopAfterRef.current - played);
+      setRemaining(left);
+      if (left <= 0.05) stopPlayback();
+    }, 100);
+  }, [clearPlaybackMonitor, stopPlayback]);
 
   const startPlayback = () => {
-    if (!embedUrl) return;
-    // Reset timers/state
+    if (!videoId || !playerRef.current || !playerReady || hasPlayed) return;
     stopPlayback(true);
     setRemaining(stopAfter);
-    // Force a fresh iframe load with autoplay + start param for reliable seeking
-    const src = buildPlaySrc();
-    setHiddenSrc(src);
-    setPlayKey((k) => k + 1);
-    setIsPlaying(true);
-    const startedAt = Date.now();
-
-    stopTimerRef.current = setTimeout(() => {
-      stopPlayback();
-    }, stopAfter * 1000);
-
-    tickRef.current = setInterval(() => {
-      const elapsed = (Date.now() - startedAt) / 1000;
-      const left = Math.max(0, stopAfter - elapsed);
-      setRemaining(left);
-      if (left <= 0.05) {
-        stopPlayback();
-      }
-    }, 150);
+    setPlayerError("");
+    setIsLoading(true);
+    setHasPlayed(true);
+    playRequestedRef.current = true;
+    playbackOriginRef.current = null;
+    playerRef.current.loadVideoById({ videoId, startSeconds: startAt });
   };
 
   useEffect(() => {
+    if (!videoId || !playerHostRef.current) return;
+    let cancelled = false;
+    let player: YouTubePlayer | null = null;
+
+    loadYouTubePlayerApi()
+      .then((YT) => {
+        if (cancelled || !playerHostRef.current) return;
+        player = new YT.Player(playerHostRef.current, {
+          width: 200,
+          height: 200,
+          videoId,
+          playerVars: {
+            controls: 0,
+            disablekb: 1,
+            playsinline: 1,
+            rel: 0,
+            origin: window.location.origin,
+          },
+          events: {
+            onReady: (event) => {
+              if (cancelled) return;
+              playerRef.current = event.target;
+              event.target.cueVideoById({ videoId, startSeconds: startAtRef.current });
+              setPlayerReady(true);
+            },
+            onStateChange: (event) => {
+              if (!playRequestedRef.current) return;
+              if (event.data === YT.PlayerState.PLAYING) {
+                if (playbackOriginRef.current == null) {
+                  playbackOriginRef.current = event.target.getCurrentTime();
+                }
+                setIsLoading(false);
+                setIsPlaying(true);
+                startPlaybackMonitor();
+              } else if (event.data === YT.PlayerState.BUFFERING) {
+                setIsLoading(true);
+                setIsPlaying(false);
+              } else if (event.data === YT.PlayerState.ENDED) {
+                stopPlayback();
+              }
+            },
+            onError: () => {
+              playRequestedRef.current = false;
+              clearPlaybackMonitor();
+              setIsPlaying(false);
+              setIsLoading(false);
+              setPlayerError("YouTube could not play this clip.");
+            },
+          },
+        });
+        playerRef.current = player;
+      })
+      .catch(() => {
+        if (!cancelled) setPlayerError("Could not prepare the YouTube player.");
+      });
+
     return () => {
-      stopPlayback(true);
+      cancelled = true;
+      playRequestedRef.current = false;
+      clearPlaybackMonitor();
+      player?.destroy();
+      playerRef.current = null;
     };
-  }, []);
+  }, [videoId, clearPlaybackMonitor, startPlaybackMonitor, stopPlayback]);
 
   useEffect(() => {
     const id = setTimeout(() => {
       if (showAnswer) {
         stopPlayback();
-        setHiddenSrc("");
-        setPlayKey((k) => k + 1);
       }
     }, 0);
     return () => clearTimeout(id);
-  }, [showAnswer]);
+  }, [showAnswer, stopPlayback]);
 
   useEffect(() => {
     const id = setTimeout(() => {
-      // Reset hidden src when question changes; no autoplay
       stopPlayback(true);
-      setHiddenSrc("");
       setIsPlaying(false);
+      setHasPlayed(false);
       setRemaining(question.audioStopSeconds ?? DEFAULT_STOP_SECONDS);
     }, 0);
     return () => clearTimeout(id);
-  }, [embedUrl, question.audioStopSeconds]);
+  }, [embedUrl, question.audioStopSeconds, stopPlayback]);
 
   return (
     <div
-      className="card"
+      className="card round-stage round-audio"
       style={{
         padding: "22px",
         background: "rgba(10, 12, 18, 0.96)",
@@ -343,25 +364,33 @@ export function AudioModal({
                     <button
                       className="button secondary"
                       onClick={startPlayback}
-                      disabled={!embedUrl || isPlaying}
+                      disabled={!embedUrl || !playerReady || isLoading || isPlaying || hasPlayed}
                       style={{
                         position: "relative",
                         overflow: "hidden",
                         minWidth: "180px",
-                        opacity: !embedUrl || isPlaying ? 0.65 : 1,
+                        opacity: !embedUrl || !playerReady || isLoading || isPlaying || hasPlayed ? 0.65 : 1,
                         boxShadow: isPlaying
                           ? "0 0 0 0 rgba(129, 230, 217, 0.55)"
                           : "0 10px 26px rgba(0,0,0,0.35)",
                         animation: isPlaying ? "pulse-ring 1.1s ease-in-out infinite" : "none",
                       }}
                     >
-                      {isPlaying ? "Playing..." : "Play clip"}
+                      {!playerReady
+                        ? "Preparing player…"
+                        : isLoading
+                          ? "Loading clip…"
+                          : isPlaying
+                            ? "Playing…"
+                            : hasPlayed
+                              ? "Clip played"
+                              : "Play clip"}
                     </button>
                     <button
                       className="button ghost"
                       onClick={() => stopPlayback()}
-                      disabled={!isPlaying}
-                      style={{ minWidth: "140px", opacity: !isPlaying ? 0.6 : 1 }}
+                      disabled={!isPlaying && !isLoading}
+                      style={{ minWidth: "140px", opacity: !isPlaying && !isLoading ? 0.6 : 1 }}
                     >
                       Stop
                     </button>
@@ -369,6 +398,10 @@ export function AudioModal({
                       {isPlaying ? (
                         <span style={{ color: "#81e6d9", fontWeight: 700 }}>
                           {remaining?.toFixed(1)}s left
+                        </span>
+                      ) : isLoading ? (
+                        <span style={{ color: "#f7c948", fontWeight: 700 }}>
+                          Waiting for YouTube — timer has not started
                         </span>
                       ) : (
                         <>
@@ -378,32 +411,26 @@ export function AudioModal({
                               : `Plays for ${stopAfter} second(s).`}
                           </span>
                           {!embedUrl && <span style={{ color: "#f87171" }}>Missing YouTube URL</span>}
+                          {playerError && <span style={{ color: "#f87171" }}>{playerError}</span>}
                         </>
                       )}
                     </div>
                   </div>
                 </div>
               </div>
-              <div style={{ position: "absolute", width: 0, height: 0, overflow: "hidden" }}>
-                {embedUrl && (
-                  <iframe
-                    key={playKey}
-                    ref={iframeRef}
-                    title="Hidden audio"
-                    src={hiddenSrc || embedUrl}
-                    allow="autoplay; encrypted-media; picture-in-picture; accelerometer; clipboard-write; gyroscope"
-                    style={{
-                      border: 0,
-                      width: "1px",
-                      height: "1px",
-                      opacity: 0,
-                      pointerEvents: "none",
-                      position: "absolute",
-                      left: "-9999px",
-                      top: "-9999px",
-                    }}
-                  />
-                )}
+              <div
+                aria-hidden
+                style={{
+                  position: "fixed",
+                  width: "200px",
+                  height: "200px",
+                  left: "-10000px",
+                  top: "-10000px",
+                  opacity: 0,
+                  pointerEvents: "none",
+                }}
+              >
+                <div ref={playerHostRef} />
               </div>
             </div>
           </div>

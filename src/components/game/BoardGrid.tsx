@@ -1,187 +1,61 @@
 'use client';
 
-import { useEffect, useMemo, useState } from "react";
-import { POINT_VALUES, type Question } from "@/lib/types";
-import { useSettings } from "@/hooks/useSettings";
-import { getThemeById } from "@/lib/defaultData";
+import type { CSSProperties } from "react";
+import { POINT_VALUES, type Question, type ScoreTransaction, type Team } from "@/lib/types";
+import { isQuestionReady } from "@/lib/questionValidation";
+import { getTeamAccent, getTeamMarker } from "@/lib/teamPresentation";
 
 type Props = {
   categories: string[];
   questions: Question[];
+  teams?: Team[];
+  scoreHistory?: ScoreTransaction[];
+  concealCategoryHeaders?: boolean;
+  revealedCategories?: Set<string>;
+  onRevealCategory?: (category: string) => void;
   onOpen: (q: Question) => void;
 };
 
-export function BoardGrid({ categories, questions, onOpen }: Props) {
-  const [settings] = useSettings();
-  const [isMobile, setIsMobile] = useState(
-    typeof window !== "undefined" ? window.innerWidth <= 700 : false,
-  );
-
-  const headerBackground = useMemo(() => {
-    const theme = getThemeById(settings.themeId);
-    const base = theme.options[0]?.base ?? "#3b82f6";
-    const accent = theme.options[1]?.base ?? theme.options[0]?.glow ?? "#14b8a6";
-
-    const toRgba = (hex: string, alpha: number) => {
-      const clean = hex.replace("#", "");
-      const full = clean.length === 3 ? clean.split("").map((c) => c + c).join("") : clean;
-      const num = Number.parseInt(full, 16);
-      if (Number.isNaN(num)) return `rgba(59,130,246,${alpha})`;
-      const r = (num >> 16) & 255;
-      const g = (num >> 8) & 255;
-      const b = num & 255;
-      return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-    };
-
-    return `linear-gradient(135deg, ${toRgba(base, 0.55)}, ${toRgba(accent, 0.55)})`;
-  }, [settings.themeId]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const mql = window.matchMedia("(max-width: 700px)");
-    const update = () => setIsMobile(mql.matches);
-    update();
-    mql.addEventListener("change", update);
-    const handleResize = () => update();
-    window.addEventListener("resize", handleResize);
-    return () => {
-      mql.removeEventListener("change", update);
-      window.removeEventListener("resize", handleResize);
-    };
-  }, []);
-
-  const useSplit = isMobile && categories.length > 2;
-
-  if (useSplit) {
-    const rows: React.ReactNode[] = [];
-    for (let i = 0; i < categories.length; i += 2) {
-      const slice = categories.slice(i, i + 2);
-      rows.push(
-        <div
-          key={`headers-${i}`}
-          style={{
-            display: "grid",
-            gridTemplateColumns: `repeat(${slice.length}, minmax(140px, 1fr))`,
-            gap: "8px",
-            marginBottom: "8px",
-          }}
-        >
-          {slice.map((category) => (
-            <div
-              key={category}
-              className="card"
-              style={{
-                padding: "12px",
-                textAlign: "center",
-                fontWeight: 700,
-                letterSpacing: "0.02em",
-                textTransform: "uppercase",
-                background: headerBackground,
-              }}
-            >
-              {category}
-            </div>
-          ))}
-        </div>,
-      );
-      POINT_VALUES.forEach((points, rowIdx) => {
-        rows.push(
-          <div
-            key={`row-${i}-${rowIdx}`}
-            style={{
-              display: "grid",
-              gridTemplateColumns: `repeat(${slice.length}, minmax(140px, 1fr))`,
-              gap: "8px",
-              marginBottom: "8px",
-            }}
-          >
-            {slice.map((category) => {
-              const q = questions.find(
-                (question) =>
-                  question.category === category && question.points === points,
-              );
-              const disabled = q?.answered;
-              return (
-                <button
-                  key={`${category}-${points}`}
-                  disabled={!q || disabled}
-                  onClick={() => q && onOpen(q)}
-                  style={{
-                    border: "1px solid rgba(255,255,255,0.14)",
-                    background: disabled
-                      ? "rgba(255,255,255,0.08)"
-                      : "linear-gradient(135deg, rgba(0,114,187,0.55), rgba(21,55,105,0.9))",
-                    color: disabled ? "var(--muted)" : "#f7f4ec",
-                    fontWeight: 800,
-                    fontSize: "1.4rem",
-                    padding: "18px 10px",
-                    borderRadius: "12px",
-                    cursor: disabled ? "not-allowed" : "pointer",
-                    position: "relative",
-                    textShadow: disabled ? "none" : "0 2px 6px rgba(0,0,0,0.35)",
-                  }}
-                >
-                  {points}
-                  {disabled && (
-                    <span
-                      style={{
-                        position: "absolute",
-                        top: "8px",
-                        right: "10px",
-                        fontSize: "0.75rem",
-                        textTransform: "uppercase",
-                        letterSpacing: "0.05em",
-                      }}
-                    >
-                      answered
-                    </span>
-                  )}
-                  {!q && (
-                    <span
-                      style={{
-                        display: "block",
-                        fontSize: "0.8rem",
-                        fontWeight: 500,
-                        opacity: 0.8,
-                      }}
-                    >
-                      missing clue
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>,
-        );
-      });
-    }
-    return <div style={{ display: "grid", gap: "6px" }}>{rows}</div>;
-  }
-
+export function BoardGrid({
+  categories,
+  questions,
+  teams = [],
+  scoreHistory = [],
+  concealCategoryHeaders = false,
+  revealedCategories = new Set<string>(),
+  onRevealCategory,
+  onOpen,
+}: Props) {
   return (
+    <div className="quiz-board-scroll" tabIndex={0} role="region" aria-label="Quiz board; scroll horizontally for more categories">
     <div
+      className="quiz-board"
       style={{
         display: "grid",
         gridTemplateColumns: `repeat(${categories.length}, minmax(140px, 1fr))`,
         gap: "8px",
+        minWidth: `${Math.max(680, categories.length * 150)}px`,
       }}
     >
-      {categories.map((category) => (
-        <div
-          key={category}
-          className="card"
-          style={{
-            padding: "12px",
-            textAlign: "center",
-            fontWeight: 700,
-            letterSpacing: "0.02em",
-            textTransform: "uppercase",
-            background: headerBackground,
-          }}
-        >
-          {category}
-        </div>
-      ))}
+      {categories.map((category, index) => {
+        const isConcealed = concealCategoryHeaders && !revealedCategories.has(category);
+        return isConcealed ? (
+          <button
+            key={category}
+            type="button"
+            className="quiz-board-header concealed"
+            onClick={() => onRevealCategory?.(category)}
+            aria-label={`Reveal category ${index + 1}`}
+          >
+            <span aria-hidden>✦</span>
+            Reveal category {index + 1}
+          </button>
+        ) : (
+          <div key={category} className="quiz-board-header revealed">
+            {category}
+          </div>
+        );
+      })}
 
       {POINT_VALUES.map((points) =>
         categories.map((category) => {
@@ -189,43 +63,47 @@ export function BoardGrid({ categories, questions, onOpen }: Props) {
             (question) =>
               question.category === category && question.points === points,
           );
-          const disabled = q?.answered;
+          const ready = isQuestionReady(q);
+          const disabled = q?.answered || !ready;
+          const result = q?.answered
+            ? scoreHistory.find((entry) => entry.questionId === q.id)
+              ?? scoreHistory.find((entry) => entry.reason.startsWith(`${category} · ${points}`))
+            : undefined;
+          const resultTeam = result
+            ? teams.find((team) => team.id === result.teamId)
+            : undefined;
+          const resultAccent = resultTeam ? getTeamAccent(resultTeam) : undefined;
           return (
             <button
               key={`${category}-${points}`}
-              disabled={!q || disabled}
-              onClick={() => q && onOpen(q)}
-              style={{
-                border: "1px solid rgba(255,255,255,0.14)",
-                background: disabled
-                  ? "rgba(255,255,255,0.08)"
-                  : "linear-gradient(135deg, rgba(0,114,187,0.55), rgba(21,55,105,0.9))",
-                color: disabled ? "var(--muted)" : "#f7f4ec",
-                fontWeight: 800,
-                fontSize: "1.4rem",
-                padding: "18px 10px",
-                borderRadius: "12px",
-                cursor: disabled ? "not-allowed" : "pointer",
-                position: "relative",
-                textShadow: disabled ? "none" : "0 2px 6px rgba(0,0,0,0.35)",
-              }}
+              className={`quiz-board-tile${q?.answered ? " played" : ""}${result ? " scored" : ""}${!ready ? " needs-setup" : ""}`}
+              disabled={disabled}
+              aria-label={`${category}, ${points} points${q?.answered ? result ? `, played, ${result.teamName} ${result.delta >= 0 ? "gained" : "lost"} ${Math.abs(result.delta)} points` : ", played" : !ready ? ", needs setup" : ""}`}
+              onClick={() => ready && onOpen(q)}
+              style={resultAccent ? {
+                "--result-color-on-dark": resultAccent.onDark,
+                "--result-color-on-light": resultAccent.onLight,
+                "--result-glow": resultAccent.glow,
+              } as CSSProperties : undefined}
             >
-              {points}
-              {disabled && (
-                <span
-                  style={{
-                    position: "absolute",
-                    top: "8px",
-                    right: "10px",
-                    fontSize: "0.75rem",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.05em",
-                  }}
-                >
-                  answered
-                </span>
-              )}
-              {!q && (
+              {q?.answered ? (
+                result ? (
+                  <span className="tile-result">
+                    <strong
+                      className="tile-result-team"
+                    >
+                      {resultTeam && <span aria-hidden="true">{getTeamMarker(resultTeam)}</span>}
+                      <span>{result.teamName}</span>
+                    </strong>
+                    <span className={result.delta >= 0 ? "tile-result-score won" : "tile-result-score lost"}>
+                      {result.delta >= 0 ? "+" : ""}{result.delta}
+                    </span>
+                  </span>
+                ) : (
+                  <span style={{ fontSize: "0.8rem", textTransform: "uppercase", letterSpacing: "0.06em" }}>Played</span>
+                )
+              ) : points}
+              {!ready && (
                 <span
                   style={{
                     display: "block",
@@ -234,13 +112,14 @@ export function BoardGrid({ categories, questions, onOpen }: Props) {
                     opacity: 0.8,
                   }}
                 >
-                  missing clue
+                  needs setup
                 </span>
               )}
             </button>
           );
         }),
       )}
+    </div>
     </div>
   );
 }

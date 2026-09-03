@@ -56,7 +56,7 @@ export function StandardModal({
   return (
     <>
       <div
-        className={`flip-inner ${showAnswer ? "flipped" : ""}`}
+        className={`flip-inner round-stage round-standard ${showAnswer ? "flipped" : ""}`}
         style={{
           position: "relative",
           width: "100%",

@@ -3,6 +3,7 @@ import {
   LEGACY_TEAM_STORAGE_KEY,
   LEGACY_TURN_STATE_STORAGE_KEY,
   QUESTION_STORAGE_KEY,
+  SCORE_HISTORY_STORAGE_KEY,
   TEAM_STORAGE_KEY,
   TURN_STATE_STORAGE_KEY,
 } from "@/lib/storage";
@@ -11,7 +12,7 @@ import {
   SETTINGS_STORAGE_KEY,
   type AppSettings,
 } from "@/lib/settings";
-import type { Question, Team, TurnState } from "@/lib/types";
+import type { Question, ScoreTransaction, Team, TurnState } from "@/lib/types";
 
 export type BackupPayload = {
   version: 2;
@@ -20,6 +21,7 @@ export type BackupPayload = {
   questions: Question[];
   turnState: TurnState;
   settings: AppSettings;
+  scoreHistory: ScoreTransaction[];
 };
 
 const fallbackTurnState: TurnState = {
@@ -65,6 +67,7 @@ export function buildBackupPayload(): BackupPayload {
         ? turnState
         : legacyTurnState,
     settings: readLocalStorage<AppSettings>(SETTINGS_STORAGE_KEY, DEFAULT_SETTINGS),
+    scoreHistory: readLocalStorage<ScoreTransaction[]>(SCORE_HISTORY_STORAGE_KEY, []),
   };
 }
 
@@ -104,6 +107,7 @@ export function parseBackupPayload(raw: string): BackupPayload {
       payload.settings && typeof payload.settings === "object"
         ? { ...DEFAULT_SETTINGS, ...payload.settings }
         : DEFAULT_SETTINGS,
+    scoreHistory: Array.isArray(payload.scoreHistory) ? payload.scoreHistory : [],
   };
 }
 
@@ -121,6 +125,10 @@ export function persistBackupToLocalStorage(payload: BackupPayload) {
   window.localStorage.setItem(
     SETTINGS_STORAGE_KEY,
     JSON.stringify(payload.settings ?? DEFAULT_SETTINGS),
+  );
+  window.localStorage.setItem(
+    SCORE_HISTORY_STORAGE_KEY,
+    JSON.stringify(payload.scoreHistory ?? []),
   );
   window.localStorage.removeItem(LEGACY_TEAM_STORAGE_KEY);
   window.localStorage.removeItem(LEGACY_QUESTION_STORAGE_KEY);

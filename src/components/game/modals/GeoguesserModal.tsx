@@ -21,6 +21,7 @@ type Props = {
   countdownSeconds?: number | null;
   flashKey?: number;
   timerUsed?: boolean;
+  potentialPoints?: number;
 };
 
 export function GeoguesserModal({
@@ -40,6 +41,7 @@ export function GeoguesserModal({
   countdownSeconds,
   flashKey,
   timerUsed,
+  potentialPoints,
 }: Props) {
   const lockDisabled = timerUsed ? true : !mapLocked && countdownSeconds !== null;
   const unlockCost = question.geoUnlockCost ?? 0;
@@ -47,7 +49,7 @@ export function GeoguesserModal({
   return (
     <>
       <div
-        className={`flip-inner ${showAnswer ? "flipped" : ""}`}
+        className={`flip-inner round-stage round-geo ${showAnswer ? "flipped" : ""}`}
         style={{
           position: "relative",
           width: "100%",
@@ -95,7 +97,7 @@ export function GeoguesserModal({
                 {question.category} · Geoguesser
               </div>
               <div style={{ fontSize: "2rem", fontWeight: 800 }}>
-                {question.points} pts
+                {potentialPoints ?? question.points} pts available
               </div>
               {answeringTeamName && !showAnswer && (
                 <TeamPill
@@ -110,7 +112,7 @@ export function GeoguesserModal({
               <div style={{ display: "grid", gap: "6px", justifyItems: "end" }}>
                 <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
                   <div style={{ color: "var(--muted)", fontSize: "0.95rem" }}>
-                    {mapLocked ? "Map locked (view only)" : "Map unlocked · move now"}
+                    {mapLocked ? "View-only panorama" : "Exploring · move now"}
                     {!mapLocked && countdownSeconds !== null && (
                       <strong style={{ color: "#f7c948", marginLeft: "8px" }}>
                         {countdownSeconds}s
@@ -126,15 +128,20 @@ export function GeoguesserModal({
                       cursor: lockDisabled ? "not-allowed" : "pointer",
                     }}
                   >
-                    {mapLocked ? "Unlock map" : "Lock map"}
+                    {timerUsed
+                      ? "Exploration used"
+                      : mapLocked
+                      ? `Explore for ${unlockDuration}s${unlockCost > 0 ? ` (−${unlockCost} pts)` : ""}`
+                      : "Stop exploring"}
                   </button>
                 </div>
                 <div style={{ color: "var(--muted)", fontSize: "0.9rem", textAlign: "right" }}>
                   {unlockCost > 0 ? (
                     <>
-                      Unlocking caps the reward by <strong style={{ color: "#f7c948" }}>{unlockCost} pts</strong> and adds the same{" "}
-                      <strong style={{ color: "#f7c948" }}>{unlockCost} pts</strong> to the penalty if wrong. Map opens for{" "}
-                      <strong style={{ color: "#f7c948" }}>{unlockDuration}s</strong>.
+                      Team choice: stay here for <strong style={{ color: "#6ee7b7" }}>+{question.points}</strong>, or explore for{" "}
+                      <strong style={{ color: "#f7c948" }}>{unlockDuration}s</strong> and play for{" "}
+                      <strong style={{ color: "#f7c948" }}>+{Math.max(0, question.points - unlockCost)}</strong>. A wrong answer after exploring is{" "}
+                      <strong style={{ color: "#fca5a5" }}>−{question.points + unlockCost}</strong>.
                     </>
                   ) : (
                     <>

@@ -2,9 +2,13 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { usePersistentState } from "@/hooks/usePersistentState";
+import { useSettings } from "@/hooks/useSettings";
 import { LEGACY_QUESTION_STORAGE_KEY, QUESTION_STORAGE_KEY } from "@/lib/storage";
 import { POINT_VALUES, type PointValue, type Question } from "@/lib/types";
 import { makeId } from "@/lib/defaultData";
+import { buildYouTubeEmbedUrl, getYouTubeStartSeconds } from "@/lib/youtube";
+import { extractEmbedUrl, isSafeHttpUrl } from "@/lib/embed";
+import { getQuestionIssues } from "@/lib/questionValidation";
 
 type FieldProps = {
   category: string;
@@ -26,6 +30,23 @@ type FieldProps = {
     file: File | null,
   ) => void;
 };
+
+type QuestionType = NonNullable<Question["type"]>;
+
+const QUESTION_TYPE_META: Record<
+  QuestionType,
+  { label: string; icon: string; accent: string; soft: string }
+> = {
+  standard: { label: "Standard", icon: "Q", accent: "#60a5fa", soft: "rgba(96,165,250,0.14)" },
+  mcq: { label: "Multiple choice", icon: "A", accent: "#a78bfa", soft: "rgba(167,139,250,0.14)" },
+  audio: { label: "Guess the audio", icon: "♪", accent: "#f472b6", soft: "rgba(244,114,182,0.14)" },
+  lyrics: { label: "Text grid", icon: "▦", accent: "#2dd4bf", soft: "rgba(45,212,191,0.14)" },
+  geoguesser: { label: "Geoguesser", icon: "⌖", accent: "#f59e0b", soft: "rgba(245,158,11,0.14)" },
+  joker: { label: "Joker high/low", icon: "♠", accent: "#fb7185", soft: "rgba(251,113,133,0.14)" },
+  timeline: { label: "Timeline", icon: "↔", accent: "#34d399", soft: "rgba(52,211,153,0.14)" },
+};
+
+const QUESTION_TYPES = Object.keys(QUESTION_TYPE_META) as QuestionType[];
 
 const McqFields = React.memo(function McqFields({
   category,
@@ -220,7 +241,7 @@ const McqFields = React.memo(function McqFields({
         ))}
       </div>
       <div style={{ color: "var(--muted)", fontSize: "0.9rem", marginTop: "6px" }}>
-        Two or four options. The team that picked the question must answer; a wrong answer ends the question and costs the points.
+        A wrong answer ends the clue and loses its value.
       </div>
       <label className="label" style={{ marginTop: "10px" }}>
         Answer image (optional)
@@ -306,6 +327,7 @@ const McqFields = React.memo(function McqFields({
 });
 export default function QuestionConfigPage() {
   const [isClient, setIsClient] = useState(false);
+  const [settings, setSettings] = useSettings();
   const [questions, setQuestions] = usePersistentState<Question[]>(
     QUESTION_STORAGE_KEY,
     [],
@@ -317,6 +339,9 @@ export default function QuestionConfigPage() {
   const [dragging, setDragging] = useState<{ category: string; points: PointValue } | null>(null);
   const [dragOver, setDragOver] = useState<PointValue | null>(null);
   const [isMobile, setIsMobile] = useState(false);
+  const [expandedQuestions, setExpandedQuestions] = useState<Set<string>>(
+    () => new Set(),
+  );
 
   useEffect(() => {
     setIsClient(true);
@@ -441,6 +466,37 @@ export default function QuestionConfigPage() {
     const target = POINT_VALUES[idx + direction];
     if (idx === -1 || target === undefined) return;
     moveQuestionTo(category, points, target);
+  };
+
+  const moveCategory = (category: string, direction: -1 | 1) => {
+    setQuestions((previous) => {
+      const order = Array.from(new Set(previous.map((question) => question.category)));
+      const fromIndex = order.indexOf(category);
+      const toIndex = fromIndex + direction;
+      if (fromIndex < 0 || toIndex < 0 || toIndex >= order.length) return previous;
+
+      [order[fromIndex], order[toIndex]] = [order[toIndex], order[fromIndex]];
+      const questionsByCategory = new Map<string, Question[]>();
+      previous.forEach((question) => {
+        const group = questionsByCategory.get(question.category) ?? [];
+        group.push(question);
+        questionsByCategory.set(question.category, group);
+      });
+
+      return order.flatMap((name) => questionsByCategory.get(name) ?? []);
+    });
+  };
+
+  const setCategoryCollapsed = (category: string, collapsed: boolean) => {
+    setExpandedQuestions((previous) => {
+      const next = new Set(previous);
+      POINT_VALUES.forEach((points) => {
+        const key = `${category}-${points}`;
+        if (collapsed) next.delete(key);
+        else next.add(key);
+      });
+      return next;
+    });
   };
 
   const handleNewCategory = () => {
@@ -812,20 +868,26 @@ const AudioFields = React.memo(function AudioFields({
   const [prompt, setPrompt] = useState(q?.prompt ?? "");
   const [answer, setAnswer] = useState(q?.answer ?? "");
   const [audioUrl, setAudioUrl] = useState(q?.audioUrl ?? "");
+  const [startSeconds, setStartSeconds] = useState<number>(
+    q?.audioStartSeconds ?? getYouTubeStartSeconds(q?.audioUrl),
+  );
   const [stopSeconds, setStopSeconds] = useState<number>(q?.audioStopSeconds ?? 10);
+  const [showPreview, setShowPreview] = useState(false);
 
   React.useEffect(() => {
     setPrompt(q?.prompt ?? "");
     setAnswer(q?.answer ?? "");
     setAudioUrl(q?.audioUrl ?? "");
+    setStartSeconds(q?.audioStartSeconds ?? getYouTubeStartSeconds(q?.audioUrl));
     setStopSeconds(q?.audioStopSeconds ?? 10);
-  }, [q?.prompt, q?.answer, q?.audioUrl, q?.audioStopSeconds]);
+  }, [q?.prompt, q?.answer, q?.audioUrl, q?.audioStartSeconds, q?.audioStopSeconds]);
 
   const persistSeconds = () => {
     const safe = Number.isFinite(stopSeconds) ? Math.max(1, Math.round(stopSeconds)) : 10;
     setStopSeconds(safe);
     upsertQuestion(category, points, { audioStopSeconds: safe });
   };
+  const validVideoUrl = buildYouTubeEmbedUrl(audioUrl, { startSeconds });
 
   return (
     <>
@@ -856,25 +918,70 @@ const AudioFields = React.memo(function AudioFields({
         className="input"
         value={audioUrl}
         onChange={(e) => setAudioUrl(e.target.value)}
-        onBlur={() =>
+        onBlur={() => {
+          const detectedStart = getYouTubeStartSeconds(audioUrl);
+          const nextStart = q?.audioStartSeconds == null && detectedStart > 0
+            ? detectedStart
+            : startSeconds;
+          setStartSeconds(nextStart);
           upsertQuestion(category, points, {
             audioUrl: audioUrl.trim() || null,
-          })
-        }
+            audioStartSeconds: Math.max(0, Math.round(nextStart)),
+          });
+        }}
         placeholder="https://youtube.com/watch?v=..."
       />
-      <label className="label" style={{ marginTop: "8px" }}>
-        Auto-stop after (seconds)
-      </label>
-      <input
-        className="input"
-        type="number"
-        min={1}
-        value={stopSeconds}
-        onChange={(e) => setStopSeconds(Number(e.target.value))}
-        onBlur={persistSeconds}
-        style={{ maxWidth: "160px" }}
-      />
+      {audioUrl && !validVideoUrl && (
+        <div style={{ color: "#fca5a5", fontSize: "0.9rem", marginTop: "6px" }}>
+          This does not look like a supported YouTube link.
+        </div>
+      )}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(120px, 180px))", gap: "10px", marginTop: "8px" }}>
+        <div>
+          <label className="label">Start at (seconds)</label>
+          <input
+            className="input"
+            type="number"
+            min={0}
+            value={startSeconds}
+            onChange={(e) => setStartSeconds(Number(e.target.value))}
+            onBlur={() => {
+              const safe = Number.isFinite(startSeconds) ? Math.max(0, Math.round(startSeconds)) : 0;
+              setStartSeconds(safe);
+              upsertQuestion(category, points, { audioStartSeconds: safe });
+            }}
+          />
+        </div>
+        <div>
+          <label className="label">Clip length (seconds)</label>
+          <input
+            className="input"
+            type="number"
+            min={1}
+            value={stopSeconds}
+            onChange={(e) => setStopSeconds(Number(e.target.value))}
+            onBlur={persistSeconds}
+          />
+        </div>
+      </div>
+      {validVideoUrl && (
+        <div style={{ marginTop: "10px" }}>
+          <button className="button ghost compact" type="button" onClick={() => setShowPreview((value) => !value)}>
+            {showPreview ? "Hide source preview" : "Preview source at start time"}
+          </button>
+          {showPreview && (
+            <div style={{ marginTop: "8px", aspectRatio: "16 / 9", overflow: "hidden", borderRadius: "12px", border: "1px solid rgba(255,255,255,0.12)" }}>
+              <iframe
+                title="Audio source preview"
+                src={validVideoUrl}
+                allow="accelerometer; encrypted-media; picture-in-picture"
+                allowFullScreen
+                style={{ width: "100%", height: "100%", border: 0 }}
+              />
+            </div>
+          )}
+        </div>
+      )}
       <label className="label" style={{ marginTop: "8px" }}>
         Expected answer
       </label>
@@ -898,7 +1005,7 @@ const AudioFields = React.memo(function AudioFields({
         placeholder="What answer should score as correct?"
       />
       <div style={{ color: "var(--muted)", marginTop: "6px", fontSize: "0.9rem" }}>
-        The audio clip plays once, then locks. The hidden iframe uses the YouTube link above.
+        YouTube timestamps are detected automatically. The clip plays once.
       </div>
     </>
   );
@@ -1043,6 +1150,7 @@ const GeoguesserFields = React.memo(function GeoguesserFields({
   const [answerLink, setAnswerLink] = useState(q?.answerLocationUrl ?? "");
   const [timerSeconds, setTimerSeconds] = useState<number>(q?.geoTimerSeconds ?? 10);
   const [unlockCost, setUnlockCost] = useState<number>(q?.geoUnlockCost ?? 0);
+  const [showMapPreview, setShowMapPreview] = useState(false);
 
   React.useEffect(() => {
     setPrompt(q?.prompt ?? "");
@@ -1052,6 +1160,9 @@ const GeoguesserFields = React.memo(function GeoguesserFields({
     setTimerSeconds(q?.geoTimerSeconds ?? 10);
     setUnlockCost(q?.geoUnlockCost ?? 0);
   }, [q?.prompt, q?.mapEmbedUrl, q?.answer, q?.answerLocationUrl, q?.geoTimerSeconds, q?.geoUnlockCost]);
+
+  const normalizedMapUrl = extractEmbedUrl(mapUrl);
+  const validMapUrl = isSafeHttpUrl(normalizedMapUrl);
 
   return (
     <>
@@ -1076,7 +1187,7 @@ const GeoguesserFields = React.memo(function GeoguesserFields({
         placeholder="Optional hint or instructions"
       />
       <label className="label" style={{ marginTop: "8px", display: "flex", alignItems: "center", gap: "8px" }}>
-        <span>Google Maps Street View embed URL</span>
+        <span>Street View embed</span>
         <span
           title="Find a place in Street View that does not show the street address on the road - this may be difficult."
           style={{
@@ -1100,15 +1211,38 @@ const GeoguesserFields = React.memo(function GeoguesserFields({
         className="input"
         value={mapUrl}
         onChange={(e) => setMapUrl(e.target.value)}
-        onBlur={() =>
+        onBlur={() => {
+          const normalized = extractEmbedUrl(mapUrl);
+          setMapUrl(normalized);
           upsertQuestion(category, points, {
-            mapEmbedUrl: mapUrl || null,
-          })
-        }
-        placeholder="Paste the embed URL from Google Maps > Share > Embed"
+            mapEmbedUrl: normalized || null,
+          });
+        }}
+        placeholder="Paste the URL or the complete <iframe> from Google Maps"
       />
+      {mapUrl && !validMapUrl && (
+        <div style={{ color: "#fca5a5", fontSize: "0.9rem", marginTop: "6px" }}>
+          Paste an embed URL or the complete iframe code copied from Google Maps.
+        </div>
+      )}
+      {validMapUrl && (
+        <div style={{ marginTop: "8px" }}>
+          <button className="button ghost compact" type="button" onClick={() => setShowMapPreview((value) => !value)}>
+            {showMapPreview ? "Hide player preview" : "Preview what players see"}
+          </button>
+          {showMapPreview && (
+            <div style={{ marginTop: "8px", height: "260px", borderRadius: "12px", overflow: "hidden", position: "relative", border: "1px solid rgba(255,255,255,0.12)" }}>
+              <iframe
+                title="Street View player preview"
+                src={normalizedMapUrl}
+                style={{ width: "100%", height: "560px", border: 0, marginTop: "-140px", pointerEvents: "none" }}
+              />
+            </div>
+          )}
+        </div>
+      )}
       <label className="label" style={{ marginTop: "8px" }}>
-        Move time (seconds)
+        Exploration time (seconds)
       </label>
       <input
         className="input"
@@ -1125,7 +1259,7 @@ const GeoguesserFields = React.memo(function GeoguesserFields({
         placeholder="e.g. 10"
       />
       <label className="label" style={{ marginTop: "8px" }}>
-        Unlock cost (points)
+        Exploration cost (points)
       </label>
       <input
         className="input"
@@ -1141,9 +1275,12 @@ const GeoguesserFields = React.memo(function GeoguesserFields({
         }
         placeholder="e.g. 50"
       />
-      <div style={{ color: "var(--muted)", fontSize: "0.9rem", marginTop: "4px" }}>
-        Tip: In Google Maps, pick a spot, go to Street View, click Share → Embed a map → Copy HTML, then paste the src URL here.
-      </div>
+      <details className="question-help">
+        <summary>How movement works</summary>
+        <p>
+          The panorama starts locked. Moving is an active choice that costs {unlockCost || 0} potential points and lasts {timerSeconds || 10} seconds. The crop hides Google&apos;s address header.
+        </p>
+      </details>
       <label className="label" style={{ marginTop: "8px" }}>
         Answer text (address / location)
       </label>
@@ -1247,8 +1384,7 @@ const JokerFields = React.memo(function JokerFields({
           lineHeight: 1.4,
         }}
       >
-        Configure how many circles to play, the number range, and the score per correct guess.
-        A hidden 🎩 Joker awards the max score possible for this round.
+        Set the circles and number range. The hidden 🎩 Joker awards the maximum score.
       </div>
       <label className="label">Circles per row</label>
       <input
@@ -1411,8 +1547,7 @@ const TimelineFields = React.memo(function TimelineFields({
           lineHeight: 1.4,
         }}
       >
-        Enter timeline events as one per line: YEAR AC/BC, Event prompt, Timeline text. BC years
-        stored as negative; AC/AD is implied if omitted. The center year anchors the starting point.
+        Paste one event per line: YEAR AC/BC, Event prompt, Timeline text.
       </div>
       <label className="label">Center year</label>
       <input
@@ -1478,111 +1613,84 @@ const TimelineFields = React.memo(function TimelineFields({
 });
 
   return (
-    <main className="card" style={{ padding: "24px" }}>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: "16px",
-          gap: "12px",
-        }}
-      >
+    <main className="question-studio">
+      <div className="question-studio-header">
         <div>
-          <h1 style={{ margin: 0 }}>Categories & Clues</h1>
-          <p style={{ color: "var(--muted)", marginTop: "6px" }}>
-            Add categories (columns) and fill in a question + answer for each
-            point value.
+          <span className="question-studio-kicker">Quiz studio</span>
+          <h1>Build the board</h1>
+          <p>
+            Choose a category, then shape each clue from 100 to 500 points.
           </p>
         </div>
-        <button className="button ghost" onClick={resetAnsweredFlags} style={{ cursor: "pointer" }}>
-          Reset answered flags
-        </button>
+        <div className="question-studio-actions">
+          <label className="question-board-reveal-setting" htmlFor="question-hide-category-headers">
+            <input
+              id="question-hide-category-headers"
+              type="checkbox"
+              checked={settings.hideCategoryHeadersAtStart !== false}
+              onChange={(event) => setSettings((previous) => ({
+                ...previous,
+                hideCategoryHeadersAtStart: event.target.checked,
+              }))}
+            />
+            <span>
+              <strong>Hide category titles at start</strong>
+              <small>Reveal each title from the board during the show.</small>
+            </span>
+          </label>
+          <button className="button ghost compact" onClick={resetAnsweredFlags} style={{ cursor: "pointer" }}>
+            Reset played tiles
+          </button>
+        </div>
       </div>
 
-      <div
-        className="card"
-        style={{
-          padding: "16px",
-          marginBottom: "16px",
-          display: "flex",
-          gap: "10px",
-          alignItems: "flex-end",
-        }}
-      >
+      <div className="question-category-create">
         <div style={{ flex: 1 }}>
-          <label className="label">New category</label>
+          <label className="label">Add a category</label>
           <input
             className="input"
             value={newCategory}
             onChange={(e) => setNewCategory(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleNewCategory();
+            }}
             placeholder="e.g. Local Jokes"
           />
         </div>
         <button className="button secondary" onClick={handleNewCategory} style={{ cursor: "pointer" }}>
-          + Add
+          Add category
         </button>
       </div>
 
       {categories.length > 0 && (
-        <div
-          className="card"
-          style={{
-            padding: "10px",
-            marginBottom: "16px",
-            display: "flex",
-            gap: "8px",
-            alignItems: "center",
-            flexWrap: "wrap",
-          }}
-        >
+        <nav className="question-category-tabs" aria-label="Question categories">
           {categories.map((cat) => {
             const isActive = activeCategory === cat;
             const label = categoryNames[cat] ?? cat;
             return (
               <button
                 key={cat}
-                className="button ghost"
+                className={`question-category-tab${isActive ? " active" : ""}`}
                 onClick={() => setActiveCategory(cat)}
-                style={{
-                  padding: "8px 12px",
-                  borderColor: isActive ? "rgba(255,255,255,0.6)" : "rgba(255,255,255,0.16)",
-                  background: isActive
-                    ? "linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0.04))"
-                    : "rgba(255,255,255,0.04)",
-                  fontWeight: isActive ? 700 : 600,
-                  whiteSpace: "nowrap",
-                  cursor: "pointer",
-                }}
               >
                 {label || cat}
               </button>
             );
           })}
-        </div>
+        </nav>
       )}
 
-      <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+      <div className="question-category-list">
         {(activeCategory ? categories.filter((c) => c === activeCategory) : categories).map((category) => (
           <div
             key={category}
-            className="card"
-            style={{ padding: "16px", borderColor: "rgba(255,255,255,0.16)" }}
+            className="question-category-panel"
           >
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: "12px",
-                gap: "10px",
-                flexWrap: "wrap",
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", flex: "1 1 360px" }}>
+            <div className="question-category-heading">
+              <div className="question-category-name">
+                <span aria-hidden>▦</span>
                 <input
-                  className="input"
-                  style={{ width: "100%", minWidth: "260px", maxWidth: "1000px", whiteSpace: "nowrap" }}
+                  aria-label={`Rename ${category}`}
                   value={categoryNames[category] ?? category}
                   onChange={(e) =>
                     setCategoryNames((prev) => ({
@@ -1595,182 +1703,200 @@ const TimelineFields = React.memo(function TimelineFields({
                   }
                 />
               </div>
-              <button
-                className="button ghost compact"
-                onClick={() => deleteCategory(category)}
-                style={{ cursor: "pointer", paddingInline: "10px" }}
-                aria-label={`Delete ${category}`}
-              >
-                ✕
-              </button>
+              <div className="question-category-actions">
+                <button
+                  type="button"
+                  onClick={() => moveCategory(category, -1)}
+                  disabled={categories.indexOf(category) === 0}
+                  aria-label={`Move ${category} left`}
+                  title="Move category left on the board"
+                >
+                  ← Move
+                </button>
+                <button
+                  type="button"
+                  onClick={() => moveCategory(category, 1)}
+                  disabled={categories.indexOf(category) === categories.length - 1}
+                  aria-label={`Move ${category} right`}
+                  title="Move category right on the board"
+                >
+                  Move →
+                </button>
+                <button type="button" onClick={() => setCategoryCollapsed(category, false)}>
+                  Open all
+                </button>
+                <button type="button" onClick={() => setCategoryCollapsed(category, true)}>
+                  Collapse all
+                </button>
+                <button
+                  className="question-icon-button danger"
+                  onClick={() => deleteCategory(category)}
+                  aria-label={`Delete ${category}`}
+                  title="Delete category"
+                >
+                  ✕
+                </button>
+              </div>
             </div>
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-                gap: "12px",
-              }}
-            >
+            <div className="question-card-grid">
               {POINT_VALUES.map((points) => {
                 const q = getQuestion(category, points);
                 const isDragging = dragging?.category === category && dragging.points === points;
                 const isDragOver = dragOver === points && dragging?.category === category;
                 const canDrag = !isMobile;
+                const questionIssues = q ? getQuestionIssues(q) : ["Question is missing"];
+                const questionKey = `${category}-${points}`;
+                const isExpanded = expandedQuestions.has(questionKey);
+                const questionType = (q?.type ?? "standard") as QuestionType;
+                const typeMeta = QUESTION_TYPE_META[questionType];
+                const summary = questionType === "timeline"
+                  ? `${q?.timelineEvents?.length ?? 0} timeline events`
+                  : questionType === "lyrics"
+                    ? `${q?.lyricsSegments?.filter((line) => line.trim()).length ?? 0} reveal lines`
+                    : questionType === "joker"
+                      ? `${q?.jokerCount ?? 5} circles · ${q?.jokerMin ?? 1}–${q?.jokerMax ?? 9}`
+                      : questionType === "mcq"
+                        ? `${q?.mcqOptions?.filter(Boolean).length ?? 0} answer options`
+                        : q?.prompt?.trim() || q?.answer?.trim() || "Add the first detail";
                 return (
                   <div
                     key={`${category}-${points}`}
-                    className="card"
+                    className={`question-card${isExpanded ? " expanded" : ""}${questionIssues.length ? " incomplete" : " ready"}`}
                     style={{
-                      padding: "12px",
-                      borderColor: "rgba(255,255,255,0.08)",
-                      outline: isDragOver ? "2px dashed rgba(255,255,255,0.5)" : "none",
+                      "--question-accent": typeMeta.accent,
+                      "--question-soft": typeMeta.soft,
+                      outline: isDragOver ? `2px dashed ${typeMeta.accent}` : "none",
                       opacity: isDragging ? 0.6 : 1,
-                      transition: "outline 0.15s ease, opacity 0.15s ease",
-                      cursor: "default",
-                    }}
+                    } as React.CSSProperties}
                   >
-                    {canDrag ? (
-                      <div
-                        style={{
-                          height: "28px",
-                          margin: "-12px -12px 10px",
-                          borderRadius: "10px 10px 6px 6px",
-                          background: isDragging
-                            ? "linear-gradient(90deg, rgba(255,255,255,0.3), rgba(255,255,255,0.12))"
-                            : "linear-gradient(90deg, rgba(255,255,255,0.12), rgba(255,255,255,0.05))",
-                          border: "1px solid rgba(255,255,255,0.14)",
-                          boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
-                          position: "relative",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          color: "var(--muted)",
-                          fontWeight: 700,
-                          letterSpacing: "0.04em",
-                          cursor: "grab",
-                        }}
-                        title="Drag to reorder this question within the category"
-                        draggable
-                        onDragStart={(e) => {
-                          setDragging({ category, points });
-                          setDragOver(points);
-                          e.dataTransfer?.setData("text/plain", `${category}-${points}`);
-                        }}
-                        onDragEnter={(e) => {
-                          e.preventDefault();
-                          if (dragging?.category === category) {
-                            setDragOver(points);
-                          }
-                        }}
-                        onDragOver={(e) => {
-                          e.preventDefault();
-                          if (dragging?.category === category) {
-                            setDragOver(points);
-                          }
-                        }}
-                        onDrop={(e) => {
-                          e.preventDefault();
-                          if (dragging?.category === category) {
-                            moveQuestionTo(category, dragging.points, points);
-                          }
-                          setDragOver(null);
-                          setDragging(null);
-                        }}
-                        onDragEnd={() => {
-                          setDragOver(null);
-                          setDragging(null);
-                        }}
-                      >
-                        ⇅ Drag to reorder
-                      </div>
-                    ) : (
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "flex-end",
-                          gap: "6px",
-                          padding: "6px",
-                          margin: "-12px -12px 10px",
-                        }}
-                      >
-                        <button
-                          className="button ghost compact"
-                          onClick={() => bumpQuestion(category, points, -1)}
-                          disabled={POINT_VALUES.indexOf(points) === 0}
-                          style={{ width: "100%" }}
-                        >
-                          ↑ Move up
-                        </button>
-                        <button
-                          className="button ghost compact"
-                          onClick={() => bumpQuestion(category, points, 1)}
-                          disabled={POINT_VALUES.indexOf(points) === POINT_VALUES.length - 1}
-                          style={{ width: "100%" }}
-                        >
-                          ↓ Move down
-                        </button>
-                      </div>
-                    )}
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        gap: "12px",
-                        marginBottom: "8px",
-                        flexWrap: "wrap",
-                      }}
-                    >
-                      <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-                        <div style={{ fontWeight: 700 }}>{points} pts</div>
-                      </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: "8px", justifyContent: "flex-end", flexWrap: "wrap" }}>
-                        {q?.answered && (
-                          <span style={{ color: "#f2c14f", fontSize: "0.9rem" }}>
-                            marked answered
-                          </span>
-                        )}
-                        <div style={{ position: "relative", minWidth: "180px" }}>
-                          <select
-                            value={q?.type ?? "standard"}
-                            onChange={(e) =>
-                              upsertQuestion(category, points, {
-                                type: e.target.value as Question["type"],
-                              })
-                            }
-                          className="input"
-                          style={{
-                            width: "100%",
-                            padding: "0.45rem 2rem 0.45rem 0.6rem",
-                            cursor: "pointer",
-                          }}
-                        >
-                            <option value="standard">Standard</option>
-                            <option value="lyrics">Text grid</option>
-                            <option value="geoguesser">Geoguesser</option>
-                            <option value="joker">Joker high/low</option>
-                            <option value="timeline">Timeline</option>
-                            <option value="mcq">Multiple choice</option>
-                            <option value="audio">Audio</option>
-                          </select>
-                          <span
-                            aria-hidden
-                            style={{
-                              position: "absolute",
-                              right: "10px",
-                              top: "50%",
-                              transform: "translateY(-50%)",
-                              pointerEvents: "none",
-                              color: "var(--muted)",
-                              fontSize: "0.9rem",
+                    <div className="question-card-topbar">
+                      <span className="question-points">{points}</span>
+                      <span className="question-points-unit">points</span>
+                      <span className="question-card-status" title={questionIssues.join(" · ")}>
+                        <span aria-hidden>{questionIssues.length ? "○" : "●"}</span>
+                        {questionIssues.length ? `${questionIssues.length} left` : "Ready"}
+                      </span>
+                      {q?.answered && <span className="question-played-status">Played</span>}
+                      <div className="question-card-actions">
+                        {canDrag ? (
+                          <div
+                            className="question-drag-handle"
+                            title="Drag to reorder"
+                            draggable
+                            onDragStart={(e) => {
+                              setDragging({ category, points });
+                              setDragOver(points);
+                              e.dataTransfer?.setData("text/plain", `${category}-${points}`);
+                            }}
+                            onDragEnter={(e) => {
+                              e.preventDefault();
+                              if (dragging?.category === category) setDragOver(points);
+                            }}
+                            onDragOver={(e) => {
+                              e.preventDefault();
+                              if (dragging?.category === category) setDragOver(points);
+                            }}
+                            onDrop={(e) => {
+                              e.preventDefault();
+                              if (dragging?.category === category) {
+                                moveQuestionTo(category, dragging.points, points);
+                              }
+                              setDragOver(null);
+                              setDragging(null);
+                            }}
+                            onDragEnd={() => {
+                              setDragOver(null);
+                              setDragging(null);
                             }}
                           >
-                            ▼
-                          </span>
-                        </div>
+                            <span aria-hidden>⠿</span>
+                            Reorder
+                          </div>
+                        ) : (
+                          <div className="question-move-buttons">
+                            <button
+                              type="button"
+                              onClick={() => bumpQuestion(category, points, -1)}
+                              disabled={POINT_VALUES.indexOf(points) === 0}
+                              aria-label="Move question up"
+                            >
+                              ↑
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => bumpQuestion(category, points, 1)}
+                              disabled={POINT_VALUES.indexOf(points) === POINT_VALUES.length - 1}
+                              aria-label="Move question down"
+                            >
+                              ↓
+                            </button>
+                          </div>
+                        )}
+                        <button
+                          className="question-edit-button"
+                          type="button"
+                          aria-expanded={isExpanded}
+                          onClick={() =>
+                            setExpandedQuestions((previous) => {
+                              const next = new Set(previous);
+                              if (isExpanded) next.delete(questionKey);
+                              else next.add(questionKey);
+                              return next;
+                            })
+                          }
+                        >
+                          {isExpanded ? "Collapse" : "Open"}
+                        </button>
                       </div>
                     </div>
-                    {(q?.type ?? "standard") === "standard" && (
+                    <div className="question-card-identity">
+                      <span className="question-type-icon" aria-hidden>{typeMeta.icon}</span>
+                      <strong>{typeMeta.label}</strong>
+                    </div>
+                    {!isExpanded && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setExpandedQuestions((previous) => {
+                            const next = new Set(previous);
+                            next.add(questionKey);
+                            return next;
+                          })
+                        }
+                        className="question-card-summary"
+                      >
+                        {summary}
+                      </button>
+                    )}
+                    {isExpanded && (
+                      <>
+                        <div className="question-type-picker" aria-label="Question type">
+                          {QUESTION_TYPES.map((type) => {
+                            const option = QUESTION_TYPE_META[type];
+                            const selected = type === questionType;
+                            return (
+                              <button
+                                key={type}
+                                type="button"
+                                className={selected ? "selected" : ""}
+                                aria-pressed={selected}
+                                onClick={() => upsertQuestion(category, points, { type })}
+                                style={{ "--type-color": option.accent } as React.CSSProperties}
+                              >
+                                <span aria-hidden>{option.icon}</span>
+                                {option.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        {questionIssues.length > 0 && (
+                          <div className="question-issues" role="status">
+                            <strong>Finish this clue</strong>
+                            <span>{questionIssues.join(" · ")}</span>
+                          </div>
+                        )}
+                        <div className="question-editor">
+                    {questionType === "standard" && (
                       <StandardFields
                         category={category}
                         points={points}
@@ -1780,7 +1906,7 @@ const TimelineFields = React.memo(function TimelineFields({
                         handleAnswerImageChange={handleAnswerImageChange}
                       />
                     )}
-                    {(q?.type ?? "standard") === "lyrics" && (
+                    {questionType === "lyrics" && (
                       <LyricsFields
                         category={category}
                         points={points}
@@ -1789,7 +1915,7 @@ const TimelineFields = React.memo(function TimelineFields({
                         handleAnswerImageChange={handleAnswerImageChange}
                       />
                     )}
-                    {(q?.type ?? "standard") === "geoguesser" && (
+                    {questionType === "geoguesser" && (
                       <GeoguesserFields
                         category={category}
                         points={points}
@@ -1798,7 +1924,7 @@ const TimelineFields = React.memo(function TimelineFields({
                         handleAnswerImageChange={handleAnswerImageChange}
                       />
                     )}
-                    {(q?.type ?? "standard") === "joker" && (
+                    {questionType === "joker" && (
                       <JokerFields
                         category={category}
                         points={points}
@@ -1806,7 +1932,7 @@ const TimelineFields = React.memo(function TimelineFields({
                         upsertQuestion={upsertQuestion}
                       />
                     )}
-                    {(q?.type ?? "standard") === "timeline" && (
+                    {questionType === "timeline" && (
                       <TimelineFields
                         category={category}
                         points={points}
@@ -1814,7 +1940,7 @@ const TimelineFields = React.memo(function TimelineFields({
                         upsertQuestion={upsertQuestion}
                       />
                     )}
-                    {(q?.type ?? "standard") === "mcq" && (
+                    {questionType === "mcq" && (
                       <McqFields
                         category={category}
                         points={points}
@@ -1824,13 +1950,16 @@ const TimelineFields = React.memo(function TimelineFields({
                         handleAnswerImageChange={handleAnswerImageChange}
                       />
                     )}
-                    {(q?.type ?? "standard") === "audio" && (
+                    {questionType === "audio" && (
                       <AudioFields
                         category={category}
                         points={points}
                         q={q}
                         upsertQuestion={upsertQuestion}
                       />
+                    )}
+                        </div>
+                      </>
                     )}
                   </div>
                 );

@@ -11,6 +11,7 @@ import {
   LEGACY_TEAM_STORAGE_KEY,
   LEGACY_TURN_STATE_STORAGE_KEY,
   QUESTION_STORAGE_KEY,
+  SCORE_HISTORY_STORAGE_KEY,
   TEAM_STORAGE_KEY,
   TURN_STATE_STORAGE_KEY,
 } from "@/lib/storage";
@@ -85,6 +86,7 @@ export function StorageBackupPanel() {
       window.localStorage.removeItem(QUESTION_STORAGE_KEY);
       window.localStorage.removeItem(TURN_STATE_STORAGE_KEY);
       window.localStorage.removeItem(SETTINGS_STORAGE_KEY);
+      window.localStorage.removeItem(SCORE_HISTORY_STORAGE_KEY);
       window.localStorage.removeItem(LEGACY_TEAM_STORAGE_KEY);
       window.localStorage.removeItem(LEGACY_QUESTION_STORAGE_KEY);
       window.localStorage.removeItem(LEGACY_TURN_STATE_STORAGE_KEY);
@@ -99,7 +101,7 @@ export function StorageBackupPanel() {
   const handleLoadExample = async () => {
     try {
       const mod = await import("../../default_questions.json");
-      const payloadRaw = (mod as any).default ?? mod;
+      const payloadRaw = (mod as { default?: unknown }).default ?? mod;
       const payload = parseBackupPayload(JSON.stringify(payloadRaw));
       persistBackupToLocalStorage(payload);
       updateStatus("Example data loaded. Reloading...", "success");
@@ -115,17 +117,17 @@ export function StorageBackupPanel() {
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-      <div>
-        <div style={{ fontWeight: 700, marginBottom: "4px" }}>
-          Backup & restore
+    <div className="archive-panel">
+      <div className="archive-copy">
+        <div>
+          Local archive
         </div>
-        <p style={{ color: "var(--muted)", margin: 0 }}>
+        <p>
           Save everything in localStorage to a JSON file, or load from one to seed
           a new browser.
         </p>
       </div>
-      <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+      <div className="archive-actions">
         <button className="button secondary" type="button" onClick={handleDownload}>
           ⬇️ Download backup
         </button>
@@ -140,12 +142,30 @@ export function StorageBackupPanel() {
           />
         </label>
         <button
-          className="button ghost"
+          className="button archive-danger"
           type="button"
           onClick={handleClearAll}
-          style={{ borderColor: "rgba(255, 99, 99, 0.4)", color: "#fca5a5" }}
+          style={{
+            borderColor: "#d6a85a",
+            background: "#7b2936",
+            color: "#fff7e5",
+          }}
         >
-          🗑️ Clear local data
+          <svg
+            className="archive-trash-icon"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+            style={{
+              width: "19px",
+              height: "19px",
+              flex: "0 0 19px",
+              fill: "none",
+              stroke: "#fff7e5",
+            }}
+          >
+            <path d="M4 7h16M9 7V4h6v3m3 0-1 13H7L6 7m4 4v5m4-5v5" />
+          </svg>
+          Clear local data
         </button>
         <button className="button secondary" type="button" onClick={handleLoadExample}>
           ✨ Add example data
@@ -153,6 +173,7 @@ export function StorageBackupPanel() {
       </div>
       {status ? (
         <div
+          className={`archive-status ${tone}`}
           style={{
             padding: "10px 12px",
             borderRadius: "10px",

@@ -1,10 +1,84 @@
 'use client';
 
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
+
+const SPIN_CUE_VOLUME = 0.68;
+const SELECTION_CUE_FALLBACK_VOLUME = 0.32;
+
+function getActiveRms(buffer: AudioBuffer) {
+  const windowSize = Math.max(1, Math.round(buffer.sampleRate * 0.05));
+  const activeWindows: number[] = [];
+
+  for (let offset = 0; offset < buffer.length; offset += windowSize) {
+    let sumOfSquares = 0;
+    let sampleCount = 0;
+
+    for (let channelIndex = 0; channelIndex < buffer.numberOfChannels; channelIndex += 1) {
+      const channel = buffer.getChannelData(channelIndex);
+      const end = Math.min(channel.length, offset + windowSize);
+      for (let sampleIndex = offset; sampleIndex < end; sampleIndex += 1) {
+        sumOfSquares += channel[sampleIndex] ** 2;
+        sampleCount += 1;
+      }
+    }
+
+    const rms = Math.sqrt(sumOfSquares / Math.max(1, sampleCount));
+    if (rms > 10 ** (-45 / 20)) activeWindows.push(rms);
+  }
+
+  if (activeWindows.length === 0) return 0;
+  return Math.sqrt(
+    activeWindows.reduce((sum, rms) => sum + rms ** 2, 0) / activeWindows.length,
+  );
+}
 
 export function useAudioCue() {
   const audioCtxRef = useRef<AudioContext | null>(null);
+  const selectionCueVolumeRef = useRef(SELECTION_CUE_FALLBACK_VOLUME);
   const slotSpinStopRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    const spinAudio = new Audio("/audio/sleigh-bells-fast.mp3");
+    const selectionAudio = new Audio("/audio/christmas-selection-glockenspiel.mp3");
+    spinAudio.preload = "auto";
+    selectionAudio.preload = "auto";
+    spinAudio.load();
+    selectionAudio.load();
+
+    let cancelled = false;
+    const normalizeCueVolumes = async () => {
+      try {
+        const decode = async (path: string) => {
+          const response = await fetch(path);
+          if (!response.ok) throw new Error(`Unable to load ${path}`);
+          const context = new OfflineAudioContext(2, 1, 48_000);
+          return context.decodeAudioData(await response.arrayBuffer());
+        };
+        const [spinBuffer, selectionBuffer] = await Promise.all([
+          decode("/audio/sleigh-bells-fast.mp3"),
+          decode("/audio/christmas-selection-glockenspiel.mp3"),
+        ]);
+        const spinRms = getActiveRms(spinBuffer);
+        const selectionRms = getActiveRms(selectionBuffer);
+        if (!cancelled && spinRms > 0 && selectionRms > 0) {
+          selectionCueVolumeRef.current = Math.max(
+            0.08,
+            Math.min(1, SPIN_CUE_VOLUME * (spinRms / selectionRms)),
+          );
+        }
+      } catch (error) {
+        console.warn("Unable to normalize the spinner cue volumes", error);
+      }
+    };
+    void normalizeCueVolumes();
+
+    return () => {
+      cancelled = true;
+      slotSpinStopRef.current?.();
+      spinAudio.pause();
+      selectionAudio.pause();
+    };
+  }, []);
 
   const ensureCtx = () => {
     try {
@@ -103,27 +177,13 @@ export function useAudioCue() {
   };
 
   const playSlotResolve = () => {
-    const ctx = ensureCtx();
-    if (!ctx) return;
-    const now = ctx.currentTime;
-    const osc1 = ctx.createOscillator();
-    const osc2 = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc1.type = "triangle";
-    osc2.type = "sine";
-    osc1.frequency.setValueAtTime(320, now);
-    osc1.frequency.exponentialRampToValueAtTime(540, now + 0.18);
-    osc2.frequency.setValueAtTime(210, now + 0.12);
-    osc2.frequency.linearRampToValueAtTime(330, now + 0.32);
-    gain.gain.setValueAtTime(0.22, now);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.55);
-    osc1.connect(gain);
-    osc2.connect(gain);
-    gain.connect(ctx.destination);
-    osc1.start(now);
-    osc2.start(now + 0.06);
-    osc1.stop(now + 0.6);
-    osc2.stop(now + 0.6);
+    const audio = new Audio("/audio/christmas-selection-glockenspiel.mp3");
+    audio.preload = "auto";
+    audio.volume = selectionCueVolumeRef.current;
+    audio.currentTime = 0;
+    void audio.play().catch((error) => {
+      console.warn("Unable to play the Christmas selection cue", error);
+    });
   };
 
   const playJokerSparkle = () => {
@@ -189,71 +249,31 @@ export function useAudioCue() {
     osc2.stop(now + 0.6);
   };
 
-  const playBoing = () => {
-    const ctx = ensureCtx();
-    if (!ctx) return;
-    const now = ctx.currentTime;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = "sine";
-    osc.frequency.setValueAtTime(180, now);
-    osc.frequency.exponentialRampToValueAtTime(420, now + 0.25);
-    gain.gain.setValueAtTime(0.28, now);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.35);
-    const filter = ctx.createBiquadFilter();
-    filter.type = "lowpass";
-    filter.frequency.setValueAtTime(1400, now);
-    osc.connect(filter);
-    filter.connect(gain);
-    gain.connect(ctx.destination);
-    osc.start(now);
-    osc.stop(now + 0.36);
-  };
-
   const startSlotSpinLoop = () => {
-    const ctx = ensureCtx();
-    if (!ctx) return () => {};
     if (slotSpinStopRef.current) {
       slotSpinStopRef.current();
     }
-    const now = ctx.currentTime;
-    const osc1 = ctx.createOscillator();
-    const osc2 = ctx.createOscillator();
-    const lfo = ctx.createOscillator();
-    const lfoGain = ctx.createGain();
-    const gain = ctx.createGain();
-
-    osc1.type = "triangle";
-    osc2.type = "sine";
-    lfo.type = "sine";
-
-    osc1.frequency.setValueAtTime(360, now);
-    osc2.frequency.setValueAtTime(720, now);
-    lfo.frequency.setValueAtTime(8, now);
-    lfoGain.gain.setValueAtTime(0.22, now);
-    gain.gain.setValueAtTime(0.18, now);
-
-    lfo.connect(lfoGain);
-    lfoGain.connect(gain.gain);
-    osc1.connect(gain);
-    osc2.connect(gain);
-    gain.connect(ctx.destination);
-
-    osc1.start(now);
-    osc2.start(now);
-    lfo.start(now);
-
     let stopped = false;
+    const audio = new Audio("/audio/sleigh-bells-fast.mp3");
+    audio.preload = "auto";
+    audio.volume = SPIN_CUE_VOLUME;
+    audio.currentTime = 0;
+
+    const handleEnded = () => stop();
     const stop = () => {
       if (stopped) return;
       stopped = true;
-      const t = ctx.currentTime;
-      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
-      osc1.stop(t + 0.24);
-      osc2.stop(t + 0.24);
-      lfo.stop(t + 0.24);
+      audio.removeEventListener("ended", handleEnded);
+      audio.pause();
+      audio.currentTime = 0;
       slotSpinStopRef.current = null;
     };
+
+    audio.addEventListener("ended", handleEnded, { once: true });
+    void audio.play().catch((error) => {
+      console.warn("Unable to play the sleigh-bell spin cue", error);
+      stop();
+    });
 
     slotSpinStopRef.current = stop;
     return stop;
@@ -275,7 +295,6 @@ export function useAudioCue() {
     playBigWin,
     playSlotResolve,
     playJokerSparkle,
-    playBoing,
     startSlotSpinLoop,
     stopSlotSpinLoop,
   };

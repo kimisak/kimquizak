@@ -4,6 +4,7 @@ export type PointValue = (typeof POINT_VALUES)[number];
 export type Player = {
   id: string;
   name: string;
+  placeholder?: string;
 };
 
 export type Team = {
@@ -61,6 +62,16 @@ export type Question = {
 
 export type TeamMap = Record<string, Team>;
 export type QuestionMap = Record<string, Question>;
+
+export type ScoreTransaction = {
+  id: string;
+  teamId: string;
+  teamName: string;
+  delta: number;
+  reason: string;
+  createdAt: string;
+  questionId?: string;
+};
 
 export type TurnState = {
   order: string[];

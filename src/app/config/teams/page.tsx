@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { useSettings } from "@/hooks/useSettings";
 import {
@@ -15,9 +15,21 @@ import {
   getThemeById,
   getThemeOptions,
   makeId,
-  type EmojiOption,
 } from "@/lib/defaultData";
-import { TeamPill } from "@/components/game/TeamPill";
+import { EditableTeamPill } from "@/components/game/TeamPill";
+import { getTeamAccent, reconcileTeamTheme } from "@/lib/teamPresentation";
+
+const getNextDefaultPlayerNumber = (teams: Team[]) =>
+  teams.reduce(
+    (highest, team) =>
+      team.players.reduce((teamHighest, player) => {
+        const match = /^Player\s+(\d+)$/i.exec(
+          (player.placeholder || player.name).trim(),
+        );
+        return match ? Math.max(teamHighest, Number(match[1])) : teamHighest;
+      }, highest),
+    0,
+  ) + 1;
 
 export default function TeamConfigPage() {
   const [hydrated, setHydrated] = useState(false);
@@ -40,6 +52,29 @@ export default function TeamConfigPage() {
     return () => clearTimeout(id);
   }, [teams.length, setTeams, settings.themeId]);
 
+  useEffect(() => {
+    if (!hydrated || teams.length === 0) return;
+    setTeams((previous) => {
+      let changed = false;
+      const reconciled = previous.map((team) => {
+        let playersChanged = false;
+        const normalizedPlayers = team.players.map((player) => {
+          if (player.placeholder || !/^Player\s+\d+$/i.test(player.name.trim())) {
+            return player;
+          }
+          playersChanged = true;
+          changed = true;
+          return { ...player, name: "", placeholder: player.name.trim() };
+        });
+        const normalizedTeam = playersChanged ? { ...team, players: normalizedPlayers } : team;
+        const next = reconcileTeamTheme(normalizedTeam, settings.themeId);
+        if (next !== team) changed = true;
+        return next;
+      });
+      return changed ? reconciled : previous;
+    });
+  }, [hydrated, settings.themeId, setTeams, teams.length]);
+
   const shuffleArray = <T,>(arr: T[]) => {
     const copy = [...arr];
     for (let i = copy.length - 1; i > 0; i--) {
@@ -51,22 +86,22 @@ export default function TeamConfigPage() {
 
   const shufflePlayersAcrossTeams = () => {
     setTeams((prev) => {
-      const counts = prev.map((team) => team.players.length);
-      const allPlayers = prev.flatMap((team) => team.players);
-      if (allPlayers.length === 0) return prev;
-      const shuffled = shuffleArray(allPlayers);
+      const allNames = prev.flatMap((team) => team.players.map((player) => player.name));
+      if (!allNames.some((name) => name.trim())) return prev;
+      const shuffledNames = shuffleArray(allNames);
       let cursor = 0;
-      return prev.map((team, idx) => {
-        const take = counts[idx];
-        const nextPlayers = shuffled.slice(cursor, cursor + take);
-        cursor += take;
-        return { ...team, players: nextPlayers };
-      });
+      return prev.map((team) => ({
+        ...team,
+        players: team.players.map((player) => ({
+          ...player,
+          name: shuffledNames[cursor++],
+        })),
+      }));
     });
   };
 
   const startShuffling = () => {
-    if (isShuffling) return;
+    if (isShuffling || !teams.some((team) => team.players.some((player) => player.name.trim()))) return;
     const duration = Math.max(1, Math.min(10, Math.floor(Math.random() * 10) + 1));
     setShuffleMillisLeft(duration * 1000);
     setIsShuffling(true);
@@ -95,7 +130,7 @@ export default function TeamConfigPage() {
 
   if (!hydrated) {
     return (
-      <main className="card" style={{ padding: "24px" }}>
+      <main className="admin-page teams-page">
         <h1 style={{ margin: 0 }}>Teams & Players</h1>
         <p style={{ color: "var(--muted)", marginTop: "6px" }}>Loading…</p>
       </main>
@@ -128,19 +163,20 @@ export default function TeamConfigPage() {
   };
 
   const addPlayer = (teamId: string) => {
-    setTeams((prev) =>
-      prev.map((team) =>
+    setTeams((prev) => {
+      const nextPlayerNumber = getNextDefaultPlayerNumber(prev);
+      return prev.map((team) =>
         team.id === teamId
           ? {
               ...team,
               players: [
                 ...team.players,
-                { id: makeId("p"), name: `Player ${team.players.length + 1}` },
+                { id: makeId("p"), name: "", placeholder: `Player ${nextPlayerNumber}` },
               ],
             }
           : team,
-      ),
-    );
+      );
+    });
   };
 
   const removePlayer = (teamId: string, playerId: string) => {
@@ -158,23 +194,26 @@ export default function TeamConfigPage() {
 
   const addTeam = () => {
     const options = getThemeOptions(settings.themeId);
-    const pick = options[teams.length % options.length] ?? options[0];
-    setTeams((prev) => [
-      ...prev,
-      {
-        id: makeId("team"),
-        name: `Team ${prev.length + 1}`,
-        score: 0,
-        badgeEmoji: pick?.emoji,
-        accentBase: pick?.base,
-        accentGlow: pick?.glow,
-        players: [
-          { id: makeId("p"), name: "Player 1" },
-          { id: makeId("p"), name: "Player 2" },
-          { id: makeId("p"), name: "Player 3" },
-        ],
-      },
-    ]);
+    setTeams((prev) => {
+      const pick = options[prev.length % options.length] ?? options[0];
+      const firstPlayerNumber = getNextDefaultPlayerNumber(prev);
+      return [
+        ...prev,
+        {
+          id: makeId("team"),
+          name: `Team ${prev.length + 1}`,
+          score: 0,
+          badgeEmoji: pick?.emoji,
+          accentBase: pick?.base,
+          accentGlow: pick?.glow,
+          players: [
+            { id: makeId("p"), name: "", placeholder: `Player ${firstPlayerNumber}` },
+            { id: makeId("p"), name: "", placeholder: `Player ${firstPlayerNumber + 1}` },
+            { id: makeId("p"), name: "", placeholder: `Player ${firstPlayerNumber + 2}` },
+          ],
+        },
+      ];
+    });
   };
 
   const removeTeam = (teamId: string) => {
@@ -194,8 +233,9 @@ export default function TeamConfigPage() {
   const emojiOptions = activeTheme.options;
 
   return (
-    <main className="card" style={{ padding: "24px" }}>
+    <main className="admin-page teams-page">
       <div
+        className="admin-hero"
         style={{
           display: "flex",
           justifyContent: "space-between",
@@ -211,11 +251,14 @@ export default function TeamConfigPage() {
             Aim for 3–5 teams. All changes are saved locally.
           </p>
         </div>
-        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", marginLeft: "auto", justifyContent: "flex-end" }}>
+        <div className="admin-actions" style={{ display: "flex", gap: "10px", flexWrap: "wrap", marginLeft: "auto", justifyContent: "flex-end" }}>
           <button
             className="button ghost"
             onClick={startShuffling}
-            disabled={isShuffling}
+            disabled={isShuffling || !teams.some((team) => team.players.some((player) => player.name.trim()))}
+            title={teams.some((team) => team.players.some((player) => player.name.trim()))
+              ? "Shuffle entered player names across teams"
+              : "Enter at least one player name to shuffle"}
             style={{ cursor: "pointer" }}
           >
             {shuffleLabel()}
@@ -230,6 +273,7 @@ export default function TeamConfigPage() {
       </div>
 
       <div
+        className="team-editor-grid"
         style={{
           display: "grid",
           gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
@@ -237,189 +281,102 @@ export default function TeamConfigPage() {
         }}
       >
         {teams.map((team) => {
-          const colorBase = team.accentBase ?? "#f2c14f";
-          const colorGlow = team.accentGlow ?? "#ffe29f";
+          const presentation = getTeamAccent(team);
+          const colorBase = presentation.base;
+          const teamNameWidth = `${Math.max(9, Math.min(team.name.length + 4, 28))}ch`;
+          const longestPlayerLength = team.players.reduce(
+            (longest, player) => Math.max(
+              longest,
+              (player.name || player.placeholder || "").length,
+            ),
+            0,
+          );
+          const playerNameWidth = `${Math.max(8, Math.min(longestPlayerLength + 2, 26))}ch`;
           return (
             <div
               key={team.id}
-              className="card"
-              style={{ padding: "16px", borderColor: "rgba(255,255,255,0.14)", position: "relative" }}
+              className="card team-editor"
+              style={{
+                padding: "16px",
+                borderColor: "rgba(255,255,255,0.14)",
+                position: "relative",
+                "--team-accent": presentation.base,
+                "--team-card-content-width": `max(160px, calc(${teamNameWidth} + 62px), calc(${playerNameWidth} + 52px))`,
+              } as CSSProperties}
             >
               <button
-                className="button ghost"
+                className="button ghost team-remove"
                 onClick={() => removeTeam(team.id)}
-                style={{
-                  position: "absolute",
-                  top: "8px",
-                  right: "8px",
-                  width: "28px",
-                  height: "28px",
-                  borderRadius: "999px",
-                  display: "grid",
-                  placeItems: "center",
-                  padding: 0,
-                  lineHeight: 1,
-                  cursor: "pointer",
-                }}
                 aria-label={`Remove ${team.name}`}
+                title={`Remove ${team.name}`}
               >
-                ✕
+                ×
               </button>
               <div
-                style={{
-                  display: "flex",
-                  alignItems: "flex-end",
-                  justifyContent: "space-between",
-                  gap: "10px",
-                  marginBottom: "12px",
-                  flexWrap: "wrap",
-                }}
+                className="team-editor-head"
               >
-                <div style={{ flex: 1, minWidth: "180px" }}>
-                  <label className="label">Team name</label>
-                  <input
-                    className="input"
-                    value={team.name}
-                    onChange={(e) => handleTeamNameChange(team.id, e.target.value)}
-                    placeholder="Team name"
-                  />
-                </div>
-                <div style={{ minWidth: "140px", position: "relative" }}>
-                  <label className="label">Emoji</label>
-                  <select
-                    className="input"
-                    value={team.badgeEmoji ?? ""}
-                    style={{ paddingRight: "26px", cursor: "pointer" }}
-                    onChange={(e) => {
-                      const choice = emojiOptions.find((opt) => opt.emoji === e.target.value);
-                      setTeams((prev) =>
-                        prev.map((t) =>
-                          t.id === team.id
-                            ? {
-                                ...t,
-                                badgeEmoji: choice?.emoji ?? null,
-                                accentBase: choice?.base ?? t.accentBase ?? null,
-                                accentGlow: choice?.glow ?? t.accentGlow ?? null,
-                              }
-                            : t,
-                        ),
-                      );
-                    }}
-                  >
-                    {emojiOptions.map((opt) => (
-                      <option key={opt.emoji} value={opt.emoji}>
-                        {opt.emoji} {opt.label}
-                      </option>
-                    ))}
-                  </select>
-                  <span
-                    aria-hidden
-                    style={{
-                      position: "absolute",
-                      right: "10px",
-                      bottom: "10px",
-                      pointerEvents: "none",
-                      color: "var(--muted)",
-                      fontSize: "0.9rem",
-                    }}
-                  >
-                    ▼
-                  </span>
-                </div>
-                <div style={{ minWidth: "320px", flex: 1 }}>
-                  <label className="label">Preview</label>
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "12px",
-                      flexWrap: "wrap",
-                    }}
-                  >
-                    <div
-                      aria-label="Team colors"
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "6px",
-                        flexWrap: "wrap",
-                      }}
-                    >
-                      <span
-                        title={`Base ${colorBase}`}
-                        style={{
-                          width: "22px",
-                          height: "22px",
-                          borderRadius: "6px",
-                          background: colorBase,
-                          border: "1px solid rgba(255,255,255,0.22)",
-                          boxShadow: `0 0 0 2px ${colorBase}33`,
-                        }}
-                      />
-                      <span
-                        title={`Glow ${colorGlow}`}
-                        style={{
-                          width: "22px",
-                          height: "22px",
-                          borderRadius: "6px",
-                          background: colorGlow,
-                          border: "1px solid rgba(255,255,255,0.14)",
-                          boxShadow: `0 0 0 2px ${colorGlow}22`,
-                        }}
-                      />
-                      <span
-                        title="Accent gradient"
-                        style={{
-                          width: "46px",
-                          height: "22px",
-                          borderRadius: "999px",
-                          background: `linear-gradient(135deg, ${colorBase}, ${colorGlow})`,
-                          border: "1px solid rgba(255,255,255,0.18)",
-                          boxShadow: `0 2px 6px ${colorBase}3d`,
-                        }}
-                      />
-                    </div>
-                    <TeamPill
-                      name={team.name || "Team"}
-                      color={colorBase}
-                      emoji={team.badgeEmoji ?? "⭐️"}
-                    />
-                  </div>
-                </div>
+                <EditableTeamPill
+                  name={team.name}
+                  color={colorBase}
+                  emoji={team.badgeEmoji}
+                  choices={emojiOptions}
+                  teamLabel={team.name || "this team"}
+                  onNameChange={(name) => handleTeamNameChange(team.id, name)}
+                  onEmojiChange={(emoji) => {
+                    const choice = emojiOptions.find((option) => option.emoji === emoji);
+                    setTeams((previous) => previous.map((candidate) => (
+                      candidate.id === team.id
+                        ? {
+                            ...candidate,
+                            badgeEmoji: choice?.emoji ?? candidate.badgeEmoji ?? null,
+                            accentBase: choice?.base ?? candidate.accentBase ?? null,
+                            accentGlow: choice?.glow ?? candidate.accentGlow ?? null,
+                          }
+                        : candidate
+                    )));
+                  }}
+                />
               </div>
 
-              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+              <div className="player-editor-list" style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                 <label className="label">Players</label>
                 {team.players.map((player: Player, idx: number) => (
                   <div
                     key={player.id}
+                    className="player-editor-row"
                     style={{ display: "flex", gap: "8px", alignItems: "center" }}
                   >
                     <input
                       className="input"
                       value={player.name}
+                      style={{
+                        "--player-name-width": `${Math.max(8, Math.min(player.name.length + 2, 26))}ch`,
+                      } as CSSProperties}
                       onChange={(e) =>
                         handlePlayerNameChange(team.id, player.id, e.target.value)
                       }
-                      placeholder={`Player ${idx + 1}`}
+                      placeholder={player.placeholder || `Player ${idx + 1}`}
+                      aria-label={`${player.placeholder || `Player ${idx + 1}`} in ${team.name}`}
                     />
                     <button
                       className="button ghost"
                       onClick={() => removePlayer(team.id, player.id)}
                       style={{ paddingInline: "10px", cursor: "pointer" }}
-                      aria-label={`Remove ${player.name}`}
+                      aria-label={`Remove ${player.name || player.placeholder || `Player ${idx + 1}`}`}
                     >
                       –
                     </button>
                   </div>
                 ))}
-                <button
-                  className="button secondary"
-                  onClick={() => addPlayer(team.id)}
-                  style={{ width: "fit-content", cursor: "pointer" }}
-                >
-                  + Add player
-                </button>
+                <div className="team-card-actions">
+                  <button
+                    className="button secondary"
+                    onClick={() => addPlayer(team.id)}
+                    style={{ cursor: "pointer" }}
+                  >
+                    + Add player
+                  </button>
+                </div>
               </div>
             </div>
           );

@@ -117,7 +117,7 @@ export function TimelineModal({
 
   return (
     <div
-      className="card"
+      className="card round-stage round-timeline"
       style={{
         padding: "20px",
         background: "rgba(10, 12, 18, 0.96)",

@@ -120,7 +120,7 @@ export function JokerModal({
 
   return (
     <div
-      className="card"
+      className="card round-stage round-joker"
       style={{
         padding: "20px",
         background: "rgba(10, 12, 18, 0.96)",
