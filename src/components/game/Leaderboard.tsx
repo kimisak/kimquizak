@@ -16,7 +16,6 @@ type Props = {
 
 export function Leaderboard({ teams, onAdjust, onSet, history = [], onUndo, compact = false, currentTeamId }: Props) {
   const [showHistory, setShowHistory] = useState(false);
-  const [customAmounts, setCustomAmounts] = useState<Record<string, string>>({});
 
   const podiumMarkers = ["🥇", "🥈", "🥉"];
 
@@ -55,6 +54,7 @@ export function Leaderboard({ teams, onAdjust, onSet, history = [], onUndo, comp
             const accent = getTeamAccent(team);
             const marker = getTeamMarker(team);
             const isCurrentTurn = team.id === currentTeamId;
+            const namedPlayers = team.players.filter((player) => player.name.trim());
 
             return (
               <div
@@ -68,9 +68,12 @@ export function Leaderboard({ teams, onAdjust, onSet, history = [], onUndo, comp
                   "--team-glow": accent.glow,
                 } as CSSProperties}
               >
-                <div
-                  className="scoreboard-rank"
-                  style={{
+      <div
+        className="scoreboard-rank"
+        role="img"
+        aria-label={`Place ${idx + 1}`}
+        title={idx >= 3 ? `Place ${idx + 1} · Better luck next round` : `Place ${idx + 1}`}
+        style={{
                     width: compact && idx === 0 ? "42px" : compact ? "36px" : "42px",
                     height: compact && idx === 0 ? "42px" : compact ? "36px" : "42px",
                     borderRadius: "12px",
@@ -82,11 +85,12 @@ export function Leaderboard({ teams, onAdjust, onSet, history = [], onUndo, comp
                     border: `1px solid ${accent.glow}55`,
                     boxShadow: `0 3px 10px ${accent.base}45`,
                   }}
-              >
-                {podiumMarkers[idx] ?? `#${idx + 1}`}
-              </div>
+      >
+        <span aria-hidden="true">{podiumMarkers[idx] ?? "🧻"}</span>
+      </div>
               <div className="scoreboard-identity" style={{ display: "grid", gap: compact ? "2px" : "6px", minWidth: compact ? 0 : "180px", flex: 1 }}>
                 <div
+                    className="scoreboard-identity-line"
                     style={{
                       display: "flex",
                       alignItems: "center",
@@ -114,6 +118,15 @@ export function Leaderboard({ teams, onAdjust, onSet, history = [], onUndo, comp
                       <span className="scoreboard-team-name">{team.name}</span>
                       {isCurrentTurn && <span className="turn-badge">TURN</span>}
                     </span>
+                    {compact && namedPlayers.length > 0 && (
+                      <ul className="scoreboard-player-list" aria-label={`Players in ${team.name}`}>
+                        {namedPlayers.map((player) => (
+                          <li key={player.id} title={player.name.trim()}>
+                            {player.name.trim()}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </div>
                   {!compact && <div
                     style={{
@@ -124,7 +137,7 @@ export function Leaderboard({ teams, onAdjust, onSet, history = [], onUndo, comp
                       flexWrap: "wrap",
                     }}
                   >
-                    {team.players.map((p) => p.name.trim()).filter(Boolean).join(", ")}
+                    {namedPlayers.map((player) => player.name.trim()).join(", ")}
                   </div>}
                 </div>
                 <div className="scoreboard-controls" style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap", marginLeft: "auto", justifyContent: "flex-end" }}>
@@ -154,28 +167,6 @@ export function Leaderboard({ teams, onAdjust, onSet, history = [], onUndo, comp
                     <span style={{ position: "absolute", right: "7px", top: "50%", transform: "translateY(-50%)", color: "var(--muted)", fontSize: "0.62rem", fontWeight: 800, pointerEvents: "none" }}>PTS</span>
                   </div>
                   <button className="button ghost compact" type="button" onClick={() => onAdjust(team.id, 100)}>+100</button>
-                  <input
-                    type="number"
-                    inputMode="numeric"
-                    value={customAmounts[team.id] ?? ""}
-                    onChange={(event) => setCustomAmounts((previous) => ({ ...previous, [team.id]: event.target.value }))}
-                    placeholder="Bonus / correction"
-                    aria-label={`Custom score adjustment for ${team.name}`}
-                    style={{ width: "145px", padding: "8px", borderRadius: "10px", border: `1px solid ${accent.base}65`, background: "rgba(255,255,255,0.07)", color: "var(--foreground)" }}
-                  />
-                  <button
-                    className="button secondary compact"
-                    type="button"
-                    disabled={!Number(customAmounts[team.id])}
-                    onClick={() => {
-                      const amount = Number(customAmounts[team.id]);
-                      if (!Number.isFinite(amount) || amount === 0) return;
-                      onAdjust(team.id, amount, "Host bonus / correction");
-                      setCustomAmounts((previous) => ({ ...previous, [team.id]: "" }));
-                    }}
-                  >
-                    Apply
-                  </button>
                 </div>
               </div>
             );
@@ -187,7 +178,7 @@ export function Leaderboard({ teams, onAdjust, onSet, history = [], onUndo, comp
           className="scoreboard-history"
           style={{
             margin: compact ? "14px auto 0" : "14px 0 0",
-            maxWidth: compact ? "1120px" : undefined,
+            maxWidth: compact ? "1280px" : undefined,
             borderTop: "1px solid rgba(255,255,255,0.1)",
             paddingTop: "12px",
             display: "grid",

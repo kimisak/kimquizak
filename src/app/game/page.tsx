@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BoardGrid } from "@/components/game/BoardGrid";
+import { FinalCelebration } from "@/components/game/FinalCelebration";
 import { Leaderboard } from "@/components/game/Leaderboard";
 import { GeoguesserModal } from "@/components/game/modals/GeoguesserModal";
 import {
@@ -16,6 +17,7 @@ import { StandardModal } from "@/components/game/modals/StandardModal";
 import { AudioModal } from "@/components/game/modals/AudioModal";
 import { TurnOrderRail } from "@/components/game/TurnOrderRail";
 import { useAudioCue } from "@/hooks/useAudioCue";
+import { useFinaleSoundtrack } from "@/hooks/useFinaleSoundtrack";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { useSettings } from "@/hooks/useSettings";
 import { useTurnState } from "@/hooks/useTurnState";
@@ -50,6 +52,8 @@ export default function GameBoardPage() {
     playJokerSparkle,
     startSlotSpinLoop,
     stopSlotSpinLoop,
+    startFinaleDrumroll,
+    stopFinaleDrumroll,
   } = useAudioCue();
   const [teams, setTeams] = usePersistentState<Team[]>(
     TEAM_STORAGE_KEY,
@@ -71,9 +75,6 @@ export default function GameBoardPage() {
   const [lyricsRevealed, setLyricsRevealed] = useState<boolean[]>([]);
   const [lyricsPattern, setLyricsPattern] = useState<number[]>([]);
   const [showAnswer, setShowAnswer] = useState(false);
-  const [revealedCategories, setRevealedCategories] = useState<Set<string>>(
-    () => new Set(),
-  );
   const [selectedTeamId, setSelectedTeamId] = useState<string>("");
   const [lastGuessTeamId, setLastGuessTeamId] = useState<string>("");
   const [mapLocked, setMapLocked] = useState(true);
@@ -81,7 +82,6 @@ export default function GameBoardPage() {
   const [geoTimerUsed, setGeoTimerUsed] = useState(false);
   const [geoPotential, setGeoPotential] = useState<number>(0);
   const [geoCostApplied, setGeoCostApplied] = useState(false);
-  const [lyricsPotential, setLyricsPotential] = useState<number>(0);
   const [jokerRound, setJokerRound] = useState<JokerRound | null>(null);
   const [jokerProgress, setJokerProgress] = useState<JokerProgress | null>(null);
   const [showJokerConfetti, setShowJokerConfetti] = useState(false);
@@ -97,6 +97,9 @@ export default function GameBoardPage() {
   const [timelinePotential, setTimelinePotential] = useState<number>(0);
   const [showFinalLeaderboard, setShowFinalLeaderboard] = useState(false);
   const [finalLeaderboardShown, setFinalLeaderboardShown] = useState(false);
+  const [isFinalePreview, setIsFinalePreview] = useState(false);
+  const [finaleRevealed, setFinaleRevealed] = useState(false);
+  const [finaleDrumrollFinished, setFinaleDrumrollFinished] = useState(false);
   const [mcqEliminated, setMcqEliminated] = useState<number[]>([]);
   const [mcqResolved, setMcqResolved] = useState(false);
   const [mcqResolvedInfo, setMcqResolvedInfo] = useState<{
@@ -112,6 +115,12 @@ export default function GameBoardPage() {
   const slotSpinStopRef = useRef<(() => void) | null>(null);
   const gameModalRef = useRef<HTMLDivElement | null>(null);
   const questionTriggerRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("previewFinale") !== "1") return;
+    setIsFinalePreview(true);
+    setShowFinalLeaderboard(true);
+  }, []);
 
   useEffect(() => {
     setTeams((prev) => {
@@ -130,6 +139,10 @@ export default function GameBoardPage() {
   const turnOrder = turnState.order;
   const boardTurnIndex = turnState.boardIndex;
   const lyricsTurnIndex = turnState.lyricsIndex;
+  const revealedCategories = useMemo(
+    () => new Set(turnState.revealedCategories ?? []),
+    [turnState.revealedCategories],
+  );
 
   const categories = useMemo(() => {
     const seen = new Set<string>();
@@ -162,6 +175,34 @@ export default function GameBoardPage() {
     () => questions.filter((question) => isQuestionReady(question) && question.answered).length,
     [questions],
   );
+  const remainingQuestionCount = Math.max(0, playableQuestionCount - answeredQuestionCount);
+  const boardProgressPercent = playableQuestionCount > 0
+    ? (answeredQuestionCount / playableQuestionCount) * 100
+    : 0;
+  const finaleSoundtrack = useFinaleSoundtrack({
+    enabled: settings.finaleMusicEnabled ?? DEFAULT_SETTINGS.finaleMusicEnabled,
+    url: settings.finaleMusicUrl ?? DEFAULT_SETTINGS.finaleMusicUrl,
+    startSeconds: settings.finaleMusicStartSeconds ?? DEFAULT_SETTINGS.finaleMusicStartSeconds,
+    durationSeconds: settings.finaleMusicDurationSeconds ?? DEFAULT_SETTINGS.finaleMusicDurationSeconds,
+    volume: settings.finaleMusicVolume ?? DEFAULT_SETTINGS.finaleMusicVolume,
+    prepare: (playableQuestionCount > 0 && remainingQuestionCount <= 1) || showFinalLeaderboard,
+  });
+  const finaleSoundtrackReady = !finaleSoundtrack.configured
+    || ["ready", "blocked", "ended", "error"].includes(finaleSoundtrack.status);
+
+  useEffect(() => {
+    if (!showFinalLeaderboard || finaleRevealed || !finaleDrumrollFinished || !finaleSoundtrackReady) return;
+    stopFinaleDrumroll();
+    if (finaleSoundtrack.status !== "error") finaleSoundtrack.requestPlay();
+    setFinaleRevealed(true);
+  }, [
+    finaleDrumrollFinished,
+    finaleRevealed,
+    finaleSoundtrack,
+    finaleSoundtrackReady,
+    showFinalLeaderboard,
+    stopFinaleDrumroll,
+  ]);
   const activeTurnOrder = useMemo(
     () => turnOrder.filter((id) => teams.some((t) => t.id === id)),
     [turnOrder, teams],
@@ -457,7 +498,6 @@ export default function GameBoardPage() {
     if (normalized.type === "lyrics") {
       const len = normalized.lyricsSegments?.length ?? 0;
       setLyricsRevealed(new Array(len).fill(false));
-      setLyricsPotential(normalized.points ?? 0);
       const boardId =
         activeTurnOrder.length > 0
           ? activeTurnOrder[boardTurnIndex % activeTurnOrder.length]
@@ -465,7 +505,6 @@ export default function GameBoardPage() {
       setSelectedTeamId(boardId);
     } else {
       setLyricsRevealed([]);
-      setLyricsPotential(0);
       const boardId =
         activeTurnOrder.length > 0
           ? activeTurnOrder[boardTurnIndex % activeTurnOrder.length]
@@ -486,7 +525,6 @@ export default function GameBoardPage() {
     setGeoTimerUsed(false);
     setGeoPotential(0);
     setGeoCostApplied(false);
-    setLyricsPotential(0);
     setJokerRound(null);
     setJokerProgress(null);
     setShowJokerConfetti(false);
@@ -554,13 +592,6 @@ export default function GameBoardPage() {
     }
     if (isRedLyric(idx)) {
       playSadBlip();
-      const redCount = Math.max(1, lyricsPattern.length);
-      const basePoints = activeQuestion?.points ?? 0;
-      const totalTiles = Math.max(1, activeQuestion?.lyricsSegments?.length ?? 1);
-      const totalRedLoss = (basePoints * redCount) / totalTiles;
-      const perRedDecrement = Math.max(1, Math.round(totalRedLoss / redCount));
-      const minPot = Math.max(0, Math.round(basePoints - totalRedLoss));
-      setLyricsPotential((prev) => Math.max(minPot, prev - perRedDecrement));
       advanceLyrics();
     }
   };
@@ -622,6 +653,7 @@ export default function GameBoardPage() {
     const playable = questions.filter(isQuestionReady);
     const allAnswered = playable.length > 0 && playable.every((q) => q.answered);
     if (allAnswered) {
+      setFinaleRevealed(false);
       setShowFinalLeaderboard(true);
       setFinalLeaderboardShown(true);
     }
@@ -695,31 +727,26 @@ export default function GameBoardPage() {
 
   const markAnswered = (correct: boolean) => {
     if (!activeQuestion) return;
+    if (remainingQuestionCount === 1 && isQuestionReady(activeQuestion) && !activeQuestion.answered) {
+      setFinaleRevealed(false);
+      setFinaleDrumrollFinished(false);
+      startFinaleDrumroll(() => setFinaleDrumrollFinished(true));
+    }
     const basePoints = activeQuestion.points ?? 0;
     const teamIdToScore =
       activeQuestion.type === "lyrics"
         ? getLyricsTeamId()
         : lastGuessTeamId || selectedTeamId || getBoardTeamId();
 
-    const rewardPoints =
-      activeQuestion.type === "geoguesser"
-        ? Math.max(0, geoPotential)
-        : activeQuestion.type === "lyrics"
-          ? Math.max(0, lyricsPotential || basePoints)
-          : basePoints;
-    const penaltyPoints =
-      activeQuestion.type === "geoguesser"
-        ? basePoints + (geoCostApplied ? activeQuestion.geoUnlockCost ?? 0 : 0)
-        : activeQuestion.type === "lyrics"
-          ? basePoints
-          : basePoints;
+    const rewardPoints = activeQuestion.type === "geoguesser"
+      ? Math.max(0, geoPotential)
+      : basePoints;
 
-    if (teamIdToScore) {
-      const delta = correct ? rewardPoints : -penaltyPoints;
+    if (teamIdToScore && correct) {
       applyScoreChange(
         teamIdToScore,
-        delta,
-        `${activeQuestion.category} · ${activeQuestion.points} · ${correct ? "Correct" : "Wrong"}`,
+        rewardPoints,
+        `${activeQuestion.category} · ${activeQuestion.points} · Correct`,
         activeQuestion.id,
       );
     }
@@ -779,7 +806,7 @@ export default function GameBoardPage() {
       playDownbeat();
     }
     const incrementVal = jokerRound.increment ?? 0;
-    const delta = correct ? incrementVal : -incrementVal;
+    const delta = correct ? incrementVal : 0;
     const basePoints = activeQuestion.points ?? 0;
     const updatedScore = Math.max(
       basePoints,
@@ -868,26 +895,13 @@ export default function GameBoardPage() {
       setMcqResolved(true);
     } else {
       playDownbeat();
-      if (currentTeamId) {
-        const penalty = activeQuestion.points ?? 0;
-        applyScoreChange(
-          currentTeamId,
-          -penalty,
-          `${activeQuestion.category} · ${activeQuestion.points} · Multiple choice wrong`,
-          activeQuestion.id,
-        );
-        const team = teams.find((t) => t.id === currentTeamId);
-        setMcqResolvedInfo({
-          teamName: team?.name ?? "Team",
-          points: -penalty,
-        });
+      setMcqEliminated((previous) => previous.includes(idx) ? previous : [...previous, idx]);
+      if (activeTurnOrder.length > 0) {
+        const nextTeamId = activeTurnOrder[(boardTurnIndex + 1) % activeTurnOrder.length];
+        advanceBoard();
+        setSelectedTeamId(nextTeamId);
+        setLastGuessTeamId("");
       }
-      setQuestions((prev) =>
-        prev.map((q) =>
-          q.id === activeQuestion.id ? { ...q, answered: true } : q,
-        ),
-      );
-      setMcqResolved(true);
     }
   };
 
@@ -947,13 +961,6 @@ export default function GameBoardPage() {
       playSuccessChime();
     } else {
       playDownbeat();
-      // If teams are not rotating on miss, progressively lower the potential score.
-      if (!rotateOnMiss) {
-        const basePoints = activeQuestion.points ?? timelinePotential ?? 0;
-        const eventCount = Math.max(1, activeQuestion.timelineEvents?.length ?? 1);
-        const decrement = Math.ceil(basePoints / eventCount);
-        setTimelinePotential((prev) => Math.max(0, prev - decrement));
-      }
     }
 
     setTimelineQueue(remaining);
@@ -1045,8 +1052,6 @@ export default function GameBoardPage() {
           answeringTeamColor={answeringTeamColor}
           answeringTeamEmoji={answeringTeamEmoji}
           answerVideoUrl={answerVideoUrl}
-          potentialPoints={lyricsPotential || activeQuestion.points}
-          basePoints={activeQuestion.points}
           onNextTeam={handleLyricsNextTeam}
           onCorrect={() => markAnswered(true)}
           onWrong={() => markAnswered(false)}
@@ -1208,13 +1213,60 @@ export default function GameBoardPage() {
             flexWrap: "wrap",
           }}
         >
-          <div className="game-title-block" style={{ flex: 1, minWidth: "220px", display: "flex", alignItems: "baseline", gap: "12px", flexWrap: "wrap" }}>
-            <h1 style={{ margin: 0, fontSize: "1.45rem", fontWeight: 850 }}>
-              {settings.quizTitle || DEFAULT_SETTINGS.quizTitle}
-            </h1>
-            <span style={{ color: "var(--muted)", fontSize: "0.9rem" }}>
-              {answeredQuestionCount}/{playableQuestionCount} played
-            </span>
+          <div className={`board-progress${boardComplete ? " complete" : ""}`}>
+            <div className="board-progress-heading">
+              <span>
+                {playableQuestionCount === 0
+                  ? "Board not ready"
+                  : boardComplete
+                    ? "Board complete"
+                    : "Board progress"}
+              </span>
+              <span className="board-progress-heading-actions">
+                {playableQuestionCount > 0 && boardComplete && <span aria-hidden="true">✓</span>}
+                {process.env.NODE_ENV === "development" && (
+                  <button
+                    className="finale-preview-trigger"
+                    type="button"
+                    onClick={() => {
+                      setIsFinalePreview(true);
+                      setFinaleRevealed(false);
+                      setFinaleDrumrollFinished(false);
+                      setShowFinalLeaderboard(true);
+                      startFinaleDrumroll(() => setFinaleDrumrollFinished(true));
+                    }}
+                  >
+                    Preview finale
+                  </button>
+                )}
+              </span>
+            </div>
+            <div className="board-progress-counts">
+              {playableQuestionCount === 0 ? (
+                <span className="board-progress-empty">Add questions to begin</span>
+              ) : (
+                <>
+                  <span><strong>{answeredQuestionCount}</strong> played</span>
+                  <span aria-hidden="true">·</span>
+                  <span><strong>{remainingQuestionCount}</strong> remaining</span>
+                </>
+              )}
+            </div>
+            <div
+              className="board-progress-track"
+              role="progressbar"
+              aria-label="Questions played"
+              aria-valuemin={0}
+              aria-valuemax={playableQuestionCount || 1}
+              aria-valuenow={answeredQuestionCount}
+              aria-valuetext={
+                playableQuestionCount > 0
+                  ? `${answeredQuestionCount} of ${playableQuestionCount} questions played`
+                  : "No playable questions"
+              }
+            >
+              <span style={{ width: `${boardProgressPercent}%` }} />
+            </div>
           </div>
           <div className={`turn-draw${slotSpinning ? " spinning" : ""}${slotCollapsed && !slotSpinning ? " resolved" : ""}`}>
             <div className="turn-draw-copy">
@@ -1282,11 +1334,13 @@ export default function GameBoardPage() {
                 concealCategoryHeaders={settings.hideCategoryHeadersAtStart !== false}
                 revealedCategories={revealedCategories}
                 onRevealCategory={(category) =>
-                  setRevealedCategories((previous) => {
-                    const next = new Set(previous);
-                    next.add(category);
-                    return next;
-                  })
+                  setTurnState((previous) => ({
+                    ...previous,
+                    revealedCategories: Array.from(new Set([
+                      ...(previous.revealedCategories ?? []),
+                      category,
+                    ])),
+                  }))
                 }
                 onOpen={openQuestion}
               />
@@ -1321,7 +1375,10 @@ export default function GameBoardPage() {
         <div style={{ display: "flex", justifyContent: "center" }}>
           <button
             className="button primary"
-            onClick={() => setShowFinalLeaderboard(true)}
+            onClick={() => {
+              setFinaleRevealed(true);
+              setShowFinalLeaderboard(true);
+            }}
             style={{ marginTop: "-6px" }}
           >
             Show podium again
@@ -1406,127 +1463,29 @@ export default function GameBoardPage() {
         </div>
       )}
       {showFinalLeaderboard && (
-        <div
-          className="final-score-overlay"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="final-score-title"
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.75)",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            zIndex: 30,
-            padding: "20px",
+        <FinalCelebration
+          teams={sortedTeams}
+          preview={isFinalePreview}
+          revealed={finaleRevealed}
+          onReveal={() => {
+            stopFinaleDrumroll();
+            setFinaleDrumrollFinished(true);
+            if (finaleSoundtrack.status !== "error") finaleSoundtrack.requestPlay();
+            setFinaleRevealed(true);
           }}
-          onClick={closeFinalLeaderboard}
-        >
-          <div
-            className="card final-score-card"
-            style={{
-              position: "relative",
-              maxWidth: "760px",
-              width: "min(92vw, 760px)",
-              padding: "24px",
-              background: "linear-gradient(145deg, rgba(18,22,34,0.95), rgba(26,30,46,0.95))",
-              border: "1px solid rgba(255,255,255,0.14)",
-              boxShadow: "0 18px 48px rgba(0,0,0,0.5)",
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="final-score-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div>
-                <div
-                  style={{
-                    letterSpacing: "0.08em",
-                    textTransform: "uppercase",
-                    color: "var(--muted)",
-                    fontWeight: 800,
-                  }}
-                >
-                  All questions answered
-                </div>
-                <h2 id="final-score-title" style={{ margin: "6px 0 2px", fontSize: "2.2rem" }}>Final leaderboard</h2>
-                <div style={{ color: "var(--muted)" }}>Tap outside or hit close</div>
-              </div>
-              <button
-                className="button ghost"
-                onClick={closeFinalLeaderboard}
-                style={{ marginLeft: "12px", whiteSpace: "nowrap" }}
-                aria-label="Close final leaderboard"
-              >
-                Close
-              </button>
-            </div>
-            <div style={{ marginTop: "18px", display: "grid", gap: "12px" }}>
-              {sortedTeams.slice(0, 3).map((team, idx) => {
-                const medal = idx === 0 ? "🥇" : idx === 1 ? "🥈" : "🥉";
-                return (
-                  <div
-                    key={team.id}
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "auto 1fr auto",
-                      alignItems: "center",
-                      gap: "10px",
-                      padding: "12px 14px",
-                      borderRadius: "12px",
-                      background:
-                        idx === 0
-                          ? "linear-gradient(90deg, rgba(255,215,0,0.12), rgba(255,215,0,0.04))"
-                          : idx === 1
-                          ? "linear-gradient(90deg, rgba(192,192,192,0.14), rgba(192,192,192,0.05))"
-                          : idx === 2
-                          ? "linear-gradient(90deg, rgba(205,127,50,0.16), rgba(205,127,50,0.06))"
-                          : "rgba(255,255,255,0.03)",
-                      border: "1px solid rgba(255,255,255,0.08)",
-                    }}
-                  >
-                    <div style={{ fontSize: "1.8rem" }}>{medal}</div>
-                    <div style={{ display: "grid", gap: "4px" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "8px", fontWeight: 800, fontSize: "1.2rem" }}>
-                      <span>{team.badgeEmoji || "⭐️"}</span>
-                      <span>{team.name}</span>
-                    </div>
-                      <div
-                        style={{
-                          display: "flex",
-                          flexWrap: "wrap",
-                          gap: "8px",
-                          color: "var(--muted)",
-                        }}
-                      >
-                        {team.players.filter((p) => p.name.trim()).map((p) => (
-                          <span
-                            key={p.id}
-                            className="jumping-name"
-                            style={{
-                              padding: "4px 8px",
-                              borderRadius: "999px",
-                              background: "rgba(255,255,255,0.06)",
-                              border: "1px solid rgba(255,255,255,0.08)",
-                              fontSize: "0.95rem",
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: "6px",
-                              animationDelay: `${Math.random() * 0.6}s`,
-                            }}
-                          >
-                            {p.name}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                    <div style={{ fontWeight: 800, fontSize: "1.1rem" }}>{team.score} pts</div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
+          music={{
+            configured: finaleSoundtrack.configured,
+            status: finaleSoundtrack.status,
+            remaining: finaleSoundtrack.remaining,
+            message: finaleSoundtrack.message,
+            onStart: finaleSoundtrack.requestPlay,
+          }}
+          onClose={closeFinalLeaderboard}
+        />
       )}
+      <div className="finale-soundtrack-player" aria-hidden="true">
+        <div ref={finaleSoundtrack.playerHostRef} />
+      </div>
       <style jsx global>{`
         .flip-inner.flipped {
           transform: rotateY(180deg);
@@ -1557,16 +1516,6 @@ export default function GameBoardPage() {
         .lyrics-tile.concealed:hover {
           animation: giggle 0.7s ease-in-out infinite;
           box-shadow: 0 8px 18px rgba(0, 0, 0, 0.25);
-        }
-        @keyframes jumpy {
-          0% { transform: translateY(0); }
-          25% { transform: translateY(-6px) rotate(-1deg); }
-          50% { transform: translateY(2px) rotate(1deg); }
-          75% { transform: translateY(-4px) rotate(-0.5deg); }
-          100% { transform: translateY(0); }
-        }
-        .jumping-name {
-          animation: jumpy 1.6s ease-in-out infinite;
         }
         @keyframes boom {
           0% {
@@ -1622,7 +1571,15 @@ export default function GameBoardPage() {
   );
 
   function closeFinalLeaderboard() {
+    stopFinaleDrumroll();
+    finaleSoundtrack.stop();
+    setFinaleRevealed(false);
+    setFinaleDrumrollFinished(false);
     setShowFinalLeaderboard(false);
+    if (isFinalePreview) {
+      setIsFinalePreview(false);
+      return;
+    }
     setFinalLeaderboardShown(true);
   }
 }

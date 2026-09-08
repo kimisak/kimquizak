@@ -210,13 +210,13 @@ export function McqModal({
               style={{
                 justifyContent: "flex-start",
                 alignItems: "stretch",
-                opacity: disabled ? 0.6 : isResolvedWrong ? 0.45 : 1,
+                opacity: disabled ? 0.72 : isResolvedWrong ? 0.45 : 1,
                 cursor: disabled || resolved ? "not-allowed" : "pointer",
                 fontSize: "1.2rem",
                 gap: "12px",
                 padding: 0,
-                background: "rgba(255,255,255,0.06)",
-                border: `1px solid ${bg}`,
+                background: disabled ? "rgba(127,29,29,0.3)" : "rgba(255,255,255,0.06)",
+                border: `1px solid ${disabled ? "rgba(248,113,113,0.7)" : bg}`,
                 boxShadow: disabled ? "none" : "0 10px 24px rgba(0,0,0,0.35)",
                 color: "#fdfdfd",
                 overflow: "hidden",
@@ -279,7 +279,7 @@ export function McqModal({
             </span>
           </div>
         ) : (
-          "One shot: the team that picked the question must answer. A wrong answer ends the question and costs the points."
+          "A wrong choice is removed and play passes to the next team. No points are deducted."
         )}
       </div>
     </div>

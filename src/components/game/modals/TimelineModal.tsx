@@ -122,6 +122,7 @@ export function TimelineModal({
         padding: "20px",
         background: "rgba(10, 12, 18, 0.96)",
         borderColor: "rgba(255,255,255,0.18)",
+        color: "var(--cream)",
         position: "relative",
         overflow: "hidden",
       }}
@@ -149,24 +150,6 @@ export function TimelineModal({
           {(basePoints || points) && (
             <div style={{ display: "flex", alignItems: "center", gap: "10px", fontWeight: 800, flexWrap: "wrap" }}>
               <div style={{ fontSize: "2rem" }}>{basePoints ?? points} pts</div>
-              {!rotateInfo && typeof potentialScore === "number" && (
-                <div
-                  style={{
-                    fontSize: "0.95rem",
-                    color: "#e0f2fe",
-                    background: "rgba(14,165,233,0.16)",
-                    border: "1px solid rgba(14,165,233,0.35)",
-                    borderRadius: "999px",
-                    padding: "6px 10px",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "6px",
-                  }}
-                >
-                  <span style={{ fontWeight: 700 }}>Current score</span>
-                  <span style={{ fontWeight: 800 }}>{potentialScore} pts</span>
-                </div>
-              )}
               {totalCount > 0 && (
                 <div
                   style={{
@@ -214,11 +197,11 @@ export function TimelineModal({
       >
         {rotateInfo ? (
           <>
-            Drag events to their correct spot on the timeline. Wrong guesses are marked and play passes to the next team. When the last event is placed, the current team wins the points only if correct; otherwise the next team claims them.
+            Drag events to their correct spot on the timeline. Wrong placements are marked and play passes to the next team without changing the points. When the last event is placed, the current team wins the points only if correct; otherwise the next team claims them.
           </>
         ) : (
           <>
-            Drag events to their correct spot on the timeline. Wrong guesses stay with the same team and reduce the current score. The current team only wins the remaining points if the final event is correct.
+            Drag events to their correct spot on the timeline. Wrong placements are marked, stay with the same team, and do not change the points. The current team wins the full value if the final event is correct.
           </>
         )}
       </div>
@@ -307,19 +290,21 @@ export function TimelineModal({
 
       {activeEvent ? (
         <div
+      className="timeline-active-event"
       draggable={!disableActions}
       onDragStart={(e) => e.dataTransfer.setData("text/plain", activeEvent.id)}
       style={{
-        border: "1px solid rgba(255,255,255,0.16)",
+        border: "1px solid rgba(234,208,141,0.5)",
         borderRadius: "12px",
         padding: "12px",
-        background: "linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05))",
+        background: "linear-gradient(135deg, rgba(77,29,38,0.92), rgba(24,58,44,0.92))",
         boxShadow: "0 8px 16px rgba(0,0,0,0.3)",
+        color: "#fff8e8",
         cursor: disableActions ? "not-allowed" : "grab",
       }}
     >
-      <div style={{ fontWeight: 800, marginBottom: "6px" }}>Place this event</div>
-      <div style={{ fontSize: "1.1rem" }}>{activeEvent.text || "(No description)"}</div>
+      <div className="timeline-active-event-label" style={{ fontWeight: 800, marginBottom: "6px" }}>Place this event</div>
+      <div className="timeline-active-event-text" style={{ fontSize: "1.1rem" }}>{activeEvent.text || "(No description)"}</div>
     </div>
   ) : (
         <div

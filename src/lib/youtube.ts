@@ -45,13 +45,16 @@ export function getYouTubeStartSeconds(raw: string | null | undefined): number {
 
 export function buildYouTubeEmbedUrl(
   raw: string | null | undefined,
-  options: { startSeconds?: number; autoplay?: boolean; enableJsApi?: boolean } = {},
+  options: { startSeconds?: number; endSeconds?: number; autoplay?: boolean; enableJsApi?: boolean } = {},
 ): string {
   const id = extractYouTubeId(raw);
   if (!id) return "";
   const params = new URLSearchParams({ rel: "0", playsinline: "1" });
   const start = Math.max(0, Math.floor(options.startSeconds ?? getYouTubeStartSeconds(raw)));
   if (start > 0) params.set("start", String(start));
+  if (options.endSeconds != null && options.endSeconds > start) {
+    params.set("end", String(Math.floor(options.endSeconds)));
+  }
   if (options.autoplay) params.set("autoplay", "1");
   if (options.enableJsApi) params.set("enablejsapi", "1");
   return `https://www.youtube.com/embed/${id}?${params.toString()}`;

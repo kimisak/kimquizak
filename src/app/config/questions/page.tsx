@@ -3,9 +3,23 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { useSettings } from "@/hooks/useSettings";
-import { LEGACY_QUESTION_STORAGE_KEY, QUESTION_STORAGE_KEY } from "@/lib/storage";
-import { POINT_VALUES, type PointValue, type Question } from "@/lib/types";
+import { useTurnState } from "@/hooks/useTurnState";
+import {
+  LEGACY_QUESTION_STORAGE_KEY,
+  LEGACY_TEAM_STORAGE_KEY,
+  QUESTION_STORAGE_KEY,
+  SCORE_HISTORY_STORAGE_KEY,
+  TEAM_STORAGE_KEY,
+} from "@/lib/storage";
+import {
+  POINT_VALUES,
+  type PointValue,
+  type Question,
+  type ScoreTransaction,
+  type Team,
+} from "@/lib/types";
 import { makeId } from "@/lib/defaultData";
+import { DEFAULT_SETTINGS } from "@/lib/settings";
 import { buildYouTubeEmbedUrl, getYouTubeStartSeconds } from "@/lib/youtube";
 import { extractEmbedUrl, isSafeHttpUrl } from "@/lib/embed";
 import { getQuestionIssues } from "@/lib/questionValidation";
@@ -241,7 +255,7 @@ const McqFields = React.memo(function McqFields({
         ))}
       </div>
       <div style={{ color: "var(--muted)", fontSize: "0.9rem", marginTop: "6px" }}>
-        A wrong answer ends the clue and loses its value.
+        A wrong choice is removed and play passes to the next team without deducting points.
       </div>
       <label className="label" style={{ marginTop: "10px" }}>
         Answer image (optional)
@@ -326,9 +340,8 @@ const McqFields = React.memo(function McqFields({
   );
 });
 export default function QuestionConfigPage() {
-  const [isClient, setIsClient] = useState(false);
   const [settings, setSettings] = useSettings();
-  const [questions, setQuestions] = usePersistentState<Question[]>(
+  const [questions, setQuestions, questionsHydrated] = usePersistentState<Question[]>(
     QUESTION_STORAGE_KEY,
     [],
     [LEGACY_QUESTION_STORAGE_KEY],
@@ -339,23 +352,38 @@ export default function QuestionConfigPage() {
   const [dragging, setDragging] = useState<{ category: string; points: PointValue } | null>(null);
   const [dragOver, setDragOver] = useState<PointValue | null>(null);
   const [isMobile, setIsMobile] = useState(false);
+  const [showFinaleMusicPreview, setShowFinaleMusicPreview] = useState(false);
   const [expandedQuestions, setExpandedQuestions] = useState<Set<string>>(
     () => new Set(),
   );
+  const [, setTeams] = usePersistentState<Team[]>(
+    TEAM_STORAGE_KEY,
+    [],
+    [LEGACY_TEAM_STORAGE_KEY],
+  );
+  const [, setScoreHistory] = usePersistentState<ScoreTransaction[]>(
+    SCORE_HISTORY_STORAGE_KEY,
+    [],
+  );
+  const { reset: resetTurnState } = useTurnState();
 
-  useEffect(() => {
-    setIsClient(true);
-  }, []);
-
-  useEffect(() => {
-    if (!isClient) return;
-    setQuestions((prev) => (Array.isArray(prev) ? prev : []));
-  }, [isClient, setQuestions]);
+  const finaleMusicEnabled = settings.finaleMusicEnabled ?? DEFAULT_SETTINGS.finaleMusicEnabled;
+  const finaleMusicUrl = settings.finaleMusicUrl ?? DEFAULT_SETTINGS.finaleMusicUrl;
+  const finaleMusicStartSeconds = settings.finaleMusicStartSeconds
+    ?? getYouTubeStartSeconds(finaleMusicUrl);
+  const finaleMusicDurationSeconds = settings.finaleMusicDurationSeconds
+    ?? DEFAULT_SETTINGS.finaleMusicDurationSeconds;
+  const finaleMusicVolume = settings.finaleMusicVolume ?? DEFAULT_SETTINGS.finaleMusicVolume;
+  const finaleMusicEndSeconds = finaleMusicStartSeconds + finaleMusicDurationSeconds;
+  const finaleMusicPreviewUrl = buildYouTubeEmbedUrl(finaleMusicUrl, {
+    startSeconds: finaleMusicStartSeconds,
+    endSeconds: finaleMusicEndSeconds,
+  });
 
   const categories = useMemo(() => {
-    const list = isClient ? questions : [];
+    const list = questionsHydrated && Array.isArray(questions) ? questions : [];
     return Array.from(new Set(list.map((q) => q.category)));
-  }, [questions, isClient]);
+  }, [questions, questionsHydrated]);
 
   useEffect(() => {
     setCategoryNames((prev) => {
@@ -579,8 +607,15 @@ export default function QuestionConfigPage() {
     );
   };
 
-  const resetAnsweredFlags = () => {
+  const resetGameProgress = () => {
+    if (!window.confirm(
+      "Reset all scores, played tiles, turn order, revealed categories, and score history? Team and question content will be kept.",
+    )) return;
+
     setQuestions((prev) => prev.map((q) => ({ ...q, answered: false })));
+    setTeams((previous) => previous.map((team) => ({ ...team, score: 0 })));
+    setScoreHistory([]);
+    resetTurnState();
   };
 
   const getQuestion = (category: string, points: PointValue) =>
@@ -1013,6 +1048,7 @@ const AudioFields = React.memo(function AudioFields({
 
 const LyricsFields = React.memo(function LyricsFields(props: FieldProps) {
   const { category, points, q, upsertQuestion } = props;
+  const lyricsInputRef = React.useRef<HTMLTextAreaElement>(null);
   const [prompt, setPrompt] = useState(q?.prompt ?? "");
   const [lyrics, setLyrics] = useState((q?.lyricsSegments ?? []).join("\n"));
   const [answer, setAnswer] = useState(q?.answer ?? "");
@@ -1026,6 +1062,19 @@ const LyricsFields = React.memo(function LyricsFields(props: FieldProps) {
     setAnswerVideoUrl(q?.answerVideoUrl ?? "");
     setAutoplay(q?.answerVideoAutoplay ?? true);
   }, [q?.prompt, q?.lyricsSegments, q?.answer, q?.answerVideoUrl, q?.answerVideoAutoplay]);
+
+  React.useEffect(() => {
+    const input = lyricsInputRef.current;
+    if (!input) return;
+    const resizeInput = () => {
+      input.style.height = "auto";
+      const borderHeight = input.offsetHeight - input.clientHeight;
+      input.style.height = `${Math.max(110, input.scrollHeight + borderHeight)}px`;
+    };
+    resizeInput();
+    window.addEventListener("resize", resizeInput);
+    return () => window.removeEventListener("resize", resizeInput);
+  }, [lyrics]);
 
   return (
     <>
@@ -1087,9 +1136,10 @@ const LyricsFields = React.memo(function LyricsFields(props: FieldProps) {
         Autoplay video when revealing answer
       </label>
       <label className="label" style={{ marginTop: "8px" }}>
-        Lyrics lines (one per line)
+        One word per line
       </label>
       <textarea
+        ref={lyricsInputRef}
         value={lyrics}
         onChange={(e) => setLyrics(e.target.value)}
         onBlur={() =>
@@ -1105,11 +1155,13 @@ const LyricsFields = React.memo(function LyricsFields(props: FieldProps) {
           background: "rgba(255,255,255,0.04)",
           color: "var(--foreground)",
           padding: "10px",
+          overflowY: "hidden",
+          resize: "vertical",
         }}
-        placeholder="Add each lyric line on its own line"
+        placeholder={"First word\nSecond word\nThird word"}
       />
       <div style={{ marginTop: "6px", color: "var(--muted)", fontSize: "0.9rem" }}>
-        {q?.lyricsSegments?.length ?? 0} line(s). Players click squares to reveal each line.
+        {lyrics.split(/\r?\n/).filter((line) => line.trim()).length} word tile(s). Players click squares to reveal each one.
       </div>
       <label className="label" style={{ marginTop: "8px" }}>
         Answer
@@ -1623,6 +1675,22 @@ const TimelineFields = React.memo(function TimelineFields({
           </p>
         </div>
         <div className="question-studio-actions">
+          <button className="button ghost compact" onClick={resetGameProgress} style={{ cursor: "pointer" }}>
+            Reset game progress
+          </button>
+        </div>
+      </div>
+
+      <section className="question-board-config" aria-labelledby="board-config-title">
+        <div className="question-board-config-heading">
+          <div>
+            <span className="question-studio-kicker">Show controls</span>
+            <h2 id="board-config-title">Board config</h2>
+          </div>
+          <p>Set what the audience sees at the opening and hears at the finale.</p>
+        </div>
+
+        <div className="question-board-config-grid">
           <label className="question-board-reveal-setting" htmlFor="question-hide-category-headers">
             <input
               id="question-hide-category-headers"
@@ -1638,11 +1706,128 @@ const TimelineFields = React.memo(function TimelineFields({
               <small>Reveal each title from the board during the show.</small>
             </span>
           </label>
-          <button className="button ghost compact" onClick={resetAnsweredFlags} style={{ cursor: "pointer" }}>
-            Reset played tiles
-          </button>
+
+          <div className="question-finale-music-setting">
+            <label className="question-finale-music-toggle" htmlFor="question-finale-music-enabled">
+              <input
+                id="question-finale-music-enabled"
+                type="checkbox"
+                checked={finaleMusicEnabled}
+                onChange={(event) => setSettings((previous) => ({
+                  ...previous,
+                  finaleMusicEnabled: event.target.checked,
+                }))}
+              />
+              <span>
+                <strong>Finale soundtrack</strong>
+                <small>Cue it before the final answer, then play it with the celebration.</small>
+              </span>
+            </label>
+
+            <div className="question-finale-music-fields" aria-disabled={!finaleMusicEnabled}>
+              <label>
+                <span>YouTube URL</span>
+                <input
+                  className="input"
+                  value={finaleMusicUrl}
+                  disabled={!finaleMusicEnabled}
+                  onChange={(event) => setSettings((previous) => ({
+                    ...previous,
+                    finaleMusicUrl: event.target.value,
+                  }))}
+                  onBlur={() => {
+                    const detectedStart = getYouTubeStartSeconds(finaleMusicUrl);
+                    if (detectedStart <= 0) return;
+                    setSettings((previous) => ({
+                      ...previous,
+                      finaleMusicStartSeconds: detectedStart,
+                    }));
+                  }}
+                />
+              </label>
+              <label>
+                <span>Start at</span>
+                <span className="question-number-unit">
+                  <input
+                    className="input"
+                    type="number"
+                    min={0}
+                    value={finaleMusicStartSeconds}
+                    disabled={!finaleMusicEnabled}
+                    onChange={(event) => setSettings((previous) => ({
+                      ...previous,
+                      finaleMusicStartSeconds: Math.max(0, Number(event.target.value) || 0),
+                    }))}
+                  />
+                  <small>sec</small>
+                </span>
+              </label>
+              <label>
+                <span>Play for</span>
+                <span className="question-number-unit">
+                  <input
+                    className="input"
+                    type="number"
+                    min={1}
+                    value={finaleMusicDurationSeconds}
+                    disabled={!finaleMusicEnabled}
+                    onChange={(event) => setSettings((previous) => ({
+                      ...previous,
+                      finaleMusicDurationSeconds: Math.max(1, Number(event.target.value) || 1),
+                    }))}
+                  />
+                  <small>sec</small>
+                </span>
+              </label>
+              <label>
+                <span>Volume</span>
+                <span className="question-number-unit">
+                  <input
+                    className="input"
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={finaleMusicVolume}
+                    disabled={!finaleMusicEnabled}
+                    onChange={(event) => setSettings((previous) => ({
+                      ...previous,
+                      finaleMusicVolume: Math.min(100, Math.max(0, Number(event.target.value) || 0)),
+                    }))}
+                  />
+                  <small>%</small>
+                </span>
+              </label>
+            </div>
+
+            <div className="question-finale-music-footer">
+              <span>
+                Starts at {finaleMusicStartSeconds}s · ends at {finaleMusicEndSeconds}s
+              </span>
+              <button
+                className="button ghost compact"
+                type="button"
+                disabled={!finaleMusicEnabled || !finaleMusicPreviewUrl}
+                onClick={() => setShowFinaleMusicPreview((visible) => !visible)}
+              >
+                {showFinaleMusicPreview ? "Close preview" : "Preview source"}
+              </button>
+            </div>
+            {finaleMusicEnabled && finaleMusicUrl && !finaleMusicPreviewUrl && (
+              <small className="question-finale-music-error">Enter a supported YouTube URL.</small>
+            )}
+            {showFinaleMusicPreview && finaleMusicPreviewUrl && (
+              <div className="question-finale-music-preview">
+                <iframe
+                  title="Finale soundtrack preview"
+                  src={finaleMusicPreviewUrl}
+                  allow="accelerometer; encrypted-media; picture-in-picture"
+                  allowFullScreen
+                />
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      </section>
 
       <div className="question-category-create">
         <div style={{ flex: 1 }}>

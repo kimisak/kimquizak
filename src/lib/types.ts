@@ -77,6 +77,7 @@ export type TurnState = {
   order: string[];
   boardIndex: number;
   lyricsIndex: number;
+  revealedCategories?: string[];
 };
 
 export type TimelineEvent = {

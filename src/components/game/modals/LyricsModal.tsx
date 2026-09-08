@@ -25,8 +25,6 @@ type Props = {
   disableActions?: boolean;
   onClose: () => void;
   flashKey?: number;
-  potentialPoints?: number;
-  basePoints?: number;
   onNextTeam?: () => void;
 };
 
@@ -51,11 +49,8 @@ export function LyricsModal({
   disableActions,
   onClose,
   flashKey,
-  potentialPoints,
-  basePoints,
   onNextTeam,
 }: Props) {
-  const currentPot = potentialPoints ?? question.points ?? 0;
   return (
     <>
       <div
@@ -108,7 +103,7 @@ export function LyricsModal({
               {question.points} pts
             </div>
             <div style={{ color: "var(--muted)", fontSize: "0.95rem" }}>
-              Current pot: <strong style={{ color: "#f7c948" }}>{currentPot} pts</strong>. Red tiles pass play and shave the pot; a wrong guess loses {basePoints ?? question.points} pts.
+              Red tiles pass play to the next team without changing the points. A wrong final answer scores zero.
             </div>
             {answeringTeamName && (
               <TeamPill
@@ -126,7 +121,7 @@ export function LyricsModal({
             </div>
           )}
           <div style={{ color: "var(--muted)", marginBottom: "8px", fontSize: "0.95rem" }}>
-            Red tiles rotate turn and chip away at the pot. The team in control must eventually guess or reveal.
+            Red tiles rotate the turn without a score penalty. The team in control must eventually guess or reveal.
           </div>
           <div
             style={{

@@ -36,14 +36,22 @@ export function useAudioCue() {
   const audioCtxRef = useRef<AudioContext | null>(null);
   const selectionCueVolumeRef = useRef(SELECTION_CUE_FALLBACK_VOLUME);
   const slotSpinStopRef = useRef<(() => void) | null>(null);
+  const finaleDrumrollStopRef = useRef<(() => void) | null>(null);
+  const finaleDrumrollAudioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     const spinAudio = new Audio("/audio/sleigh-bells-fast.mp3");
     const selectionAudio = new Audio("/audio/christmas-selection-glockenspiel.mp3");
+    const finaleDrumrollAudio = new Audio("/audio/drum-roll-intro-cc0.mp3");
     spinAudio.preload = "auto";
     selectionAudio.preload = "auto";
+    finaleDrumrollAudio.preload = "auto";
+    finaleDrumrollAudio.loop = false;
+    finaleDrumrollAudio.volume = 0.52;
     spinAudio.load();
     selectionAudio.load();
+    finaleDrumrollAudio.load();
+    finaleDrumrollAudioRef.current = finaleDrumrollAudio;
 
     let cancelled = false;
     const normalizeCueVolumes = async () => {
@@ -75,8 +83,11 @@ export function useAudioCue() {
     return () => {
       cancelled = true;
       slotSpinStopRef.current?.();
+      finaleDrumrollStopRef.current?.();
       spinAudio.pause();
       selectionAudio.pause();
+      finaleDrumrollAudio.pause();
+      finaleDrumrollAudioRef.current = null;
     };
   }, []);
 
@@ -286,6 +297,40 @@ export function useAudioCue() {
     }
   };
 
+  const startFinaleDrumroll = (onFinished?: () => void) => {
+    if (finaleDrumrollStopRef.current) return finaleDrumrollStopRef.current;
+    const audio = finaleDrumrollAudioRef.current;
+    if (!audio) return () => undefined;
+    let stopped = false;
+    audio.currentTime = 0;
+    audio.loop = false;
+    const handleEnded = () => {
+      stop();
+      onFinished?.();
+    };
+    void audio.play().catch((error) => {
+      console.warn("Unable to play the finale drumroll", error);
+      stop();
+      onFinished?.();
+    });
+    const stop = () => {
+      if (stopped) return;
+      stopped = true;
+      audio.removeEventListener("ended", handleEnded);
+      audio.pause();
+      audio.currentTime = 0;
+      finaleDrumrollStopRef.current = null;
+    };
+
+    audio.addEventListener("ended", handleEnded, { once: true });
+    finaleDrumrollStopRef.current = stop;
+    return stop;
+  };
+
+  const stopFinaleDrumroll = () => {
+    finaleDrumrollStopRef.current?.();
+  };
+
   return {
     playSadBlip,
     playCountdownBeep,
@@ -297,5 +342,7 @@ export function useAudioCue() {
     playJokerSparkle,
     startSlotSpinLoop,
     stopSlotSpinLoop,
+    startFinaleDrumroll,
+    stopFinaleDrumroll,
   };
 }

@@ -14,8 +14,8 @@ export function usePersistentState<T>(
   legacyKeys: string[] = [],
 ) {
   const skipBroadcastRef = useRef(false);
-  const hydratedRef = useRef(false);
   const locallyUpdatedRef = useRef(false);
+  const hydrationCommittedRef = useRef(false);
   const initialRef = useRef(initial);
   const legacyKeySignature = legacyKeys.join("\u0000");
   const stableLegacyKeys = useMemo(
@@ -48,35 +48,54 @@ export function usePersistentState<T>(
   // The server and the browser's first render must use the same snapshot.
   // Browser storage is applied after hydration, before persistence is enabled.
   const [value, setValue] = useState<T>(initial);
+  const [hydrated, setHydrated] = useState(false);
+  const valueRef = useRef(value);
+  const persistValue = useCallback((nextValue: T, broadcast = true) => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(key, JSON.stringify(nextValue));
+      if (broadcast) {
+        window.dispatchEvent(new CustomEvent("local-storage", { detail: { key } }));
+      }
+    } catch (err) {
+      console.error("Failed to write localStorage", err);
+    }
+  }, [key]);
   const setPersistentValue = useCallback<Dispatch<SetStateAction<T>>>((next) => {
     locallyUpdatedRef.current = true;
-    setValue(next);
-  }, []);
+    const nextValue = typeof next === "function"
+      ? (next as (previous: T) => T)(valueRef.current)
+      : next;
+    valueRef.current = nextValue;
+    setValue(nextValue);
+    if (hydrationCommittedRef.current) persistValue(nextValue);
+  }, [persistValue]);
 
   useEffect(() => {
     const id = window.setTimeout(() => {
       const stored = readStored();
-      hydratedRef.current = true;
       setValue((current) =>
         stored.found || !locallyUpdatedRef.current ? stored.value : current,
       );
+      setHydrated(true);
     }, 0);
     return () => window.clearTimeout(id);
   }, [readStored]);
 
   useEffect(() => {
-    if (typeof window === "undefined" || !hydratedRef.current) return;
-    try {
-      window.localStorage.setItem(key, JSON.stringify(value));
-      if (skipBroadcastRef.current) {
-        skipBroadcastRef.current = false;
-        return;
-      }
-      window.dispatchEvent(new CustomEvent("local-storage", { detail: { key } }));
-    } catch (err) {
-      console.error("Failed to write localStorage", err);
-    }
-  }, [key, value]);
+    hydrationCommittedRef.current = hydrated;
+  }, [hydrated]);
+
+  useEffect(() => {
+    valueRef.current = value;
+  }, [value]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !hydrated) return;
+    const shouldBroadcast = !skipBroadcastRef.current;
+    skipBroadcastRef.current = false;
+    persistValue(value, shouldBroadcast);
+  }, [hydrated, persistValue, value]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -101,5 +120,5 @@ export function usePersistentState<T>(
     };
   }, [key, readStored, stableLegacyKeys]);
 
-  return [value, setPersistentValue] as const;
+  return [value, setPersistentValue, hydrated] as const;
 }

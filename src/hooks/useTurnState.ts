@@ -14,16 +14,18 @@ export function useTurnState() {
       order: [],
       boardIndex: 0,
       lyricsIndex: 0,
+      revealedCategories: [],
     },
     [LEGACY_TURN_STATE_STORAGE_KEY],
   );
 
   const setOrder = (order: string[]) =>
-    setTurnState({
+    setTurnState((previous) => ({
+      ...previous,
       order,
       boardIndex: 0,
       lyricsIndex: 0,
-    });
+    }));
 
   const advanceBoard = () =>
     setTurnState((prev) => {
@@ -44,6 +46,7 @@ export function useTurnState() {
       order: [],
       boardIndex: 0,
       lyricsIndex: 0,
+      revealedCategories: [],
     });
 
   return { turnState, setTurnState, setOrder, advanceBoard, advanceLyrics, reset };

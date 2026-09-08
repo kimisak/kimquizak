@@ -13,6 +13,8 @@ export function TurnOrderRail({ teams }: Props) {
   if (!current) return null;
 
   const currentAccent = getTeamAccent(current);
+  const namedQueue = queued.slice(0, 2);
+  const compactQueue = queued.slice(2);
 
   return (
     <div className="turn-order-track" aria-label="Board turn order">
@@ -38,7 +40,7 @@ export function TurnOrderRail({ teams }: Props) {
       {queued.length > 0 && <span className="turn-order-transition" aria-hidden>✦</span>}
 
       <ol className="turn-order-queue" start={2} aria-label="Upcoming teams">
-      {queued.map((team, queueIndex) => {
+      {namedQueue.map((team, queueIndex) => {
         const position = queueIndex + 2;
         const accent = getTeamAccent(team);
         const status = queueIndex === 0 ? "NEXT" : `${position}`;
@@ -60,11 +62,41 @@ export function TurnOrderRail({ teams }: Props) {
               <span className="turn-order-emoji team-identity-emoji"><span aria-hidden>{getTeamMarker(team)}</span></span>
               <span className="turn-order-name">{team.name}</span>
             </span>
-            {queueIndex < queued.length - 1 && <span className="turn-order-arrow" aria-hidden>›</span>}
+            {queueIndex < namedQueue.length - 1 && <span className="turn-order-arrow" aria-hidden>›</span>}
           </li>
         );
       })}
       </ol>
+
+      {compactQueue.length > 0 && (
+        <>
+          <span className="turn-order-overflow-transition" aria-hidden>›</span>
+          <div className="turn-order-overflow" aria-label="Later teams in turn order">
+            {compactQueue.map((team, queueIndex) => {
+              const accent = getTeamAccent(team);
+              const position = queueIndex + 4;
+              return (
+                <span
+                  key={team.id}
+                  className="turn-order-overflow-team team-identity-surface"
+                  role="img"
+                  aria-label={`Number ${position} in the queue, ${team.name}`}
+                  title={`${position}. ${team.name}`}
+                  data-emoji-surface={accent.emojiSurface}
+                  style={{
+                    "--turn-team-base": accent.base,
+                    "--turn-team-color": accent.onLight,
+                    "--turn-team-glow": accent.glow,
+                    "--turn-team-tint": accent.tint,
+                  } as CSSProperties}
+                >
+                  <span aria-hidden>{getTeamMarker(team)}</span>
+                </span>
+              );
+            })}
+          </div>
+        </>
+      )}
     </div>
   );
 }

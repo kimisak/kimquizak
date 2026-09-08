@@ -19,22 +19,34 @@ import {
 import { EditableTeamPill } from "@/components/game/TeamPill";
 import { getTeamAccent, reconcileTeamTheme } from "@/lib/teamPresentation";
 
-const getNextDefaultPlayerNumber = (teams: Team[]) =>
-  teams.reduce(
-    (highest, team) =>
-      team.players.reduce((teamHighest, player) => {
-        const match = /^Player\s+(\d+)$/i.exec(
-          (player.placeholder || player.name).trim(),
-        );
-        return match ? Math.max(teamHighest, Number(match[1])) : teamHighest;
-      }, highest),
-    0,
-  ) + 1;
+const getDefaultPlayerNumber = (player: Player) => {
+  const match = /^Player\s+(\d+)$/i.exec(
+    (player.placeholder || player.name).trim(),
+  );
+  return match ? Number(match[1]) : null;
+};
+
+const getAvailableDefaultPlayerNumbers = (teams: Team[], count: number) => {
+  const usedNumbers = new Set(
+    teams.flatMap((team) =>
+      team.players.flatMap((player) => {
+        const playerNumber = getDefaultPlayerNumber(player);
+        return playerNumber === null ? [] : [playerNumber];
+      }),
+    ),
+  );
+  const availableNumbers: number[] = [];
+
+  for (let candidate = 1; availableNumbers.length < count; candidate += 1) {
+    if (!usedNumbers.has(candidate)) availableNumbers.push(candidate);
+  }
+
+  return availableNumbers;
+};
 
 export default function TeamConfigPage() {
-  const [hydrated, setHydrated] = useState(false);
   const [settings] = useSettings();
-  const [teams, setTeams] = usePersistentState<Team[]>(
+  const [teams, setTeams, teamsHydrated] = usePersistentState<Team[]>(
     TEAM_STORAGE_KEY,
     [],
     [LEGACY_TEAM_STORAGE_KEY],
@@ -43,17 +55,13 @@ export default function TeamConfigPage() {
   const [shuffleMillisLeft, setShuffleMillisLeft] = useState<number | null>(null);
 
   useEffect(() => {
-    const id = setTimeout(() => {
-      setHydrated(true);
-      if (teams.length === 0) {
-        setTeams(buildDefaultTeams(settings.themeId));
-      }
-    }, 0);
-    return () => clearTimeout(id);
-  }, [teams.length, setTeams, settings.themeId]);
+    if (teamsHydrated && teams.length === 0) {
+      setTeams(buildDefaultTeams(settings.themeId));
+    }
+  }, [teams.length, teamsHydrated, setTeams, settings.themeId]);
 
   useEffect(() => {
-    if (!hydrated || teams.length === 0) return;
+    if (!teamsHydrated || teams.length === 0) return;
     setTeams((previous) => {
       let changed = false;
       const reconciled = previous.map((team) => {
@@ -73,7 +81,7 @@ export default function TeamConfigPage() {
       });
       return changed ? reconciled : previous;
     });
-  }, [hydrated, settings.themeId, setTeams, teams.length]);
+  }, [teamsHydrated, settings.themeId, setTeams, teams.length]);
 
   const shuffleArray = <T,>(arr: T[]) => {
     const copy = [...arr];
@@ -128,7 +136,7 @@ export default function TeamConfigPage() {
     return `Shuffling… ${seconds.toFixed(1)}s`;
   };
 
-  if (!hydrated) {
+  if (!teamsHydrated) {
     return (
       <main className="admin-page teams-page">
         <h1 style={{ margin: 0 }}>Teams & Players</h1>
@@ -164,7 +172,7 @@ export default function TeamConfigPage() {
 
   const addPlayer = (teamId: string) => {
     setTeams((prev) => {
-      const nextPlayerNumber = getNextDefaultPlayerNumber(prev);
+      const [nextPlayerNumber] = getAvailableDefaultPlayerNumbers(prev, 1);
       return prev.map((team) =>
         team.id === teamId
           ? {
@@ -181,14 +189,29 @@ export default function TeamConfigPage() {
 
   const removePlayer = (teamId: string, playerId: string) => {
     setTeams((prev) =>
-      prev.map((team) =>
-        team.id === teamId
-          ? {
-              ...team,
-              players: team.players.filter((p) => p.id !== playerId),
+      prev.map((team) => {
+        if (team.id !== teamId) return team;
+
+        const removedPlayer = team.players.find((player) => player.id === playerId);
+        const removedPlayerNumber = removedPlayer
+          ? getDefaultPlayerNumber(removedPlayer)
+          : null;
+        const remainingPlayers = team.players
+          .filter((player) => player.id !== playerId)
+          .map((player) => {
+            const playerNumber = getDefaultPlayerNumber(player);
+            if (
+              removedPlayerNumber === null ||
+              playerNumber === null ||
+              playerNumber <= removedPlayerNumber
+            ) {
+              return player;
             }
-          : team,
-      ),
+            return { ...player, placeholder: `Player ${playerNumber - 1}` };
+          });
+
+        return { ...team, players: remainingPlayers };
+      }),
     );
   };
 
@@ -196,7 +219,7 @@ export default function TeamConfigPage() {
     const options = getThemeOptions(settings.themeId);
     setTeams((prev) => {
       const pick = options[prev.length % options.length] ?? options[0];
-      const firstPlayerNumber = getNextDefaultPlayerNumber(prev);
+      const playerNumbers = getAvailableDefaultPlayerNumbers(prev, 3);
       return [
         ...prev,
         {
@@ -207,9 +230,9 @@ export default function TeamConfigPage() {
           accentBase: pick?.base,
           accentGlow: pick?.glow,
           players: [
-            { id: makeId("p"), name: "", placeholder: `Player ${firstPlayerNumber}` },
-            { id: makeId("p"), name: "", placeholder: `Player ${firstPlayerNumber + 1}` },
-            { id: makeId("p"), name: "", placeholder: `Player ${firstPlayerNumber + 2}` },
+            { id: makeId("p"), name: "", placeholder: `Player ${playerNumbers[0]}` },
+            { id: makeId("p"), name: "", placeholder: `Player ${playerNumbers[1]}` },
+            { id: makeId("p"), name: "", placeholder: `Player ${playerNumbers[2]}` },
           ],
         },
       ];

@@ -28,6 +28,7 @@ const fallbackTurnState: TurnState = {
   order: [],
   boardIndex: 0,
   lyricsIndex: 0,
+  revealedCategories: [],
 };
 
 function readLocalStorage<T>(key: string, fallback: T): T {
@@ -66,7 +67,10 @@ export function buildBackupPayload(): BackupPayload {
       turnState.order.length > 0 || turnState.boardIndex > 0 || turnState.lyricsIndex > 0
         ? turnState
         : legacyTurnState,
-    settings: readLocalStorage<AppSettings>(SETTINGS_STORAGE_KEY, DEFAULT_SETTINGS),
+    settings: {
+      ...DEFAULT_SETTINGS,
+      ...readLocalStorage<AppSettings>(SETTINGS_STORAGE_KEY, DEFAULT_SETTINGS),
+    },
     scoreHistory: readLocalStorage<ScoreTransaction[]>(SCORE_HISTORY_STORAGE_KEY, []),
   };
 }

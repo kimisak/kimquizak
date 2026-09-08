@@ -207,11 +207,11 @@ export function JokerModal({
             </div>
             {incrementInfo !== undefined && (
               <div style={{ color: "var(--muted)", fontSize: "0.9rem" }}>
-                +/- {incrementInfo} per guess
+                +{incrementInfo} per correct guess
               </div>
             )}
             <div style={{ color: "var(--muted)", fontSize: "0.85rem" }}>
-              {rotateInfo ? "Wrong guesses: next team" : "Wrong guesses: same team"}
+              {rotateInfo ? "Wrong guesses: next team, no penalty" : "Wrong guesses: same team, no penalty"}
             </div>
           </div>
       </div>

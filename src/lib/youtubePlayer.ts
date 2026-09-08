@@ -2,6 +2,7 @@ export type YouTubePlayer = {
   cueVideoById: (options: { videoId: string; startSeconds?: number }) => void;
   loadVideoById: (options: { videoId: string; startSeconds?: number }) => void;
   pauseVideo: () => void;
+  setVolume: (volume: number) => void;
   getCurrentTime: () => number;
   destroy: () => void;
 };
@@ -23,6 +24,7 @@ export type YouTubeNamespace = {
         onReady?: (event: YouTubePlayerEvent) => void;
         onStateChange?: (event: YouTubePlayerEvent) => void;
         onError?: () => void;
+        onAutoplayBlocked?: () => void;
       };
     },
   ) => YouTubePlayer;
