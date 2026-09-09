@@ -5,7 +5,8 @@ export type AppSettings = {
   finaleMusicEnabled: boolean;
   finaleMusicUrl: string;
   finaleMusicStartSeconds: number;
-  finaleMusicDurationSeconds: number;
+  finaleMusicEndSeconds: number;
+  finaleMusicDurationSeconds?: number;
   finaleMusicVolume: number;
 };
 
@@ -18,6 +19,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
   finaleMusicEnabled: true,
   finaleMusicUrl: "https://youtu.be/9QS0q3mGPGg?t=84",
   finaleMusicStartSeconds: 84,
-  finaleMusicDurationSeconds: 24,
+  finaleMusicEndSeconds: 108,
   finaleMusicVolume: 35,
 };

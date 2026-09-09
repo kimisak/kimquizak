@@ -43,6 +43,22 @@ function readLocalStorage<T>(key: string, fallback: T): T {
   }
 }
 
+function withSettingsDefaults(settings: Partial<AppSettings>): AppSettings {
+  const finaleMusicStartSeconds = settings.finaleMusicStartSeconds
+    ?? DEFAULT_SETTINGS.finaleMusicStartSeconds;
+  const finaleMusicEndSeconds = settings.finaleMusicEndSeconds
+    ?? (finaleMusicStartSeconds + (
+      settings.finaleMusicDurationSeconds
+      ?? (DEFAULT_SETTINGS.finaleMusicEndSeconds - DEFAULT_SETTINGS.finaleMusicStartSeconds)
+    ));
+  return {
+    ...DEFAULT_SETTINGS,
+    ...settings,
+    finaleMusicStartSeconds,
+    finaleMusicEndSeconds,
+  };
+}
+
 export function buildBackupPayload(): BackupPayload {
   const teams =
     readLocalStorage<Team[]>(TEAM_STORAGE_KEY, []).length > 0
@@ -67,10 +83,9 @@ export function buildBackupPayload(): BackupPayload {
       turnState.order.length > 0 || turnState.boardIndex > 0 || turnState.lyricsIndex > 0
         ? turnState
         : legacyTurnState,
-    settings: {
-      ...DEFAULT_SETTINGS,
-      ...readLocalStorage<AppSettings>(SETTINGS_STORAGE_KEY, DEFAULT_SETTINGS),
-    },
+    settings: withSettingsDefaults(
+      readLocalStorage<Partial<AppSettings>>(SETTINGS_STORAGE_KEY, DEFAULT_SETTINGS),
+    ),
     scoreHistory: readLocalStorage<ScoreTransaction[]>(SCORE_HISTORY_STORAGE_KEY, []),
   };
 }
@@ -109,7 +124,7 @@ export function parseBackupPayload(raw: string): BackupPayload {
     turnState,
     settings:
       payload.settings && typeof payload.settings === "object"
-        ? { ...DEFAULT_SETTINGS, ...payload.settings }
+        ? withSettingsDefaults(payload.settings)
         : DEFAULT_SETTINGS,
     scoreHistory: Array.isArray(payload.scoreHistory) ? payload.scoreHistory : [],
   };

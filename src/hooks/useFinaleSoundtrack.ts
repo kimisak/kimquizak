@@ -18,7 +18,7 @@ type Options = {
   enabled: boolean;
   url: string;
   startSeconds: number;
-  durationSeconds: number;
+  endSeconds: number;
   volume: number;
   prepare: boolean;
 };
@@ -27,7 +27,7 @@ export function useFinaleSoundtrack({
   enabled,
   url,
   startSeconds,
-  durationSeconds,
+  endSeconds,
   volume,
   prepare,
 }: Options) {
@@ -40,10 +40,10 @@ export function useFinaleSoundtrack({
   const playbackOriginRef = useRef<number | null>(null);
   const pendingPlayRef = useRef(false);
   const startRef = useRef(startSeconds);
-  const durationRef = useRef(durationSeconds);
+  const endRef = useRef(endSeconds);
   const volumeRef = useRef(volume);
   const [status, setStatus] = useState<FinaleMusicStatus>("idle");
-  const [remaining, setRemaining] = useState(durationSeconds);
+  const [remaining, setRemaining] = useState(Math.max(0.1, endSeconds - startSeconds));
   const [message, setMessage] = useState("");
   const [activated, setActivated] = useState(false);
   const videoId = useMemo(() => extractYouTubeId(url), [url]);
@@ -54,11 +54,11 @@ export function useFinaleSoundtrack({
 
   useEffect(() => {
     startRef.current = Math.max(0, startSeconds);
-    durationRef.current = Math.max(1, durationSeconds);
+    endRef.current = Math.max(startRef.current + 0.1, endSeconds);
     volumeRef.current = Math.min(100, Math.max(0, volume));
-    setRemaining(Math.max(1, durationSeconds));
+    setRemaining(Math.max(0.1, endRef.current - startRef.current));
     playerRef.current?.setVolume(volumeRef.current);
-  }, [durationSeconds, startSeconds, volume]);
+  }, [endSeconds, startSeconds, volume]);
 
   const clearTimers = useCallback(() => {
     if (monitorRef.current) clearInterval(monitorRef.current);
@@ -79,13 +79,17 @@ export function useFinaleSoundtrack({
   const beginPlayback = useCallback((player: YouTubePlayer) => {
     clearTimers();
     setMessage("");
-    setRemaining(durationRef.current);
+    setRemaining(Math.max(0.1, endRef.current - startRef.current));
     setStatus("loading");
     playRequestedRef.current = true;
     pendingPlayRef.current = false;
     playbackOriginRef.current = null;
     player.setVolume(volumeRef.current);
-    player.loadVideoById({ videoId: videoId ?? "", startSeconds: startRef.current });
+    player.loadVideoById({
+      videoId: videoId ?? "",
+      startSeconds: startRef.current,
+      endSeconds: endRef.current,
+    });
     watchdogRef.current = setTimeout(() => {
       if (!playRequestedRef.current || playbackOriginRef.current != null) return;
       playRequestedRef.current = false;
@@ -136,7 +140,11 @@ export function useFinaleSoundtrack({
               playerRef.current = event.target;
               playerReadyRef.current = true;
               event.target.setVolume(volumeRef.current);
-              event.target.cueVideoById({ videoId, startSeconds: startRef.current });
+              event.target.cueVideoById({
+                videoId,
+                startSeconds: startRef.current,
+                endSeconds: endRef.current,
+              });
               setStatus("ready");
               if (pendingPlayRef.current) beginPlayback(event.target);
             },
@@ -150,9 +158,8 @@ export function useFinaleSoundtrack({
                 if (!monitorRef.current) {
                   monitorRef.current = setInterval(() => {
                     const activePlayer = playerRef.current;
-                    const origin = playbackOriginRef.current;
-                    if (!activePlayer || origin == null || !playRequestedRef.current) return;
-                    const left = Math.max(0, durationRef.current - (activePlayer.getCurrentTime() - origin));
+                    if (!activePlayer || playbackOriginRef.current == null || !playRequestedRef.current) return;
+                    const left = Math.max(0, endRef.current - activePlayer.getCurrentTime());
                     setRemaining(left);
                     if (left <= 0.05) stop("ended");
                   }, 100);

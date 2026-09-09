@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from "react";
+import { YouTubeClipPreview } from "@/components/config/YouTubeClipPreview";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { useSettings } from "@/hooks/useSettings";
 import { useTurnState } from "@/hooks/useTurnState";
@@ -371,14 +372,16 @@ export default function QuestionConfigPage() {
   const finaleMusicUrl = settings.finaleMusicUrl ?? DEFAULT_SETTINGS.finaleMusicUrl;
   const finaleMusicStartSeconds = settings.finaleMusicStartSeconds
     ?? getYouTubeStartSeconds(finaleMusicUrl);
-  const finaleMusicDurationSeconds = settings.finaleMusicDurationSeconds
-    ?? DEFAULT_SETTINGS.finaleMusicDurationSeconds;
   const finaleMusicVolume = settings.finaleMusicVolume ?? DEFAULT_SETTINGS.finaleMusicVolume;
-  const finaleMusicEndSeconds = finaleMusicStartSeconds + finaleMusicDurationSeconds;
-  const finaleMusicPreviewUrl = buildYouTubeEmbedUrl(finaleMusicUrl, {
+  const legacyFinaleDuration = settings.finaleMusicDurationSeconds
+    ?? (DEFAULT_SETTINGS.finaleMusicEndSeconds - DEFAULT_SETTINGS.finaleMusicStartSeconds);
+  const finaleMusicEndSeconds = settings.finaleMusicEndSeconds
+    ?? (finaleMusicStartSeconds + legacyFinaleDuration);
+  const finaleMusicRangeValid = finaleMusicEndSeconds > finaleMusicStartSeconds;
+  const finaleMusicPreviewUrl = finaleMusicRangeValid ? buildYouTubeEmbedUrl(finaleMusicUrl, {
     startSeconds: finaleMusicStartSeconds,
     endSeconds: finaleMusicEndSeconds,
-  });
+  }) : "";
 
   const categories = useMemo(() => {
     const list = questionsHydrated && Array.isArray(questions) ? questions : [];
@@ -1719,8 +1722,8 @@ const TimelineFields = React.memo(function TimelineFields({
                 }))}
               />
               <span>
-                <strong>Finale soundtrack</strong>
-                <small>Cue it before the final answer, then play it with the celebration.</small>
+                <strong>WRAP song</strong>
+                <small>Choose the exact part of a YouTube song that starts with the podium reveal.</small>
               </span>
             </label>
 
@@ -1738,9 +1741,11 @@ const TimelineFields = React.memo(function TimelineFields({
                   onBlur={() => {
                     const detectedStart = getYouTubeStartSeconds(finaleMusicUrl);
                     if (detectedStart <= 0) return;
+                    const currentDuration = Math.max(0.1, finaleMusicEndSeconds - finaleMusicStartSeconds);
                     setSettings((previous) => ({
                       ...previous,
                       finaleMusicStartSeconds: detectedStart,
+                      finaleMusicEndSeconds: detectedStart + currentDuration,
                     }));
                   }}
                 />
@@ -1752,6 +1757,7 @@ const TimelineFields = React.memo(function TimelineFields({
                     className="input"
                     type="number"
                     min={0}
+                    step={0.1}
                     value={finaleMusicStartSeconds}
                     disabled={!finaleMusicEnabled}
                     onChange={(event) => setSettings((previous) => ({
@@ -1763,17 +1769,18 @@ const TimelineFields = React.memo(function TimelineFields({
                 </span>
               </label>
               <label>
-                <span>Play for</span>
+                <span>Finish at</span>
                 <span className="question-number-unit">
                   <input
                     className="input"
                     type="number"
-                    min={1}
-                    value={finaleMusicDurationSeconds}
+                    min={0.1}
+                    step={0.1}
+                    value={finaleMusicEndSeconds}
                     disabled={!finaleMusicEnabled}
                     onChange={(event) => setSettings((previous) => ({
                       ...previous,
-                      finaleMusicDurationSeconds: Math.max(1, Number(event.target.value) || 1),
+                      finaleMusicEndSeconds: Math.max(0.1, Number(event.target.value) || 0.1),
                     }))}
                   />
                   <small>sec</small>
@@ -1801,7 +1808,9 @@ const TimelineFields = React.memo(function TimelineFields({
 
             <div className="question-finale-music-footer">
               <span>
-                Starts at {finaleMusicStartSeconds}s · ends at {finaleMusicEndSeconds}s
+                {finaleMusicRangeValid
+                  ? `${Math.round((finaleMusicEndSeconds - finaleMusicStartSeconds) * 10) / 10}s clip · decimals supported`
+                  : "Finish time must be later than start time"}
               </span>
               <button
                 className="button ghost compact"
@@ -1813,17 +1822,19 @@ const TimelineFields = React.memo(function TimelineFields({
               </button>
             </div>
             {finaleMusicEnabled && finaleMusicUrl && !finaleMusicPreviewUrl && (
-              <small className="question-finale-music-error">Enter a supported YouTube URL.</small>
+              <small className="question-finale-music-error">
+                {finaleMusicRangeValid
+                  ? "Enter a supported YouTube URL."
+                  : "Finish time must be later than start time."}
+              </small>
             )}
             {showFinaleMusicPreview && finaleMusicPreviewUrl && (
-              <div className="question-finale-music-preview">
-                <iframe
-                  title="Finale soundtrack preview"
-                  src={finaleMusicPreviewUrl}
-                  allow="accelerometer; encrypted-media; picture-in-picture"
-                  allowFullScreen
-                />
-              </div>
+              <YouTubeClipPreview
+                key={`${finaleMusicUrl}-${finaleMusicStartSeconds}-${finaleMusicEndSeconds}`}
+                url={finaleMusicUrl}
+                startSeconds={finaleMusicStartSeconds}
+                endSeconds={finaleMusicEndSeconds}
+              />
             )}
           </div>
         </div>

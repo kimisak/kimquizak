@@ -179,11 +179,18 @@ export default function GameBoardPage() {
   const boardProgressPercent = playableQuestionCount > 0
     ? (answeredQuestionCount / playableQuestionCount) * 100
     : 0;
+  const finaleMusicStartSeconds = settings.finaleMusicStartSeconds
+    ?? DEFAULT_SETTINGS.finaleMusicStartSeconds;
+  const finaleMusicEndSeconds = settings.finaleMusicEndSeconds
+    ?? (finaleMusicStartSeconds + (
+      settings.finaleMusicDurationSeconds
+      ?? (DEFAULT_SETTINGS.finaleMusicEndSeconds - DEFAULT_SETTINGS.finaleMusicStartSeconds)
+    ));
   const finaleSoundtrack = useFinaleSoundtrack({
     enabled: settings.finaleMusicEnabled ?? DEFAULT_SETTINGS.finaleMusicEnabled,
     url: settings.finaleMusicUrl ?? DEFAULT_SETTINGS.finaleMusicUrl,
-    startSeconds: settings.finaleMusicStartSeconds ?? DEFAULT_SETTINGS.finaleMusicStartSeconds,
-    durationSeconds: settings.finaleMusicDurationSeconds ?? DEFAULT_SETTINGS.finaleMusicDurationSeconds,
+    startSeconds: finaleMusicStartSeconds,
+    endSeconds: finaleMusicEndSeconds,
     volume: settings.finaleMusicVolume ?? DEFAULT_SETTINGS.finaleMusicVolume,
     prepare: (playableQuestionCount > 0 && remainingQuestionCount <= 1) || showFinalLeaderboard,
   });

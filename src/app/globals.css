@@ -387,7 +387,12 @@ select.input option { background: var(--cream); color: var(--cocoa); }
 .question-finale-music-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: #d8c9b1; font-size: .7rem; }
 .question-finale-music-error { color: #ffc2bd; font-size: .72rem; }
 .question-finale-music-preview { aspect-ratio: 16/9; max-width: 560px; overflow: hidden; border: 1px solid rgba(234,208,141,.28); border-radius: 12px; }
-.question-finale-music-preview iframe { display: block; width: 100%; height: 100%; border: 0; }
+.question-finale-music-preview iframe, .question-finale-music-preview > div { display: block; width: 100%; height: 100%; border: 0; }
+.question-finale-clip-preview { display: grid; max-width: 560px; gap: 9px; }
+.question-finale-preview-controls { display: flex; align-items: center; gap: 12px; }
+.question-finale-preview-timing { display: grid; min-width: 0; gap: 1px; color: #d8c9b1; font-size: .68rem; }
+.question-finale-preview-timing strong { color: var(--brass-light); font-family: var(--font-display); font-size: 1rem; }
+.question-finale-preview-timing small { color: #a8dfb8; font-weight: 800; }
 .question-category-create { display: flex; align-items: flex-end; gap: 12px; padding: 17px 20px; border-radius: 18px; background: var(--parchment); box-shadow: var(--shadow-small); color: var(--cocoa); }
 .question-category-tabs { display: flex; gap: 7px; overflow-x: auto; padding: 4px 4px 8px; }
 .question-category-tab { flex: 0 0 auto; min-height: 42px; padding: 8px 13px; border: 0; border-bottom: 3px solid transparent; border-radius: 10px 10px 3px 3px; background: rgba(255,248,232,.74); color: var(--cocoa); font-size: .76rem; font-weight: 800; cursor: pointer; }

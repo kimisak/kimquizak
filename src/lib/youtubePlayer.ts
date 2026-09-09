@@ -1,6 +1,7 @@
 export type YouTubePlayer = {
-  cueVideoById: (options: { videoId: string; startSeconds?: number }) => void;
-  loadVideoById: (options: { videoId: string; startSeconds?: number }) => void;
+  cueVideoById: (options: { videoId: string; startSeconds?: number; endSeconds?: number }) => void;
+  loadVideoById: (options: { videoId: string; startSeconds?: number; endSeconds?: number }) => void;
+  playVideo: () => void;
   pauseVideo: () => void;
   setVolume: (volume: number) => void;
   getCurrentTime: () => number;
