@@ -169,21 +169,16 @@ export function LyricsModal({
         {!showAnswer ? (
           <section className="text-grid-stage">
             <header className="text-grid-intro">
-              <div>
+              <div className="text-grid-intro-copy">
                 <span className="question-modal-eyebrow">Reveal board</span>
                 <h1>{question.prompt || "Open tiles to reveal the hidden text."}</h1>
+                {question.lyricsInfoText?.trim() && <p>{question.lyricsInfoText}</p>}
               </div>
               <div className="text-grid-progress" aria-label={`${revealedCount} of ${segments.length} tiles revealed`}>
                 <strong>{revealedCount}<span>/{segments.length}</span></strong>
                 <small>revealed</small>
               </div>
             </header>
-
-            <div className="text-grid-rule">
-              <span aria-hidden>✦</span>
-              <p><strong>Choose a tile.</strong> A cranberry pass tile moves play to the next team without changing the score.</p>
-              {passCount > 0 && <small>{passCount} pass {passCount === 1 ? "tile" : "tiles"} found</small>}
-            </div>
 
             {segments.length > 0 ? (
               <div className="text-grid-board">
@@ -285,6 +280,13 @@ export function LyricsModal({
               </button>
             )}
           </>
+        ) : null}
+        middle={!showAnswer ? (
+          <div className="text-grid-action-hint">
+            <span aria-hidden>✦</span>
+            <p><strong>Choose a tile.</strong> A cranberry pass tile moves play to the next team without changing the score.</p>
+            {passCount > 0 && <small>{passCount} found</small>}
+          </div>
         ) : null}
       />
     </article>

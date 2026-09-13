@@ -666,6 +666,7 @@ export default function QuestionConfigPage() {
           answerImageName: null,
           type: "standard",
           lyricsSegments: [],
+          lyricsInfoText: null,
           mapEmbedUrl: null,
           answerLocationLabel: null,
           answerLocationUrl: null,
@@ -765,6 +766,7 @@ export default function QuestionConfigPage() {
         answerImageName: null,
         type: "standard",
         lyricsSegments: [],
+        lyricsInfoText: null,
         mapEmbedUrl: null,
         answerLocationLabel: null,
           answerLocationUrl: null,
@@ -1269,6 +1271,7 @@ const LyricsFields = React.memo(function LyricsFields(props: FieldProps) {
   const { category, points, q, upsertQuestion } = props;
   const lyricsInputRef = React.useRef<HTMLTextAreaElement>(null);
   const [prompt, setPrompt] = useState(q?.prompt ?? "");
+  const [infoText, setInfoText] = useState(q?.lyricsInfoText ?? "");
   const [lyrics, setLyrics] = useState((q?.lyricsSegments ?? []).join("\n"));
   const [answer, setAnswer] = useState(q?.answer ?? "");
   const [answerVideoUrl, setAnswerVideoUrl] = useState(q?.answerVideoUrl ?? "");
@@ -1276,11 +1279,12 @@ const LyricsFields = React.memo(function LyricsFields(props: FieldProps) {
 
   React.useEffect(() => {
     setPrompt(q?.prompt ?? "");
+    setInfoText(q?.lyricsInfoText ?? "");
     setLyrics((q?.lyricsSegments ?? []).join("\n"));
     setAnswer(q?.answer ?? "");
     setAnswerVideoUrl(q?.answerVideoUrl ?? "");
     setAutoplay(q?.answerVideoAutoplay ?? true);
-  }, [q?.prompt, q?.lyricsSegments, q?.answer, q?.answerVideoUrl, q?.answerVideoAutoplay]);
+  }, [q?.prompt, q?.lyricsInfoText, q?.lyricsSegments, q?.answer, q?.answerVideoUrl, q?.answerVideoAutoplay]);
 
   React.useEffect(() => {
     const input = lyricsInputRef.current;
@@ -1297,7 +1301,7 @@ const LyricsFields = React.memo(function LyricsFields(props: FieldProps) {
 
   return (
     <>
-      <label className="label">Intro / hint (optional)</label>
+      <label className="label">Question title</label>
       <textarea
         value={prompt}
         onChange={(e) => setPrompt(e.target.value)}
@@ -1315,7 +1319,23 @@ const LyricsFields = React.memo(function LyricsFields(props: FieldProps) {
           color: "var(--foreground)",
           padding: "10px",
         }}
-        placeholder="Optional intro or clue"
+        placeholder="e.g. Which Christmas song is hidden here?"
+      />
+      <label className="label" style={{ marginTop: "8px" }}>More info (optional)</label>
+      <textarea
+        value={infoText}
+        onChange={(e) => setInfoText(e.target.value)}
+        onBlur={() => upsertQuestion(category, points, { lyricsInfoText: infoText || null })}
+        style={{
+          width: "100%",
+          minHeight: "60px",
+          borderRadius: "10px",
+          border: "1px solid rgba(255,255,255,0.12)",
+          background: "rgba(255,255,255,0.04)",
+          color: "var(--foreground)",
+          padding: "10px",
+        }}
+        placeholder="Optional context, hint, or instruction shown below the title"
       />
       <label className="label" style={{ marginTop: "8px" }}>
         Answer video URL (YouTube embed link, not share)

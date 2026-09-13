@@ -9,6 +9,7 @@ type Props = {
   onWrong?: () => void;
   disabled?: boolean;
   before?: ReactNode;
+  middle?: ReactNode;
 };
 
 export function QuestionModalActions({
@@ -18,10 +19,12 @@ export function QuestionModalActions({
   onWrong,
   disabled = false,
   before,
+  middle,
 }: Props) {
   return (
     <footer className="question-modal-actions">
       <div className="question-modal-actions-secondary">{before}</div>
+      {middle && <div className="question-modal-actions-middle">{middle}</div>}
       {revealed ? (
         <div className="question-modal-score-actions">
           <button className="button question-score-wrong" type="button" onClick={onWrong} disabled={disabled}>

@@ -30,6 +30,7 @@ export type Question = {
   answerImageName?: string | null;
   type?: "standard" | "lyrics" | "geoguesser" | "joker" | "timeline" | "mcq" | "audio";
   lyricsSegments?: string[];
+  lyricsInfoText?: string | null;
   mapEmbedUrl?: string | null;
   answerLocationLabel?: string | null;
   answerLocationUrl?: string | null;
