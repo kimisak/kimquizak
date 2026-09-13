@@ -146,6 +146,7 @@ function HostMessageEditor({
         {teams.length > 0
           ? ` Team range: 1–${teams.length}. Member ranges: ${memberRanges}.`
           : " Add teams to make numbered variables available."}
+        {" "}Countdowns accept minutes, seconds, or both: {"{5m}"}, {"{10s}"}, {"{1m30s}"}, or {"{100s}"}.
       </small>
       <div className={`question-host-message-reveal-setting${hasRandomVariable ? "" : " direct-preview"}`}>
         <span>{hasRandomVariable ? "Random reveal" : "Full-screen preview"}</span>
@@ -1276,6 +1277,15 @@ const LyricsFields = React.memo(function LyricsFields(props: FieldProps) {
   const [answer, setAnswer] = useState(q?.answer ?? "");
   const [answerVideoUrl, setAnswerVideoUrl] = useState(q?.answerVideoUrl ?? "");
   const [autoplay, setAutoplay] = useState(q?.answerVideoAutoplay ?? true);
+  const [showAnswerVideoPreview, setShowAnswerVideoPreview] = useState(false);
+  const answerVideoStart = getYouTubeStartSeconds(answerVideoUrl);
+  const answerVideoPreviewUrl = buildYouTubeEmbedUrl(answerVideoUrl, {
+    startSeconds: answerVideoStart,
+  });
+  const configuredTileCount = lyrics.split(/\r?\n/).filter((line) => line.trim()).length;
+  const randomPassTileCount = configuredTileCount > 0
+    ? Math.max(1, Math.round(configuredTileCount * 0.4))
+    : 0;
 
   React.useEffect(() => {
     setPrompt(q?.prompt ?? "");
@@ -1338,7 +1348,7 @@ const LyricsFields = React.memo(function LyricsFields(props: FieldProps) {
         placeholder="Optional context, hint, or instruction shown below the title"
       />
       <label className="label" style={{ marginTop: "8px" }}>
-        Answer video URL (YouTube embed link, not share)
+        Answer video URL
       </label>
       <input
         className="input"
@@ -1351,6 +1361,36 @@ const LyricsFields = React.memo(function LyricsFields(props: FieldProps) {
         }
         placeholder="https://youtube.com/watch?v=..."
       />
+      {answerVideoUrl && !answerVideoPreviewUrl && (
+        <small className="question-text-grid-video-error">Enter a supported YouTube URL.</small>
+      )}
+      {answerVideoPreviewUrl && (
+        <div className="question-text-grid-video-source">
+          <button
+            className="button ghost compact"
+            type="button"
+            onClick={() => setShowAnswerVideoPreview((visible) => !visible)}
+          >
+            {showAnswerVideoPreview ? "Close video preview" : "Preview answer video"}
+          </button>
+          <small>
+            {answerVideoStart > 0
+              ? `Preview starts at ${answerVideoStart} seconds from the URL timestamp.`
+              : "Preview starts at the beginning of the video."}
+          </small>
+          {showAnswerVideoPreview && (
+            <div className="question-text-grid-video-preview">
+              <iframe
+                key={answerVideoPreviewUrl}
+                title="Text Grid answer video preview"
+                src={answerVideoPreviewUrl}
+                allow="accelerometer; encrypted-media; picture-in-picture"
+                allowFullScreen
+              />
+            </div>
+          )}
+        </div>
+      )}
       <label
         className="label"
         style={{
@@ -1375,7 +1415,7 @@ const LyricsFields = React.memo(function LyricsFields(props: FieldProps) {
         Autoplay video when revealing answer
       </label>
       <label className="label" style={{ marginTop: "8px" }}>
-        One word per line
+        One line per tile
       </label>
       <textarea
         ref={lyricsInputRef}
@@ -1397,10 +1437,24 @@ const LyricsFields = React.memo(function LyricsFields(props: FieldProps) {
           overflowY: "hidden",
           resize: "vertical",
         }}
-        placeholder={"First word\nSecond word\nThird word"}
+        placeholder={"First tile\nSecond tile can contain several words\nThird tile"}
       />
       <div style={{ marginTop: "6px", color: "var(--muted)", fontSize: "0.9rem" }}>
-        {lyrics.split(/\r?\n/).filter((line) => line.trim()).length} word tile(s). Players click squares to reveal each one.
+        {configuredTileCount} {configuredTileCount === 1 ? "tile" : "tiles"}. Each non-empty line becomes one clickable tile.
+      </div>
+      <div className="question-text-grid-pass-info">
+        <span aria-hidden>✦</span>
+        <div>
+          <strong>Cranberry pass tiles are randomly selected</strong>
+          <p>
+            When this question opens for play, the app randomly chooses approximately 40% of its tiles, with at least one pass tile. Every tile has an equal chance, and the host cannot see or choose their positions beforehand.
+          </p>
+          <small>
+            {configuredTileCount > 0
+              ? `With ${configuredTileCount} tiles, ${randomPassTileCount} will be random pass ${randomPassTileCount === 1 ? "tile" : "tiles"}. Reopening the question draws a fresh pattern.`
+              : "Add words above to see how many random pass tiles will be used."}
+          </small>
+        </div>
       </div>
       <label className="label" style={{ marginTop: "8px" }}>
         Answer

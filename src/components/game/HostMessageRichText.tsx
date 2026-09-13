@@ -1,20 +1,26 @@
 'use client';
 
-import { Fragment, type CSSProperties } from "react";
+import { Fragment, useEffect, useState, type CSSProperties } from "react";
 import { getTeamAccent, getTeamMarker } from "@/lib/teamPresentation";
-import { parseHostMessageNumberRange } from "@/lib/hostMessageTemplates";
+import {
+  formatHostMessageCountdown,
+  parseHostMessageCountdown,
+  parseHostMessageNumberRange,
+} from "@/lib/hostMessageTemplates";
 import type { ResolvedHostMessage, Team } from "@/lib/types";
 
 type Props = {
   template: string;
   resolution: ResolvedHostMessage;
   teams: Team[];
+  countdownsActive?: boolean;
 };
 
 type MessagePart = {
   value: string;
-  kind?: "team" | "player" | "number";
+  kind?: "team" | "player" | "number" | "countdown";
   team?: Team;
+  countdownSeconds?: number;
 };
 
 const VARIABLE_PATTERN = /\{([^{}]+)\}/g;
@@ -38,11 +44,15 @@ function createMessageParts(template: string, resolution: ResolvedHostMessage, t
     const memberMatch = variable.match(/^team(\d+)\.member(\d+)$/);
     const teamMatch = variable.match(/^team(\d+)$/);
     const numberRange = parseHostMessageNumberRange(variable);
+    const countdownSeconds = parseHostMessageCountdown(variable);
     let value = resolution.variables[variable] ?? match[0];
     let kind: MessagePart["kind"];
     let team: Team | undefined;
 
-    if (variable === "random.team" || variable === "random.player" || numberRange) {
+    if (countdownSeconds) {
+      value = formatHostMessageCountdown(countdownSeconds);
+      kind = "countdown";
+    } else if (variable === "random.team" || variable === "random.player" || numberRange) {
       const selection = resolution.randomSelections?.[randomSelectionIndex];
       randomSelectionIndex += 1;
       value = selection?.value ?? resolution.variables[variable] ?? match[0];
@@ -60,7 +70,7 @@ function createMessageParts(template: string, resolution: ResolvedHostMessage, t
       team = teams[Number(teamMatch[1]) - 1];
     }
 
-    parts.push({ value, kind, team });
+    parts.push({ value, kind, team, countdownSeconds: countdownSeconds ?? undefined });
     cursor = offset + match[0].length;
   }
 
@@ -68,10 +78,41 @@ function createMessageParts(template: string, resolution: ResolvedHostMessage, t
   return parts;
 }
 
-export function HostMessageRichText({ template, resolution, teams }: Props) {
+function HostMessageCountdown({ seconds, active }: { seconds: number; active: boolean }) {
+  const [remaining, setRemaining] = useState(seconds);
+  const initialLabel = formatHostMessageCountdown(seconds);
+
+  useEffect(() => {
+    if (!active) return;
+    const deadline = Date.now() + seconds * 1000;
+    const timer = window.setInterval(() => {
+      const next = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+      setRemaining(next);
+      if (next === 0) window.clearInterval(timer);
+    }, 200);
+    return () => window.clearInterval(timer);
+  }, [active, seconds]);
+
+  const displayedSeconds = active ? remaining : seconds;
+  return (
+    <span
+      className={`host-message-entity host-message-countdown${displayedSeconds === 0 ? " complete" : ""}`}
+      role="timer"
+      aria-label={`${displayedSeconds} seconds remaining`}
+      style={{ width: `${Math.max(3.55, initialLabel.length * 0.62 + 0.6)}em` }}
+    >
+      <span className="host-message-entity-name">{formatHostMessageCountdown(displayedSeconds)}</span>
+    </span>
+  );
+}
+
+export function HostMessageRichText({ template, resolution, teams, countdownsActive = false }: Props) {
   const parts = createMessageParts(template, resolution, teams);
 
   return parts.map((part, index) => {
+    if (part.kind === "countdown" && part.countdownSeconds) {
+      return <HostMessageCountdown key={index} seconds={part.countdownSeconds} active={countdownsActive} />;
+    }
     if (part.kind === "number") {
       return (
         <span className="host-message-entity host-message-number" key={index}>

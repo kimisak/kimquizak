@@ -455,6 +455,9 @@ select.input option { background: var(--cream); color: var(--cocoa); }
 .host-message-entity-xlong { font-size:.7em; }
 .host-message-player { background:linear-gradient(180deg,color-mix(in srgb,var(--host-entity-base) 48%,#173026),color-mix(in srgb,var(--host-entity-base) 27%,#081811)); }
 .host-message-number { --host-entity-base:#b72842; --host-entity-color:#fff0ad; padding-inline:.3em; background:linear-gradient(180deg,#8e2639,#511522); color:#fff0ad !important; }
+.host-message-countdown { --host-entity-base:#176b58; --host-entity-color:#fff0ad; min-width:3.55em; flex:0 0 auto; justify-content:center; padding:.08em .3em .12em; background:linear-gradient(180deg,#176b58,#0c3c31); color:#fff0ad !important; font-variant-numeric:tabular-nums; letter-spacing:-.025em; }
+.host-message-countdown.complete { --host-entity-base:#b72842; background:linear-gradient(180deg,#9b3543,#571923); animation:host-message-countdown-complete .7s ease-in-out infinite alternate; }
+@keyframes host-message-countdown-complete { to { box-shadow:inset 0 1px rgba(255,255,255,.14),0 0 .3em rgba(239,152,161,.5); transform:scale(1.025); } }
 .host-random-reveal-stage { width:min(96vw,1280px); min-height:min(88dvh,980px); align-content:center; gap:clamp(7px,1.2vh,14px); padding:clamp(20px,3vw,44px); }
 .host-random-reveal-stage h1 { color:var(--cream); font-family:var(--font-display); font-size:clamp(2rem,4.2vw,4rem); font-weight:900; letter-spacing:-.04em; text-transform:none; }
 .host-random-reveal-wait { color:#a99d8c !important; font-family:var(--font-body) !important; font-size:.67rem !important; font-weight:750 !important; letter-spacing:.04em !important; }
@@ -566,6 +569,17 @@ select.input option { background: var(--cream); color: var(--cocoa); }
 .question-editor textarea, .question-editor input.input, .question-editor select.input { border-radius: 10px !important; background-color: #fffdf5 !important; color: var(--cocoa) !important; }
 .question-help { margin-top: 10px; color: var(--muted); font-size: .83rem; }
 .question-help summary { font-weight: 800; cursor: pointer; }
+.question-text-grid-pass-info { display:flex; align-items:flex-start; gap:10px; margin-top:12px; padding:12px 14px; border:1px solid rgba(155,53,67,.25); border-left:4px solid var(--cranberry); border-radius:11px; background:linear-gradient(110deg,rgba(155,53,67,.1),rgba(255,253,245,.72)); color:var(--cocoa); }
+.question-text-grid-pass-info > span { flex:0 0 auto; margin-top:1px; color:var(--cranberry); }
+.question-text-grid-pass-info strong, .question-text-grid-pass-info small { display:block; }
+.question-text-grid-pass-info strong { color:var(--velvet); font-size:.82rem; }
+.question-text-grid-pass-info p { margin:4px 0 5px; color:#66574d; font-size:.75rem; line-height:1.4; }
+.question-text-grid-pass-info small { color:#806d5d; font-size:.68rem; font-weight:750; }
+.question-text-grid-video-source { display:grid; justify-items:start; gap:7px; margin-top:9px; }
+.question-text-grid-video-source > small { color:var(--muted); font-size:.7rem; }
+.question-text-grid-video-preview { width:min(100%,640px); aspect-ratio:16/9; overflow:hidden; border:1px solid rgba(74,48,37,.22); border-radius:13px; background:#06140f; box-shadow:0 10px 22px rgba(74,48,37,.12); }
+.question-text-grid-video-preview iframe { display:block; width:100%; height:100%; border:0; }
+.question-text-grid-video-error { display:block; margin-top:6px; color:#9b3543; font-size:.72rem; font-weight:750; }
 
 /* Holiday stage */
 .game-page { position: relative; display: grid !important; width: 100%; min-width: 0; gap: 14px !important; margin: 0; padding: 0; overflow: visible; border: 0; background: transparent; box-shadow: none; color: var(--cream); }

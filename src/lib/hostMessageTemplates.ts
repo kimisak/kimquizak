@@ -6,10 +6,12 @@ export const HOST_MESSAGE_VARIABLES = [
   { token: "{random.team}", label: "Random team" },
   { token: "{random.player}", label: "Random player" },
   { token: "{1-10}", label: "Random number from 1 to 10" },
+  { token: "{5m}", label: "Five-minute countdown" },
 ] as const;
 
 const VARIABLE_PATTERN = /\{([^{}]+)\}/g;
 const NUMBER_RANGE_PATTERN = /^(-?\d+)\s*-\s*(-?\d+)$/;
+const COUNTDOWN_PATTERN = /^(?:(\d+)m)?(?:(\d+)s)?$/i;
 export const MAX_WHEEL_NUMBER_RANGE = 24;
 
 export function parseHostMessageNumberRange(variable: string) {
@@ -19,6 +21,22 @@ export function parseHostMessageNumberRange(variable: string) {
   const end = Number(match[2]);
   if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end)) return null;
   return { start, end, size: Math.abs(end - start) + 1 };
+}
+
+export function parseHostMessageCountdown(variable: string) {
+  const match = variable.trim().match(COUNTDOWN_PATTERN);
+  if (!match || (!match[1] && !match[2])) return null;
+  const minutes = Number(match[1] ?? 0);
+  const seconds = Number(match[2] ?? 0);
+  const totalSeconds = minutes * 60 + seconds;
+  return Number.isSafeInteger(totalSeconds) && totalSeconds > 0 ? totalSeconds : null;
+}
+
+export function formatHostMessageCountdown(totalSeconds: number) {
+  const safeSeconds = Math.max(0, Math.floor(totalSeconds));
+  const minutes = Math.floor(safeSeconds / 60);
+  const seconds = safeSeconds % 60;
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
 export function hasRandomHostMessageVariable(template: string) {
@@ -50,6 +68,7 @@ export function getUnknownHostMessageVariables(template: string) {
       variable === "random.team"
       || variable === "random.player"
       || parseHostMessageNumberRange(variable)
+      || parseHostMessageCountdown(variable)
       || /^team\d+$/.test(variable)
       || /^team\d+\.member\d+$/.test(variable)
     ) continue;
@@ -194,6 +213,8 @@ export function resolveHostMessageTemplate(
       });
       return value;
     }
+    const countdownSeconds = parseHostMessageCountdown(variable);
+    if (countdownSeconds) return formatHostMessageCountdown(countdownSeconds);
     const cached = cache.get(variable);
     if (cached) return cached;
 

@@ -65,11 +65,14 @@ function FittedHostMessage({
     };
     const resizeObserver = new ResizeObserver(scheduleFit);
     resizeObserver.observe(copy);
+    const contentObserver = new MutationObserver(scheduleFit);
+    contentObserver.observe(inner, { childList: true, characterData: true, subtree: true });
     scheduleFit();
     void document.fonts?.ready.then(scheduleFit);
 
     return () => {
       resizeObserver.disconnect();
+      contentObserver.disconnect();
       window.cancelAnimationFrame(animationFrame);
     };
   }, [message.text, resolution.text, teams]);
@@ -77,7 +80,7 @@ function FittedHostMessage({
   return (
     <p id="host-message-copy" className={`host-message-copy${sizeClass}`} ref={copyRef}>
       <span className="host-message-copy-inner" ref={innerRef}>
-        <HostMessageRichText template={message.text} resolution={resolution} teams={teams} />
+        <HostMessageRichText template={message.text} resolution={resolution} teams={teams} countdownsActive />
       </span>
     </p>
   );
