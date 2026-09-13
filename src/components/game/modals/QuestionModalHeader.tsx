@@ -24,7 +24,7 @@ export function QuestionModalHeader({
   return (
     <header className="question-modal-header">
       <div className="question-modal-heading">
-        <span>{category} · {typeLabel}</span>
+        <span>{category ? `${category} · ${typeLabel}` : typeLabel}</span>
         <strong>{points}<small> pts</small></strong>
       </div>
       {teamName && (

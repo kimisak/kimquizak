@@ -42,10 +42,20 @@ import { DEFAULT_SETTINGS } from "@/lib/settings";
 import { resolveHostMessageTemplate } from "@/lib/hostMessageTemplates";
 import { isQuestionReady } from "@/lib/questionValidation";
 import { getTeamAccent, reconcileTeamTheme } from "@/lib/teamPresentation";
+import { allocateTimelinePoints, type TimelinePlacementOutcome } from "@/lib/timelineScoring";
 
 type ActiveQuestion = Question & { category: string };
 type PlacedTimelineEvent = TimelineEvent & {
   status?: "correct" | "wrong";
+};
+type TimelineScoreResult = {
+  teamId: string;
+  teamName: string;
+  teamColor: string;
+  teamEmoji?: string | null;
+  correctCount: number;
+  sharedMissCount: number;
+  points: number;
 };
 
 export default function GameBoardPage() {
@@ -99,9 +109,8 @@ export default function GameBoardPage() {
   const [timelinePlacedRight, setTimelinePlacedRight] = useState<PlacedTimelineEvent[]>([]);
   const [timelineCenterYear, setTimelineCenterYear] = useState<number>(2000);
   const [timelineTeamIndex, setTimelineTeamIndex] = useState(0);
-  const [timelineLastCorrectTeamId, setTimelineLastCorrectTeamId] = useState<string | null>(null);
-  const [timelineWinnerName, setTimelineWinnerName] = useState<string | null>(null);
-  const [timelineWinnerId, setTimelineWinnerId] = useState<string | null>(null);
+  const [timelineOutcomes, setTimelineOutcomes] = useState<TimelinePlacementOutcome[]>([]);
+  const [timelineScoreResults, setTimelineScoreResults] = useState<TimelineScoreResult[]>([]);
   const [timelineNoWinner, setTimelineNoWinner] = useState(false);
   const [timelinePotential, setTimelinePotential] = useState<number>(0);
   const [showFinalLeaderboard, setShowFinalLeaderboard] = useState(false);
@@ -151,6 +160,14 @@ export default function GameBoardPage() {
   const revealedCategories = useMemo(
     () => new Set(turnState.revealedCategories ?? []),
     [turnState.revealedCategories],
+  );
+  const activeQuestionSpent = activeQuestion
+    ? Boolean(questions.find((question) => question.id === activeQuestion.id)?.answered)
+    : false;
+  const activeCategoryConcealed = Boolean(
+    activeQuestion &&
+    settings.hideCategoryHeadersAtStart !== false &&
+    !revealedCategories.has(activeQuestion.category),
   );
 
   const categories = useMemo(() => {
@@ -416,8 +433,8 @@ export default function GameBoardPage() {
     setTimelinePlacedRight([]);
     setTimelineCenterYear(2000);
     setTimelineTeamIndex(0);
-    setTimelineLastCorrectTeamId(null);
-    setTimelineWinnerName(null);
+    setTimelineOutcomes([]);
+    setTimelineScoreResults([]);
     setTimelineNoWinner(false);
     setTimelinePotential(0);
   };
@@ -513,9 +530,23 @@ export default function GameBoardPage() {
       setTimelinePlacedRight([]);
       setTimelineCenterYear(question.timelineCenterYear ?? 2000);
       setTimelineTeamIndex(0);
-      setTimelineLastCorrectTeamId(null);
-      setTimelineWinnerName(null);
-      setTimelineWinnerId(null);
+      setTimelineOutcomes([]);
+      const timelineTeamOrder = activeTurnOrder.length > 0
+        ? activeTurnOrder
+        : teams.map((team) => team.id);
+      setTimelineScoreResults(timelineTeamOrder.flatMap((teamId) => {
+        const team = teams.find((candidate) => candidate.id === teamId);
+        if (!team) return [];
+        return [{
+          teamId: team.id,
+          teamName: team.name,
+          teamColor: getTeamAccent(team).base,
+          teamEmoji: team.badgeEmoji,
+          correctCount: 0,
+          sharedMissCount: 0,
+          points: 0,
+        }];
+      }));
       setTimelineNoWinner(false);
       setTimelinePotential(question.points ?? 0);
       const boardId =
@@ -1004,8 +1035,34 @@ export default function GameBoardPage() {
       );
     }
 
+    const outcomesForSettlement = currentTeamId
+      ? [...timelineOutcomes, { teamId: currentTeamId, correct }]
+      : timelineOutcomes;
+    const teamOrderForSettlement =
+      activeTurnOrder.length > 0 ? activeTurnOrder : teams.map((team) => team.id);
+    const allocations = allocateTimelinePoints(
+      timelinePotential,
+      activeQuestion.timelineEvents?.length ?? 0,
+      outcomesForSettlement,
+      teamOrderForSettlement,
+    );
+    const results = allocations.flatMap((allocation) => {
+      const team = teams.find((candidate) => candidate.id === allocation.teamId);
+      if (!team) return [];
+      return [{
+        teamId: team.id,
+        teamName: team.name,
+        teamColor: getTeamAccent(team).base,
+        teamEmoji: team.badgeEmoji,
+        correctCount: allocation.correctCount,
+        sharedMissCount: allocation.sharedMissCount,
+        points: allocation.points,
+      }];
+    });
+    setTimelineOutcomes(outcomesForSettlement);
+    setTimelineScoreResults(results);
+
     if (correct) {
-      setTimelineLastCorrectTeamId(currentTeamId || null);
       playSuccessChime();
     } else {
       playDownbeat();
@@ -1017,39 +1074,15 @@ export default function GameBoardPage() {
     }
 
     if (remaining.length === 0) {
-      let winner: string | null = null;
-      if (correct) {
-        winner = currentTeamId;
-      } else if (rotateOnMiss) {
-        const orderList =
-          turnOrder.length > 0 ? activeTurnOrder : teams.map((t) => t.id);
-        if (orderList.length > 0) {
-          const nextIdx =
-            orderList.findIndex((id) => id === currentTeamId) >= 0
-              ? (orderList.findIndex((id) => id === currentTeamId) + 1) % orderList.length
-              : 0;
-          winner = orderList[nextIdx];
-        }
-      } else {
-        winner = currentTeamId;
-      }
-
-      if (winner) {
-        const winnerTeam = teams.find((t) => t.id === winner);
-        setTimelineWinnerName(winnerTeam?.name ?? null);
-        setTimelineWinnerId(winnerTeam?.id ?? null);
-        setTimelineNoWinner(false);
+      setTimelineNoWinner(results.length === 0);
+      results.forEach((result) => {
         applyScoreChange(
-          winner,
-          timelinePotential,
-          `${activeQuestion.category} · Timeline result`,
+          result.teamId,
+          result.points,
+          `${activeQuestion.category} · Timeline · ${result.correctCount} correct · ${result.sharedMissCount} shared misses`,
           activeQuestion.id,
         );
-      } else {
-        setTimelineWinnerName(null);
-        setTimelineWinnerId(null);
-        setTimelineNoWinner(true);
-      }
+      });
       setQuestions((qs) =>
         qs.map((q) => (q.id === activeQuestion.id ? { ...q, answered: true } : q)),
       );
@@ -1072,10 +1105,13 @@ export default function GameBoardPage() {
 
   const renderModal = () => {
     if (!activeQuestion) return null;
+    const modalQuestion = activeCategoryConcealed
+      ? { ...activeQuestion, category: "" }
+      : activeQuestion;
     if (activeQuestion.type === "lyrics") {
       return (
         <LyricsModal
-          question={activeQuestion}
+          question={modalQuestion}
           lyricsRevealed={lyricsRevealed}
           isRed={isRedLyric}
           onRevealLine={handleRevealLine}
@@ -1105,7 +1141,7 @@ export default function GameBoardPage() {
     if (activeQuestion.type === "geoguesser") {
       return (
         <GeoguesserModal
-          question={activeQuestion}
+          question={modalQuestion}
           teams={teams}
           currentTeamName={currentTeam?.name}
           answeringTeamColor={answeringTeamColor}
@@ -1127,7 +1163,7 @@ export default function GameBoardPage() {
     if (activeQuestion.type === "mcq") {
       return (
         <McqModal
-          question={activeQuestion}
+          question={modalQuestion}
           teams={teams}
           currentTeamName={currentTeam?.name}
           currentTeamColor={currentTeamColor}
@@ -1146,7 +1182,7 @@ export default function GameBoardPage() {
     if (activeQuestion.type === "joker" && jokerRound && jokerProgress) {
       return (
         <JokerModal
-          question={activeQuestion}
+          question={modalQuestion}
           teams={teams}
           currentTeamName={currentTeam?.name}
           currentTeamColor={currentTeamColor}
@@ -1169,7 +1205,7 @@ export default function GameBoardPage() {
       const timelineTeamEmoji = timelineTeam?.badgeEmoji || "⭐️";
       return (
         <TimelineModal
-          category={activeQuestion.category}
+          category={modalQuestion.category}
           centerYear={timelineCenterYear}
           currentTeamName={timelineTeam?.name}
           currentTeamColor={timelineTeam ? getTeamAccent(timelineTeam).base : "#c99c4a"}
@@ -1179,14 +1215,7 @@ export default function GameBoardPage() {
           placedRight={timelinePlacedRight ?? []}
           onPlace={handleTimelinePlace}
           disableActions={!timelineTeamId}
-          winnerName={timelineWinnerName}
-          winnerTeamId={timelineWinnerId}
-          winnerTeamColor={
-            timelineWinnerId ? teams.find((t) => t.id === timelineWinnerId)?.accentBase : undefined
-          }
-          winnerTeamEmoji={
-            timelineWinnerId ? teams.find((t) => t.id === timelineWinnerId)?.badgeEmoji : undefined
-          }
+          scoreResults={timelineScoreResults}
           points={activeQuestion.points}
           rotateInfo={activeQuestion.timelineRotateOnMiss ?? true}
           noWinner={timelineNoWinner}
@@ -1200,7 +1229,7 @@ export default function GameBoardPage() {
     if (activeQuestion.type === "audio") {
       return (
         <AudioModal
-          question={activeQuestion}
+          question={modalQuestion}
           currentTeamName={currentTeam?.name}
           currentTeamColor={currentTeamColor}
           currentTeamEmoji={currentTeamEmoji}
@@ -1217,7 +1246,7 @@ export default function GameBoardPage() {
     }
     return (
       <StandardModal
-        question={activeQuestion}
+        question={modalQuestion}
         currentTeamName={currentTeam?.name}
         currentTeamColor={currentTeamColor}
         currentTeamEmoji={currentTeamEmoji}
@@ -1429,7 +1458,8 @@ export default function GameBoardPage() {
 
       {activeQuestion && (
         <div
-          className="game-modal-overlay"
+          className={`game-modal-overlay${activeQuestionSpent ? " is-dismissible" : ""}`}
+          onClick={activeQuestionSpent ? closeModal : undefined}
           style={{
             position: "fixed",
             inset: 0,
@@ -1470,7 +1500,7 @@ export default function GameBoardPage() {
             tabIndex={-1}
             role="dialog"
             aria-modal="true"
-            aria-label={`${activeQuestion.category}, ${activeQuestion.points} point question`}
+            aria-label={`${activeCategoryConcealed ? "Hidden category" : activeQuestion.category}, ${activeQuestion.points} point question`}
             style={{
               position: "relative",
               width: "min(900px, 100%)",

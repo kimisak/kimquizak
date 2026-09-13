@@ -145,7 +145,7 @@ export function JokerModal({
               color: "var(--muted)",
             }}
           >
-            {question.category} · Joker
+            {question.category ? `${question.category} · Joker` : "Joker"}
           </div>
           <div style={{ fontSize: "2rem", fontWeight: 800 }}>
             {question.points} pts

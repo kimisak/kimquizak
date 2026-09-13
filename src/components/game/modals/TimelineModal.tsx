@@ -1,7 +1,9 @@
 'use client';
 
+import { useRef, useState } from "react";
 import type { TimelineEvent } from "@/lib/types";
 import { TeamPill } from "@/components/game/TeamPill";
+import { QuestionModalHeader } from "./QuestionModalHeader";
 
 type PlacedEvent = TimelineEvent & { status?: "correct" | "wrong" };
 
@@ -16,10 +18,15 @@ type Props = {
   placedRight: PlacedEvent[];
   onPlace: (slot: { index: number; onYear?: number | null }) => void;
   disableActions?: boolean;
-  winnerName?: string | null;
-  winnerTeamId?: string | null;
-  winnerTeamColor?: string | null;
-  winnerTeamEmoji?: string | null;
+  scoreResults?: Array<{
+    teamId: string;
+    teamName: string;
+    teamColor: string;
+    teamEmoji?: string | null;
+    correctCount: number;
+    sharedMissCount: number;
+    points: number;
+  }>;
   points?: number;
   rotateInfo?: boolean;
   noWinner?: boolean;
@@ -28,6 +35,12 @@ type Props = {
   potentialScore?: number | null;
   basePoints?: number | null;
 };
+
+function formatYear(year: number | null | undefined) {
+  if (year === null || year === undefined) return "Unknown";
+  if (year < 0) return `${Math.abs(year)} BC`;
+  return `${year}`;
+}
 
 export function TimelineModal({
   category,
@@ -40,10 +53,7 @@ export function TimelineModal({
   placedRight,
   onPlace,
   disableActions,
-  winnerName,
-  winnerTeamId,
-  winnerTeamColor,
-  winnerTeamEmoji,
+  scoreResults = [],
   points,
   rotateInfo,
   noWinner,
@@ -52,15 +62,11 @@ export function TimelineModal({
   potentialScore,
   basePoints,
 }: Props) {
+  const [isDragging, setIsDragging] = useState(false);
+  const dragPreviewRef = useRef<HTMLDivElement | null>(null);
   const activeEvent = queue[0];
-  const formatYear = (year: number | null | undefined) => {
-    if (year === null || year === undefined) return "Unknown";
-    if (year < 0) return `${Math.abs(year)} BC`;
-    return `${year}`;
-  };
-
   const combined = [
-    ...placedLeft.map((e) => ({ ...e, side: "left" as const })),
+    ...placedLeft.map((event) => ({ ...event, side: "left" as const })),
     {
       id: "__center",
       text: "Center",
@@ -69,7 +75,7 @@ export function TimelineModal({
       timelineText: undefined,
       status: undefined,
     },
-    ...placedRight.map((e) => ({ ...e, side: "right" as const })),
+    ...placedRight.map((event) => ({ ...event, side: "right" as const })),
   ].sort((a, b) => (a.year ?? 0) - (b.year ?? 0));
 
   const groups = combined.reduce<
@@ -79,264 +85,184 @@ export function TimelineModal({
       events: typeof combined;
       startIndex: number;
     }>
-  >((acc, ev, idx) => {
-    const last = acc[acc.length - 1];
-    if (last && last.year === ev.year) {
-      last.events.push(ev);
+  >((accumulator, event, index) => {
+    const previous = accumulator[accumulator.length - 1];
+    if (previous && previous.year === event.year) {
+      previous.events.push(event);
     } else {
-      acc.push({ year: ev.year, side: ev.side, events: [ev], startIndex: idx });
+      accumulator.push({ year: event.year, side: event.side, events: [event], startIndex: index });
     }
-    return acc;
+    return accumulator;
   }, []);
 
   const remainingCount = queue.length;
-  const totalCount = combined.length + remainingCount - 1; // minus center pivot
+  const totalCount = combined.length + remainingCount - 1;
   const placedCount = Math.max(0, totalCount - remainingCount);
+  const timelineDensity = groups.length > 12 ? "dense" : groups.length > 6 ? "compact" : "comfortable";
+  const timelineCapacity = totalCount > 12 ? "dense" : totalCount > 6 ? "compact" : "comfortable";
+  const largestYearStack = Math.max(1, ...groups.map((group) => group.events.length));
+  const timelineStack = largestYearStack > 4 ? "deep" : largestYearStack > 1 ? "stacked" : "single";
+  const isComplete = !activeEvent && (scoreResults.length > 0 || Boolean(noWinner));
+  const distributedPoints = scoreResults.reduce((sum, result) => sum + result.points, 0);
+  const instruction = rotateInfo
+    ? "Each event is one share of the point pool. Place it correctly to claim the share; place it wrong and the other teams split it. A miss also passes play to the next team."
+    : "Each event is one share of the point pool. Place it correctly to claim the share; place it wrong and the other teams split it, while the same team continues."
 
-  const renderDropZone = (slot: { index: number; onYear?: number }, size: "thin" | "wide" = "thin") => (
+  const renderDropZone = (slot: { index: number; onYear?: number | null }, key: string) => (
     <div
-      onDragOver={(e) => e.preventDefault()}
-      onDrop={(e) => {
-        e.preventDefault();
+      key={key}
+      className={`timeline-drop-zone${disableActions ? " disabled" : ""}`}
+      role="group"
+      aria-label="Timeline placement slot"
+      onDragOver={(event) => event.preventDefault()}
+      onDrop={(event) => {
+        event.preventDefault();
+        setIsDragging(false);
         if (!disableActions) onPlace(slot);
       }}
-      style={{
-        minWidth: size === "wide" ? "20px" : "12px",
-        minHeight: "60px",
-        border: "1px dashed rgba(255,255,255,0.18)",
-        borderRadius: "10px",
-        display: "grid",
-        placeItems: "center",
-        padding: size === "wide" ? "8px" : "4px",
-        background: "repeating-linear-gradient(135deg, rgba(255,255,255,0.06) 0, rgba(255,255,255,0.06) 8px, rgba(255,255,255,0.03) 8px, rgba(255,255,255,0.03) 16px)",
-      }}
-    />
+    >
+      <span aria-hidden>+</span>
+    </div>
   );
 
   return (
-    <div
-      className="card round-stage round-timeline"
-      style={{
-        padding: "20px",
-        background: "rgba(10, 12, 18, 0.96)",
-        borderColor: "rgba(255,255,255,0.18)",
-        color: "var(--cream)",
-        position: "relative",
-        overflow: "hidden",
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "flex-start",
-          marginBottom: "12px",
-          gap: "10px",
-        }}
-      >
-        <div style={{ display: "grid", gap: "4px" }}>
-          <div
-            style={{
-              fontWeight: 800,
-              textTransform: "uppercase",
-              letterSpacing: "0.05em",
-              color: "var(--muted)",
-            }}
-          >
-            {category ? `${category} · Timeline` : "Timeline"}
-          </div>
-          {(basePoints || points) && (
-            <div style={{ display: "flex", alignItems: "center", gap: "10px", fontWeight: 800, flexWrap: "wrap" }}>
-              <div style={{ fontSize: "2rem" }}>{basePoints ?? points} pts</div>
-              {totalCount > 0 && (
-                <div
-                  style={{
-                    fontSize: "0.95rem",
-                    color: "#e5e7eb",
-                    background: "rgba(255,255,255,0.08)",
-                    border: "1px solid rgba(255,255,255,0.16)",
-                    borderRadius: "999px",
-                    padding: "6px 10px",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "6px",
-                  }}
-                >
-                  <span style={{ fontWeight: 700 }}>Progress</span>
-                  <span style={{ fontWeight: 800 }}>
-                    {placedCount} / {totalCount}
-                  </span>
-                </div>
-              )}
+    <article className={`card round-stage round-timeline question-modal-card timeline-question-modal timeline-density-${timelineDensity} timeline-capacity-${timelineCapacity} timeline-stack-${timelineStack}${isDragging ? " is-dragging" : ""}`}>
+      <QuestionModalHeader
+        category={category || ""}
+        typeLabel="Timeline"
+        points={basePoints ?? points ?? 0}
+        teamName={isComplete ? undefined : currentTeamName}
+        teamColor={currentTeamColor}
+        teamEmoji={currentTeamEmoji}
+        teamLabel="Placing now"
+      />
+
+      <div className="question-modal-scroll timeline-modal-scroll">
+        <section className="timeline-stage">
+          <header className="timeline-intro">
+            <div className="timeline-intro-copy">
+              <span className="question-modal-eyebrow">Build the chronology</span>
+              <h1>{title || "Place each event where it belongs"}</h1>
+              <p>{instruction}</p>
             </div>
-          )}
-          {title ? (
-            <div style={{ fontWeight: 800, fontSize: "1.2rem" }}>{title}</div>
-          ) : null}
-          {winnerName && winnerTeamId ? (
-            <TeamPill label="Winner" name={winnerName} color={winnerTeamColor ?? "#f2c14f"} emoji={winnerTeamEmoji ?? "⭐️"} />
-          ) : currentTeamName ? (
-            <TeamPill label="Guessing" name={currentTeamName} color={currentTeamColor} emoji={currentTeamEmoji} />
-          ) : null}
-        </div>
-      </div>
+            <div className="timeline-progress" aria-label={`${placedCount} of ${totalCount} events placed`}>
+              <strong>{placedCount}<span>/{totalCount}</span></strong>
+              <small>events placed</small>
+              <div aria-hidden><span style={{ width: `${totalCount ? (placedCount / totalCount) * 100 : 0}%` }} /></div>
+            </div>
+          </header>
 
-      <div
-        style={{
-          padding: "10px 12px",
-          borderRadius: "12px",
-          border: "1px solid rgba(255,255,255,0.12)",
-          background: "rgba(255,255,255,0.03)",
-          marginBottom: "12px",
-          color: "var(--muted)",
-          fontSize: "0.95rem",
-          lineHeight: 1.45,
-        }}
-      >
-        {rotateInfo ? (
-          <>
-            Drag events to their correct spot on the timeline. Wrong placements are marked and play passes to the next team without changing the points. When the last event is placed, the current team wins the points only if correct; otherwise the next team claims them.
-          </>
-        ) : (
-          <>
-            Drag events to their correct spot on the timeline. Wrong placements are marked, stay with the same team, and do not change the points. The current team wins the full value if the final event is correct.
-          </>
-        )}
-      </div>
-
-      <div
-        style={{
-          display: "flex",
-          gap: "12px",
-          alignItems: "center",
-          flexWrap: "wrap",
-          justifyContent: "center",
-          marginBottom: "12px",
-        }}
-      >
-        {groups.length > 0 && renderDropZone({ index: 0 }, "wide")}
-        {groups.map((group, groupIdx) => {
-          const hasCorrect = group.events.some((ev) => ev.status === "correct");
-          const hasWrong = group.events.some((ev) => ev.status === "wrong");
-          const status = hasCorrect ? "correct" : hasWrong ? "wrong" : "pending";
-          const textColor =
-            status === "correct"
-              ? "#5eead4"
-              : status === "wrong"
-                ? "#fca5a5"
-                : "var(--foreground)";
-          const borderColor =
-            group.side === "center"
-              ? "rgba(255,255,255,0.3)"
-              : status === "correct"
-                ? "rgba(28,111,77,0.8)"
-                : status === "wrong"
-                  ? "rgba(185,28,28,0.8)"
-                  : "rgba(255,255,255,0.16)";
-
-          const nextIndex = group.startIndex + group.events.length;
-
-          return (
-            <div key={`${group.year}-${groupIdx}`} style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <div
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  if (!disableActions) onPlace({ index: group.startIndex, onYear: group.year ?? undefined });
-                }}
-                className="card"
-                style={{
-                  padding: "10px",
-                  minWidth: "140px",
-                  textAlign: "center",
-                  border: `2px solid ${borderColor}`,
-                  background: group.side === "center"
-                    ? "linear-gradient(135deg, rgba(255,255,255,0.2), rgba(255,255,255,0.08))"
-                    : "rgba(255,255,255,0.06)",
-                  boxShadow: "0 6px 14px rgba(0,0,0,0.25)",
-                }}
-              >
-                <div style={{ fontWeight: 800, color: textColor, textAlign: "center" }}>
-                  {formatYear(group.year)}
+          <section className={`timeline-live-scores${isComplete ? " final" : ""}`} aria-label="Current Timeline scores">
+            <div className="timeline-live-score-label">
+              <small>{isComplete ? "Final distribution" : "Timeline score"}</small>
+              <strong>{distributedPoints}<span>/{potentialScore ?? points ?? 0}</span></strong>
+            </div>
+            <div className="timeline-live-score-teams">
+              {scoreResults.map((result) => (
+                <div className="timeline-live-score" key={result.teamId}>
+                  <TeamPill name={result.teamName} color={result.teamColor} emoji={result.teamEmoji} />
+                  <small>
+                    {result.correctCount} correct
+                    {result.sharedMissCount > 0 ? ` · ${result.sharedMissCount} shared` : ""}
+                  </small>
+                  <strong>{result.points}<span> pts</span></strong>
                 </div>
-                <div style={{ display: "grid", gap: "6px", marginTop: "6px" }}>
-                  {group.events.map((ev, i) => (
-                    <div
-                      key={`${ev.id}-${i}`}
-                      style={{
-                        color: ev.status === "correct" ? "#5eead4" : ev.status === "wrong" ? "#fca5a5" : "var(--muted)",
-                        fontSize: "0.9rem",
-                        lineHeight: 1.4,
-                        borderTop: "1px solid rgba(255,255,255,0.08)",
-                        paddingTop: "4px",
-                      }}
-                    >
-                      {ev.side === "center"
-                        ? centerLabel || ev.timelineText || "Center year"
-                        : ev.timelineText ?? ev.text}
+              ))}
+            </div>
+          </section>
+
+          <div className="timeline-board">
+            <div className="timeline-direction" aria-hidden>
+              <span>Earlier</span>
+              <i />
+              <span>Later</span>
+            </div>
+            <div className="timeline-track-scroll">
+              <div className={`timeline-track density-${timelineDensity}${groups.length === 1 ? " is-starting" : ""}`}>
+                {renderDropZone({ index: 0 }, "timeline-start")}
+                {groups.map((group, groupIndex) => {
+                  const hasCorrect = group.events.some((event) => event.status === "correct");
+                  const hasWrong = group.events.some((event) => event.status === "wrong");
+                  const status = hasCorrect ? "correct" : hasWrong ? "wrong" : "pending";
+                  const nextIndex = group.startIndex + group.events.length;
+
+                  return (
+                    <div className="timeline-track-step" key={`${group.year}-${groupIndex}`}>
+                      <div
+                        className={`timeline-year-card side-${group.side} status-${status}`}
+                        onDragOver={(event) => event.preventDefault()}
+                        onDrop={(event) => {
+                          event.preventDefault();
+                          setIsDragging(false);
+                          if (!disableActions) onPlace({ index: group.startIndex, onYear: group.year });
+                        }}
+                      >
+                        <strong className="timeline-year">{formatYear(group.year)}</strong>
+                        <div className="timeline-year-events">
+                          {group.events.map((event, eventIndex) => (
+                            <div className={`timeline-year-event${event.status ? ` ${event.status}` : ""}`} key={`${event.id}-${eventIndex}`}>
+                              {event.side === "center"
+                                ? centerLabel || event.timelineText || "Center year"
+                                : event.timelineText ?? event.text}
+                              {event.status && <small>{event.status === "correct" ? "Correct" : "Wrong"}</small>}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      {renderDropZone({ index: nextIndex }, `timeline-slot-${groupIndex}`)}
                     </div>
-                  ))}
-                </div>
+                  );
+                })}
               </div>
-              {groupIdx === groups.length - 1
-                ? renderDropZone({ index: nextIndex }, "wide")
-                : renderDropZone({ index: nextIndex }, "wide")}
             </div>
-          );
-        })}
+          </div>
+        </section>
       </div>
 
-      {activeEvent ? (
-        <div
-      className="timeline-active-event"
-      draggable={!disableActions}
-      onDragStart={(e) => e.dataTransfer.setData("text/plain", activeEvent.id)}
-      style={{
-        border: "1px solid rgba(234,208,141,0.5)",
-        borderRadius: "12px",
-        padding: "12px",
-        background: "linear-gradient(135deg, rgba(77,29,38,0.92), rgba(24,58,44,0.92))",
-        boxShadow: "0 8px 16px rgba(0,0,0,0.3)",
-        color: "#fff8e8",
-        cursor: disableActions ? "not-allowed" : "grab",
-      }}
-    >
-      <div className="timeline-active-event-label" style={{ fontWeight: 800, marginBottom: "6px" }}>Place this event</div>
-      <div className="timeline-active-event-text" style={{ fontSize: "1.1rem" }}>{activeEvent.text || "(No description)"}</div>
-    </div>
-  ) : (
-        <div
-          style={{
-            padding: "12px",
-            borderRadius: "12px",
-            border: "1px solid rgba(255,255,255,0.12)",
-            background: "rgba(255,255,255,0.04)",
-            color: "var(--muted)",
-          }}
-        >
-          {winnerName ? (
-            <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-              <span>Congrats,</span>
-              {winnerTeamId ? (
-                <TeamPill
-                  name={winnerName}
-                  color={winnerTeamColor ?? "#f2c14f"}
-                  emoji={winnerTeamEmoji ?? "⭐️"}
-                />
-              ) : (
-                <strong style={{ color: "#f2c14f" }}>{winnerName}</strong>
-              )}
-              <span>
-                earned <strong style={{ color: "#f2c14f" }}>{potentialScore ?? points ?? 0}</strong> points!
-              </span>
+      <footer className={`timeline-event-dock${activeEvent ? " has-event" : " complete"}`}>
+        {activeEvent ? (
+          <div
+            className="timeline-active-event"
+            draggable={!disableActions}
+            onDragStart={(event) => {
+              event.dataTransfer.setData("text/plain", activeEvent.id);
+              event.dataTransfer.effectAllowed = "move";
+              if (dragPreviewRef.current) {
+                event.dataTransfer.setDragImage(dragPreviewRef.current, 24, 24);
+              }
+              setIsDragging(true);
+            }}
+            onDragEnd={() => setIsDragging(false)}
+          >
+            <span className="timeline-event-grip" aria-hidden>⠿</span>
+            <div>
+              <small>Place this event</small>
+              <strong>{activeEvent.text || "(No description)"}</strong>
             </div>
-          ) : noWinner ? (
-            <span style={{ color: "#f2c14f", fontWeight: 700 }}>No team earned points.</span>
-          ) : (
-            "No more events to place."
-          )}
+            <span className="timeline-drag-cue">Drag to the timeline <b aria-hidden>↑</b></span>
+          </div>
+        ) : scoreResults.length > 0 ? (
+          <div className="timeline-result winner">
+            <span aria-hidden>✦</span>
+            <strong>Timeline complete</strong>
+            <b>{distributedPoints} points distributed</b>
+          </div>
+        ) : noWinner ? (
+          <div className="timeline-result no-winner"><span aria-hidden>◇</span><strong>Timeline complete · no points awarded</strong></div>
+        ) : (
+          <div className="timeline-result"><span aria-hidden>✓</span><strong>All events placed</strong></div>
+        )}
+      </footer>
+
+      {activeEvent && (
+        <div ref={dragPreviewRef} className="timeline-drag-preview" aria-hidden>
+          <span>⠿</span>
+          <div>
+            <small>Timeline event</small>
+            <strong>{activeEvent.text || "(No description)"}</strong>
+          </div>
         </div>
       )}
-    </div>
+    </article>
   );
 }

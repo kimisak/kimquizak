@@ -1,9 +1,10 @@
 'use client';
 
+import type { CSSProperties } from "react";
 import type { Question, Team } from "@/lib/types";
 import { TeamPill } from "@/components/game/TeamPill";
 import { ExpandableImage } from "./ExpandableImage";
-import { useMemo } from "react";
+import { QuestionModalHeader } from "./QuestionModalHeader";
 
 type Props = {
   question: Question;
@@ -21,6 +22,21 @@ type Props = {
   onSelect: (idx: number) => void;
 };
 
+const OPTION_PALETTE = [
+  { base: "#a83b4c", glow: "#f5c3c7" },
+  { base: "#34795b", glow: "#c8ead3" },
+  { base: "#4e7199", glow: "#d6e9f8" },
+  { base: "#b38132", glow: "#f7e1a8" },
+];
+
+function getPromptDensity(value?: string | null) {
+  const length = (value || "").trim().length;
+  if (length > 240) return "text-density-xlong";
+  if (length > 145) return "text-density-long";
+  if (length > 80) return "text-density-medium";
+  return "text-density-short";
+}
+
 export function McqModal({
   question,
   currentTeamName,
@@ -36,238 +52,124 @@ export function McqModal({
   onSelect,
 }: Props) {
   const rawOptions = question.mcqOptions?.slice(0, 4) ?? [];
-  const hasFour =
-    rawOptions.length >= 4 && rawOptions.slice(2).some((o) => (o ?? "").trim() !== "");
-  const optionCount = hasFour ? 4 : Math.min(2, Math.max(2, rawOptions.length || 2));
-  const options = useMemo(() => {
-    const base = rawOptions.slice(0, optionCount);
-    while (base.length < optionCount) base.push("");
-    return base;
-  }, [rawOptions, optionCount]);
-  const palette = ["#d94444", "#2c9b61", "#8a5adf", "#f2c14f"];
-  const optionColors = useMemo(() => {
-    // Keep deterministic order to avoid impure randomness during render
-    return palette.slice(0, options.length);
-  }, [palette, options.length]);
-
-  const hasAnswerImage = Boolean(question.answerImageData);
-  const hasQuestionImage = Boolean(question.imageData);
-  const hasAnyImage = hasAnswerImage || hasQuestionImage;
-  const flipActive = resolved && hasAnswerImage;
-  const frontImage = hasQuestionImage
-    ? { src: question.imageData, alt: question.imageName || "Question image" }
-    : null;
-  const backImage = hasAnswerImage
-    ? { src: question.answerImageData, alt: question.answerImageName || "Answer image" }
-    : frontImage;
-  const blurFront = hasAnswerImage && !hasQuestionImage;
+  const hasFour = rawOptions.length >= 4 && rawOptions.slice(2).some((option) => option.trim());
+  const optionCount = hasFour ? 4 : 2;
+  const options = Array.from({ length: optionCount }, (_, index) => rawOptions[index] ?? "");
+  const teamName = answeringTeamName || currentTeamName;
+  const teamColor = answeringTeamName ? answeringTeamColor : currentTeamColor;
+  const teamEmoji = answeringTeamName ? answeringTeamEmoji : currentTeamEmoji;
+  const displayedImage = resolved
+    ? question.answerImageData
+      ? { src: question.answerImageData, alt: question.answerImageName || "Answer image", label: "Answer image" }
+      : question.imageData
+        ? { src: question.imageData, alt: question.imageName || "Question image", label: "Question image" }
+        : null
+    : question.imageData
+      ? { src: question.imageData, alt: question.imageName || "Question image", label: "Question image" }
+      : null;
+  const remainingOptions = options.length - eliminated.length;
+  const correctAnswer = options[correctIndex] || "Correct option";
 
   return (
-    <div
-      className="card round-stage round-mcq"
-      style={{
-        padding: "22px",
-        background: "rgba(10, 12, 18, 0.96)",
-        borderColor: "rgba(255,255,255,0.18)",
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: "12px",
-        }}
-      >
-        <div>
-          <div
-            style={{
-              fontWeight: 800,
-              textTransform: "uppercase",
-              letterSpacing: "0.05em",
-              color: "var(--muted)",
-            }}
-          >
-            {question.category} · Multiple choice
-          </div>
-          <div style={{ fontSize: "2rem", fontWeight: 800 }}>
-            {question.points} pts
-          </div>
-          {answeringTeamName && !resolved && (
-            <TeamPill label="Answering" name={answeringTeamName} color={answeringTeamColor} emoji={answeringTeamEmoji} />
-          )}
-          {currentTeamName && !answeringTeamName && (
-            <TeamPill label="Current" name={currentTeamName} color={currentTeamColor} emoji={currentTeamEmoji} />
-          )}
-        </div>
-      </div>
-      {question.prompt && (
-        <div style={{ fontSize: "1.35rem", lineHeight: 1.45, marginBottom: "16px" }}>
-          {question.prompt}
-        </div>
-      )}
-      {hasAnyImage && frontImage && (
-        <div style={{ perspective: "1200px", marginBottom: "14px" }}>
-          <div
-            style={{
-              position: "relative",
-              height: "280px",
-              transformStyle: "preserve-3d",
-              transition: "transform 0.65s ease",
-              transform: flipActive ? "rotateY(180deg)" : "rotateY(0deg)",
-            }}
-          >
-            <div
-              style={{
-                position: "absolute",
-                inset: 0,
-                backfaceVisibility: "hidden",
-                borderRadius: "12px",
-                overflow: "hidden",
-                border: "1px solid rgba(255,255,255,0.1)",
-                filter: blurFront ? "blur(14px) brightness(0.5)" : "none",
-              }}
-              >
-                <ExpandableImage
-                  src={frontImage.src!}
-                  alt={frontImage.alt || "Question image"}
-                  label="Question image"
-                  className="question-image-fill"
-                />
-              {blurFront && (
-                <div
-                  style={{
-                    position: "absolute",
-                    inset: 0,
-                    display: "grid",
-                    placeItems: "center",
-                    background: "linear-gradient(135deg, rgba(0,0,0,0.45), rgba(0,0,0,0.65))",
-                    color: "#e2e8f0",
-                    fontWeight: 700,
-                    letterSpacing: "0.02em",
-                    textTransform: "uppercase",
-                  }}
-                >
-                  Answer hidden
-                </div>
-              )}
+    <article className={`card round-stage round-mcq question-modal-card mcq-question-modal${resolved ? " answer-visible" : ""}`}>
+      <QuestionModalHeader
+        category={question.category}
+        typeLabel="Multiple choice"
+        points={question.points}
+        teamName={teamName}
+        teamColor={teamColor}
+        teamEmoji={teamEmoji}
+        teamLabel={resolved ? "Answered by" : answeringTeamName ? "Answering" : "Current team"}
+      />
+
+      <div className="question-modal-scroll mcq-modal-scroll">
+        <section className={`mcq-stage${displayedImage ? " has-image" : ""}`}>
+          <div className="mcq-main">
+            <header className="mcq-prompt">
+              <span className="question-modal-eyebrow">{resolved ? "Correct answer" : "Choose one"}</span>
+              <h1 className={getPromptDensity(question.prompt)}>{question.prompt || "No question entered yet."}</h1>
+            </header>
+
+            <div className={`mcq-options option-count-${options.length}`}>
+              {options.map((option, index) => {
+                const eliminatedOption = eliminated.includes(index);
+                const correctOption = resolved && index === correctIndex;
+                const mutedOption = resolved && index !== correctIndex;
+                const palette = OPTION_PALETTE[index];
+                const stateClass = correctOption
+                  ? " is-correct"
+                  : eliminatedOption
+                    ? " is-eliminated"
+                    : mutedOption
+                      ? " is-muted"
+                      : "";
+
+                return (
+                  <button
+                    className={`mcq-option${stateClass}`}
+                    key={index}
+                    type="button"
+                    disabled={eliminatedOption || resolved}
+                    onClick={() => onSelect(index)}
+                    style={{
+                      "--mcq-option-base": palette.base,
+                      "--mcq-option-glow": palette.glow,
+                    } as CSSProperties}
+                  >
+                    <span className="mcq-option-letter">{String.fromCharCode(65 + index)}</span>
+                    <strong>{option || "(empty option)"}</strong>
+                    {eliminatedOption && !correctOption && <small>Passed</small>}
+                    {correctOption && <small>Correct</small>}
+                  </button>
+                );
+              })}
             </div>
-            {backImage && (
-              <div
-                style={{
-                  position: "absolute",
-                  inset: 0,
-                  backfaceVisibility: "hidden",
-                  transform: "rotateY(180deg)",
-                  borderRadius: "12px",
-                  overflow: "hidden",
-                  border: "1px solid rgba(255,255,255,0.1)",
-                }}
-              >
-                <ExpandableImage
-                  src={backImage.src!}
-                  alt={backImage.alt || "Answer image"}
-                  label="Answer image"
-                  className="question-image-fill"
-                />
+          </div>
+
+          {displayedImage && (
+            <ExpandableImage
+              src={displayedImage.src}
+              alt={displayedImage.alt}
+              label={displayedImage.label}
+              presentation="fluid"
+              className="mcq-media"
+            />
+          )}
+        </section>
+      </div>
+
+      <footer className={`question-modal-actions mcq-actions${resolved ? " resolved" : ""}`}>
+        {!resolved ? (
+          <>
+            <div className="mcq-rule" aria-live="polite">
+              <span aria-hidden>✦</span>
+              <p>
+                <strong>Choose carefully.</strong> A wrong option disappears and play passes to the next team without deducting points.
+              </p>
+            </div>
+            <div className="mcq-remaining">
+              <strong>{remainingOptions}</strong>
+              <small>{remainingOptions === 1 ? "option remains" : "options remain"}</small>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="mcq-result">
+              <span aria-hidden>✓</span>
+              <div>
+                <small>Answer locked</small>
+                <strong>{String.fromCharCode(65 + correctIndex)} · {correctAnswer}</strong>
+              </div>
+            </div>
+            {resolvedInfo && (
+              <div className="mcq-result-team">
+                <TeamPill name={resolvedInfo.teamName} color={answeringTeamColor} emoji={answeringTeamEmoji} />
+                <strong>+{resolvedInfo.points} pts</strong>
               </div>
             )}
-          </div>
-        </div>
-      )}
-      <div
-        style={{
-          display: "grid",
-          gap: "12px",
-          gridTemplateColumns: options.length === 4 ? "repeat(2, minmax(0,1fr))" : "1fr",
-        }}
-      >
-        {options.map((opt, idx) => {
-          const disabled = eliminated.includes(idx);
-          const isCorrect = resolved && idx === correctIndex;
-          const bg = optionColors[idx] ?? "rgba(255,255,255,0.08)";
-          const isResolvedWrong = resolved && idx !== correctIndex;
-          return (
-            <button
-              key={idx}
-              className="button secondary"
-              disabled={disabled || resolved}
-              onClick={() => onSelect(idx)}
-              style={{
-                justifyContent: "flex-start",
-                alignItems: "stretch",
-                opacity: disabled ? 0.72 : isResolvedWrong ? 0.45 : 1,
-                cursor: disabled || resolved ? "not-allowed" : "pointer",
-                fontSize: "1.2rem",
-                gap: "12px",
-                padding: 0,
-                background: disabled ? "rgba(127,29,29,0.3)" : "rgba(255,255,255,0.06)",
-                border: `1px solid ${disabled ? "rgba(248,113,113,0.7)" : bg}`,
-                boxShadow: disabled ? "none" : "0 10px 24px rgba(0,0,0,0.35)",
-                color: "#fdfdfd",
-                overflow: "hidden",
-                outline: isCorrect ? `2px solid #6ee7b7` : undefined,
-                minHeight: "82px",
-                filter: isResolvedWrong ? "grayscale(0.15)" : "none",
-              }}
-            >
-              <span
-                style={{
-                  display: "grid",
-                  placeItems: "center",
-                  minWidth: "56px",
-                  textAlign: "center",
-                  borderRadius: "0",
-                  padding: "0 10px",
-                  background: bg,
-                  borderRight: `1px solid rgba(0,0,0,0.2)`,
-                  fontWeight: 800,
-                  color: "#0b0d13",
-                }}
-              >
-                {String.fromCharCode(65 + idx)}
-              </span>
-              <span
-                style={{
-                  padding: "16px 18px",
-                  flex: 1,
-                  textAlign: "left",
-                  background: "rgba(255,255,255,0.04)",
-                  lineHeight: 1.4,
-                }}
-              >
-                {opt || "(empty option)"}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-      <div style={{ color: "var(--muted)", marginTop: "12px", fontSize: "0.95rem" }}>
-        {resolved ? (
-          <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-            {resolvedInfo && (
-              <TeamPill
-                label={resolvedInfo.points >= 0 ? "Correct" : "Wrong"}
-                name={resolvedInfo.teamName}
-                color={resolvedInfo.points >= 0 ? "#6ee7b7" : "#f87171"}
-                emoji={answeringTeamEmoji}
-              />
-            )}
-            <span
-              style={{
-                fontWeight: 700,
-                color: resolvedInfo && resolvedInfo.points < 0 ? "#f87171" : "#6ee7b7",
-              }}
-            >
-              {resolvedInfo
-                ? `${resolvedInfo.points >= 0 ? "+" : ""}${resolvedInfo.points} pts`
-                : "Close when ready."}
-            </span>
-          </div>
-        ) : (
-          "A wrong choice is removed and play passes to the next team. No points are deducted."
+          </>
         )}
-      </div>
-    </div>
+      </footer>
+    </article>
   );
 }

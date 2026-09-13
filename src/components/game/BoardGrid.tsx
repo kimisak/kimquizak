@@ -69,39 +69,57 @@ export function BoardGrid({
           );
           const ready = isQuestionReady(q);
           const disabled = q?.answered || !ready;
-          const result = q?.answered
-            ? scoreHistory.find((entry) => entry.questionId === q.id)
-              ?? scoreHistory.find((entry) => entry.reason.startsWith(`${category} · ${points}`))
+          const matchingResults = q?.answered
+            ? scoreHistory.filter((entry) => entry.questionId === q.id)
+            : [];
+          const legacyResult = q?.answered && matchingResults.length === 0
+            ? scoreHistory.find((entry) => entry.reason.startsWith(`${category} · ${points}`))
             : undefined;
-          const resultTeam = result
-            ? teams.find((team) => team.id === result.teamId)
-            : undefined;
-          const resultAccent = resultTeam ? getTeamAccent(resultTeam) : undefined;
+          const resultByTeam = [...matchingResults, ...(legacyResult ? [legacyResult] : [])]
+            .reduce<Map<string, ScoreTransaction>>((results, entry) => {
+              const existing = results.get(entry.teamId);
+              results.set(entry.teamId, existing
+                ? { ...existing, delta: existing.delta + entry.delta }
+                : entry);
+              return results;
+            }, new Map());
+          const results = Array.from(resultByTeam.values())
+            .filter((entry) => entry.delta !== 0)
+            .sort((first, second) => second.delta - first.delta);
           return (
             <button
               key={`${category}-${points}`}
-              className={`quiz-board-tile${q?.answered ? " played" : ""}${result ? " scored" : ""}${!ready ? " needs-setup" : ""}`}
+              className={`quiz-board-tile${q?.answered ? " played" : ""}${results.length ? " scored" : ""}${results.length > 1 ? " multi-score" : ""}${!ready ? " needs-setup" : ""}`}
               disabled={disabled}
-              aria-label={`${category}, ${points} points${q?.answered ? result ? `, played, ${result.teamName} ${result.delta >= 0 ? "gained" : "lost"} ${Math.abs(result.delta)} points` : ", played" : !ready ? ", needs setup" : ""}`}
+              aria-label={`${category}, ${points} points${q?.answered ? results.length ? `, played, ${results.map((result) => `${result.teamName} ${result.delta >= 0 ? "gained" : "lost"} ${Math.abs(result.delta)} points`).join(", ")}` : ", played" : !ready ? ", needs setup" : ""}`}
               onClick={() => ready && onOpen(q)}
-              style={resultAccent ? {
-                "--result-color-on-dark": resultAccent.onDark,
-                "--result-color-on-light": resultAccent.onLight,
-                "--result-glow": resultAccent.glow,
-              } as CSSProperties : undefined}
             >
               {q?.answered ? (
-                result ? (
-                  <span className="tile-result">
-                    <strong
-                      className="tile-result-team"
-                    >
-                      {resultTeam && <span aria-hidden="true">{getTeamMarker(resultTeam)}</span>}
-                      <span>{result.teamName}</span>
-                    </strong>
-                    <span className={result.delta >= 0 ? "tile-result-score won" : "tile-result-score lost"}>
-                      {result.delta >= 0 ? "+" : ""}{result.delta}
-                    </span>
+                results.length ? (
+                  <span className={`tile-result${results.length > 1 ? " tile-result-list" : ""}`}>
+                    {results.map((result) => {
+                      const resultTeam = teams.find((team) => team.id === result.teamId);
+                      const resultAccent = resultTeam ? getTeamAccent(resultTeam) : undefined;
+                      return (
+                        <span
+                          className="tile-result-entry"
+                          key={result.teamId}
+                          style={resultAccent ? {
+                            "--result-color-on-dark": resultAccent.onDark,
+                            "--result-color-on-light": resultAccent.onLight,
+                            "--result-glow": resultAccent.glow,
+                          } as CSSProperties : undefined}
+                        >
+                          <strong className="tile-result-team">
+                            {resultTeam && <span aria-hidden="true">{getTeamMarker(resultTeam)}</span>}
+                            <span>{result.teamName}</span>
+                          </strong>
+                          <span className={result.delta >= 0 ? "tile-result-score won" : "tile-result-score lost"}>
+                            {result.delta >= 0 ? "+" : ""}{result.delta}
+                          </span>
+                        </span>
+                      );
+                    })}
                   </span>
                 ) : (
                   <span style={{ fontSize: "0.8rem", textTransform: "uppercase", letterSpacing: "0.06em" }}>Played</span>

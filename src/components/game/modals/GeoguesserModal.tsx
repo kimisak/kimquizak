@@ -94,7 +94,7 @@ export function GeoguesserModal({
                   color: "var(--muted)",
                 }}
               >
-                {question.category} · Geoguesser
+                {question.category ? `${question.category} · Geoguesser` : "Geoguesser"}
               </div>
               <div style={{ fontSize: "2rem", fontWeight: 800 }}>
                 {potentialPoints ?? question.points} pts available
@@ -238,7 +238,7 @@ export function GeoguesserModal({
               fontWeight: 800,
             }}
           >
-              {question.category} · Geoguesser
+              {question.category ? `${question.category} · Geoguesser` : "Geoguesser"}
             </div>
             <div style={{ fontWeight: 800, fontSize: "2rem", marginTop: "6px" }}>
               {question.points} pts
