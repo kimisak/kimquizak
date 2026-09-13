@@ -8,9 +8,10 @@ import type { ResolvedHostMessage, Team } from "@/lib/types";
 type Selection = NonNullable<ResolvedHostMessage["randomSelections"]>[number];
 
 type WheelCandidate = {
+  id: string;
   value: string;
-  team: Team;
-  teamId: string;
+  team?: Team;
+  teamId?: string;
   playerId?: string;
 };
 
@@ -32,7 +33,23 @@ function modulo(value: number, divisor: number) {
   return ((value % divisor) + divisor) % divisor;
 }
 
-function candidatePool(kind: Selection["kind"], teams: Team[], previousSelections: Selection[]) {
+const NUMBER_WHEEL_COLORS = [
+  { base: "#b72842", glow: "#fff0ad" },
+  { base: "#176b58", glow: "#c9f2db" },
+  { base: "#426fa3", glow: "#d8efff" },
+  { base: "#7651a7", glow: "#eedcff" },
+];
+
+function candidateVisual(candidate: WheelCandidate, index: number) {
+  if (candidate.team) {
+    const accent = getTeamAccent(candidate.team);
+    return { base: accent.base, glow: accent.glow, marker: getTeamMarker(candidate.team) };
+  }
+  const color = NUMBER_WHEEL_COLORS[index % NUMBER_WHEEL_COLORS.length];
+  return { ...color, marker: null };
+}
+
+function candidatePool(selection: Selection, teams: Team[], previousSelections: Selection[]) {
   const usedTeamIds = new Set(previousSelections
     .filter((selection) => selection.kind === "team" && selection.physicsVersion === WHEEL_PHYSICS_VERSION)
     .map((selection) => selection.teamId));
@@ -40,9 +57,17 @@ function candidatePool(kind: Selection["kind"], teams: Team[], previousSelection
     .filter((selection) => selection.kind === "player" && selection.physicsVersion === WHEEL_PHYSICS_VERSION)
     .map((selection) => selection.playerId));
 
-  if (kind === "team") {
+  if (selection.kind === "number") {
+    return selection.candidates.map((value, index): WheelCandidate => ({
+      id: `number-${index}-${value}`,
+      value,
+    }));
+  }
+
+  if (selection.kind === "team") {
     return teams
       .map((team, index): WheelCandidate => ({
+        id: team.id,
         value: team.name.trim() || `Team ${index + 1}`,
         team,
         teamId: team.id,
@@ -53,6 +78,7 @@ function candidatePool(kind: Selection["kind"], teams: Team[], previousSelection
   return teams.flatMap((team) => team.players
     .filter((player) => player.name.trim() && !usedPlayerIds.has(player.id))
     .map((player): WheelCandidate => ({
+      id: player.id,
       value: player.name.trim(),
       team,
       teamId: team.id,
@@ -94,7 +120,7 @@ function PhysicsWheelReveal({
   const [spinHint, setSpinHint] = useState("Drag & release");
   const candidateCount = candidates.length;
   const sliceRadians = TWO_PI / candidateCount;
-  const segmentColors = candidates.map(({ team }) => getTeamAccent(team).base);
+  const segmentColors = candidates.map((candidate, index) => candidateVisual(candidate, index).base);
   const wheelGradient = segmentColors.map((color, index) => {
     const start = index * 360 / candidateCount;
     const end = (index + 1) * 360 / candidateCount;
@@ -373,19 +399,19 @@ function PhysicsWheelReveal({
 
   const densityClass = candidateCount > 12 ? " very-crowded" : candidateCount > 8 ? " crowded" : "";
   const activeCandidate = candidates[activeCandidateIndex] ?? candidates[0];
-  const activeAccent = getTeamAccent(activeCandidate.team);
+  const activeVisual = candidateVisual(activeCandidate, activeCandidateIndex);
 
   return (
     <div className={`random-wheel-stage${landedCandidate ? " settled" : ""}${densityClass}`}>
       <div className="random-wheel-live-readout" aria-hidden>
         <span
-          key={activeCandidate.playerId ?? activeCandidate.teamId}
+          key={activeCandidate.id}
           style={{
-            "--readout-base": activeAccent.base,
-            "--readout-color": activeAccent.glow,
+            "--readout-base": activeVisual.base,
+            "--readout-color": activeVisual.glow,
           } as CSSProperties}
         >
-          <b>{getTeamMarker(activeCandidate.team)}</b>
+          {activeVisual.marker && <b>{activeVisual.marker}</b>}
           <strong>{activeCandidate.value}</strong>
         </span>
       </div>
@@ -417,20 +443,20 @@ function PhysicsWheelReveal({
           aria-label={`Spinning wheel with ${candidates.map(({ value }) => value).join(", ")}`}
         >
           {candidates.map((candidate, index) => {
-            const accent = getTeamAccent(candidate.team);
+            const visual = candidateVisual(candidate, index);
             return (
               <span
                 className="random-wheel-label-spoke"
-                key={candidate.playerId ?? candidate.teamId}
+                key={candidate.id}
                 style={{
                   "--segment-angle": `${(index + 0.5) * 360 / candidateCount}deg`,
                   "--label-counter-angle": `${-(index + 0.5) * 360 / candidateCount}deg`,
-                  "--segment-color": accent.glow,
+                  "--segment-color": visual.glow,
                 } as CSSProperties}
               >
                 <span className="random-wheel-label" title={candidate.value}>
                   <span className="random-wheel-label-content">
-                    <span aria-hidden>{getTeamMarker(candidate.team)}</span>
+                    {visual.marker && <span aria-hidden>{visual.marker}</span>}
                     <strong>{candidate.value}</strong>
                   </span>
                 </span>
@@ -440,7 +466,7 @@ function PhysicsWheelReveal({
           {candidates.map((candidate, index) => (
             <span
               className="random-wheel-peg-spoke"
-              key={`peg-${candidate.playerId ?? candidate.teamId}`}
+              key={`peg-${candidate.id}`}
               style={{ "--segment-angle": `${index * 360 / candidateCount}deg` } as CSSProperties}
               aria-hidden
             >
@@ -480,12 +506,12 @@ export function RandomRevealSequence({
   const selection = liveSelections[selectionIndex];
   const candidates = useMemo(
     () => selection
-      ? candidatePool(selection.kind, teams, liveSelections.slice(0, selectionIndex))
+      ? candidatePool(selection, teams, liveSelections.slice(0, selectionIndex))
       : [],
     [liveSelections, selection, selectionIndex, teams],
   );
   const candidateSignature = candidates.map((candidate) => (
-    candidate.playerId ?? candidate.teamId
+    candidate.id
   )).join("|");
 
   const patchSelection = (updates: Partial<Selection>) => {
@@ -510,7 +536,13 @@ export function RandomRevealSequence({
     <section className="host-message-stage host-random-reveal-stage" aria-live="polite">
       <span className="host-message-kicker">Random selection</span>
       <span className="host-message-progress">Selection {selectionIndex + 1} of {liveSelections.length}</span>
-      <h1 id="host-message-title">{selection.kind === "team" ? "Spin for a team" : "Spin for a player"}</h1>
+      <h1 id="host-message-title">
+        {selection.kind === "team"
+          ? "Spin for a team"
+          : selection.kind === "player"
+            ? "Spin for a player"
+            : "Spin for a number"}
+      </h1>
       <PhysicsWheelReveal
         key={`${selectionIndex}-${candidateSignature}`}
         selection={selection}

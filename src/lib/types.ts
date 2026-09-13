@@ -77,19 +77,21 @@ export type ResolvedHostMessage = {
   text: string;
   variables: Record<string, string>;
   randomSelections?: Array<{
-    kind: "team" | "player";
+    kind: "team" | "player" | "number";
     value: string;
     candidates: string[];
     selectedIndex: number;
     teamId?: string;
     playerId?: string;
+    rangeStart?: number;
+    rangeEnd?: number;
     launchX?: number;
     launchVelocityX?: number;
     wheelInitialAngularVelocity?: number;
     wheelAngularDeceleration?: number;
     wheelStartAngle?: number;
     candidateIds?: Array<{
-      teamId: string;
+      teamId?: string;
       playerId?: string;
     }>;
     physicsVersion?: number;

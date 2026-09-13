@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { HostMessageRichText } from "@/components/game/HostMessageRichText";
 import { RandomRevealSequence } from "@/components/game/RandomRevealSequence";
 import type { HostMessage } from "@/lib/settings";
@@ -26,39 +26,59 @@ function FittedHostMessage({
   teams: Team[];
 }) {
   const copyRef = useRef<HTMLParagraphElement>(null);
+  const innerRef = useRef<HTMLSpanElement>(null);
+  const characterCount = resolution.text.trim().length;
+  const lineCount = resolution.text.split("\n").length;
+  const sizeClass = characterCount <= 36 && lineCount <= 2
+    ? " host-message-copy-hero"
+    : characterCount <= 90 && lineCount <= 3
+      ? " host-message-copy-large"
+      : characterCount <= 180
+        ? " host-message-copy-medium"
+        : " host-message-copy-long";
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const copy = copyRef.current;
-    if (!copy) return;
+    const inner = innerRef.current;
+    if (!copy || !inner) return;
     let animationFrame = 0;
 
     const fit = () => {
       copy.style.removeProperty("font-size");
-      let fontSize = Number.parseFloat(window.getComputedStyle(copy).fontSize);
-      while (
-        fontSize > 16
-        && (copy.scrollWidth > copy.clientWidth + 1 || copy.scrollHeight > copy.clientHeight + 1)
-      ) {
-        fontSize -= 1;
-        copy.style.fontSize = `${fontSize}px`;
+      const maximum = Number.parseFloat(window.getComputedStyle(copy).fontSize);
+      let lower = 28;
+      let upper = Math.max(lower, maximum);
+
+      for (let iteration = 0; iteration < 9; iteration += 1) {
+        const candidate = (lower + upper) / 2;
+        copy.style.fontSize = `${candidate}px`;
+        const fits = inner.scrollHeight <= copy.clientHeight + 2
+          && inner.scrollWidth <= copy.clientWidth + 2;
+        if (fits) lower = candidate;
+        else upper = candidate;
       }
+      copy.style.fontSize = `${lower}px`;
     };
     const scheduleFit = () => {
       window.cancelAnimationFrame(animationFrame);
       animationFrame = window.requestAnimationFrame(fit);
     };
-
+    const resizeObserver = new ResizeObserver(scheduleFit);
+    resizeObserver.observe(copy);
     scheduleFit();
-    window.addEventListener("resize", scheduleFit);
+    void document.fonts?.ready.then(scheduleFit);
+
     return () => {
-      window.removeEventListener("resize", scheduleFit);
+      resizeObserver.disconnect();
       window.cancelAnimationFrame(animationFrame);
     };
-  }, [message.text, resolution, teams]);
+  }, [message.text, resolution.text, teams]);
 
   return (
-    <p id="host-message-copy" ref={copyRef}>
-      <HostMessageRichText template={message.text} resolution={resolution} teams={teams} />
+    <p id="host-message-copy" className={`host-message-copy${sizeClass}`} ref={copyRef}>
+      <span className="host-message-copy-inner" ref={innerRef}>
+        <HostMessageRichText template={message.text} resolution={resolution} teams={teams} />
+      </span>
     </p>
   );
 }
@@ -76,11 +96,15 @@ export function HostMessageOverlay({
   const [liveResolution, setLiveResolution] = useState(resolution);
   const liveResolutionRef = useRef(resolution);
   const randomSelections = liveResolution.randomSelections ?? [];
+  const wheelCanRepresentEverySelection = randomSelections.every(
+    (selection) => selection.kind !== "number" || selection.candidates.length > 0,
+  );
+  const effectiveRevealStyle = wheelCanRepresentEverySelection ? revealStyle : "direct";
   const allWheelSelectionsResolved = randomSelections.every(
     (selection) => selection.physicsVersion === 2,
   );
   const [revealComplete, setRevealComplete] = useState(
-    revealStyle === "direct" || randomSelections.length === 0 || allWheelSelectionsResolved,
+    effectiveRevealStyle === "direct" || randomSelections.length === 0 || allWheelSelectionsResolved,
   );
 
   const updateRandomSelections = (nextSelections: typeof randomSelections) => {
@@ -98,14 +122,14 @@ export function HostMessageOverlay({
       aria-labelledby="host-message-title"
       aria-describedby="host-message-copy"
     >
-      {!revealComplete && revealStyle !== "direct" ? (
+      {!revealComplete && effectiveRevealStyle !== "direct" ? (
         <RandomRevealSequence
           selections={randomSelections}
           teams={teams}
           onSelectionsChange={updateRandomSelections}
           onFinish={() => setRevealComplete(true)}
         />
-      ) : <section className="host-message-stage">
+      ) : <section className="host-message-stage host-message-copy-stage">
         <span className="host-message-kicker">A message from the host</span>
         <span className="host-message-progress">
           {answeredQuestionCount} of {playableQuestionCount} questions played

@@ -5,9 +5,33 @@ export const HOST_MESSAGE_VARIABLES = [
   { token: "{team1.member1}", label: "Team 1 · member 1" },
   { token: "{random.team}", label: "Random team" },
   { token: "{random.player}", label: "Random player" },
+  { token: "{1-10}", label: "Random number from 1 to 10" },
 ] as const;
 
 const VARIABLE_PATTERN = /\{([^{}]+)\}/g;
+const NUMBER_RANGE_PATTERN = /^(-?\d+)\s*-\s*(-?\d+)$/;
+export const MAX_WHEEL_NUMBER_RANGE = 24;
+
+export function parseHostMessageNumberRange(variable: string) {
+  const match = variable.trim().match(NUMBER_RANGE_PATTERN);
+  if (!match) return null;
+  const start = Number(match[1]);
+  const end = Number(match[2]);
+  if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end)) return null;
+  return { start, end, size: Math.abs(end - start) + 1 };
+}
+
+export function hasRandomHostMessageVariable(template: string) {
+  for (const match of template.matchAll(VARIABLE_PATTERN)) {
+    const variable = match[1].toLowerCase();
+    if (
+      variable === "random.team"
+      || variable === "random.player"
+      || parseHostMessageNumberRange(variable)
+    ) return true;
+  }
+  return false;
+}
 
 function teamName(team: Team | undefined, index: number) {
   return team?.name.trim() || `Team ${index + 1}`;
@@ -25,6 +49,7 @@ export function getUnknownHostMessageVariables(template: string) {
     if (
       variable === "random.team"
       || variable === "random.player"
+      || parseHostMessageNumberRange(variable)
       || /^team\d+$/.test(variable)
       || /^team\d+\.member\d+$/.test(variable)
     ) continue;
@@ -71,6 +96,12 @@ export function getHostMessageRandomPoolIssues(template: string, teams: Team[]) 
   if (randomPlayerDraws > namedPlayerCount) {
     issues.push(`${randomPlayerDraws} random player draws need ${randomPlayerDraws} named players (currently ${namedPlayerCount}).`);
   }
+  for (const match of template.matchAll(VARIABLE_PATTERN)) {
+    const range = parseHostMessageNumberRange(match[1]);
+    if (range && range.size > MAX_WHEEL_NUMBER_RANGE) {
+      issues.push(`${match[0]} contains ${range.size.toLocaleString()} numbers. Ranges above ${MAX_WHEEL_NUMBER_RANGE} reveal directly instead of using the wheel.`);
+    }
+  }
   return issues;
 }
 
@@ -107,12 +138,14 @@ export function resolveHostMessageTemplate(
   const teamPool = [...availableTeams];
   const playerPool = [...availablePlayers];
   const randomSelections: Array<{
-    kind: "team" | "player";
+    kind: "team" | "player" | "number";
     value: string;
     candidates: string[];
     selectedIndex: number;
     teamId?: string;
     playerId?: string;
+    rangeStart?: number;
+    rangeEnd?: number;
   }> = [];
 
   const drawWithoutReplacement = (
@@ -138,6 +171,29 @@ export function resolveHostMessageTemplate(
     const variable = rawVariable.toLowerCase();
     if (variable === "random.team") return drawWithoutReplacement(teamPool, "team");
     if (variable === "random.player") return drawWithoutReplacement(playerPool, "player");
+    const numberRange = parseHostMessageNumberRange(variable);
+    if (numberRange) {
+      const selectedIndex = Math.min(
+        numberRange.size - 1,
+        Math.floor(random() * numberRange.size),
+      );
+      const direction = numberRange.end >= numberRange.start ? 1 : -1;
+      const value = String(numberRange.start + selectedIndex * direction);
+      const candidates = numberRange.size <= MAX_WHEEL_NUMBER_RANGE
+        ? Array.from({ length: numberRange.size }, (_, index) => (
+          String(numberRange.start + index * direction)
+        ))
+        : [];
+      randomSelections.push({
+        kind: "number",
+        value,
+        candidates,
+        selectedIndex,
+        rangeStart: numberRange.start,
+        rangeEnd: numberRange.end,
+      });
+      return value;
+    }
     const cached = cache.get(variable);
     if (cached) return cached;
 

@@ -26,6 +26,7 @@ import {
   getHostMessageRandomPoolIssues,
   getUnavailableHostMessageVariables,
   getUnknownHostMessageVariables,
+  hasRandomHostMessageVariable,
   HOST_MESSAGE_VARIABLES,
   resolveHostMessageTemplate,
 } from "@/lib/hostMessageTemplates";
@@ -96,7 +97,7 @@ function HostMessageEditor({
     const separator = message.text && !/\s$/.test(message.text) ? " " : "";
     onUpdate({ text: `${message.text}${separator}${token}` });
   };
-  const hasRandomVariable = /\{random\.(team|player)\}/i.test(message.text);
+  const hasRandomVariable = hasRandomHostMessageVariable(message.text);
   const revealStyle = message.revealStyle === "direct" ? "direct" : "spin-wheel";
 
   return (
@@ -146,9 +147,9 @@ function HostMessageEditor({
           ? ` Team range: 1–${teams.length}. Member ranges: ${memberRanges}.`
           : " Add teams to make numbered variables available."}
       </small>
-      {hasRandomVariable && (
-        <div className="question-host-message-reveal-setting">
-          <span>Random reveal</span>
+      <div className={`question-host-message-reveal-setting${hasRandomVariable ? "" : " direct-preview"}`}>
+        <span>{hasRandomVariable ? "Random reveal" : "Full-screen preview"}</span>
+        {hasRandomVariable ? (
           <div className="question-host-message-reveal-options">
             {HOST_MESSAGE_REVEAL_STYLES.map((style) => (
               <button
@@ -161,15 +162,20 @@ function HostMessageEditor({
               </button>
             ))}
           </div>
-          <button
-            className="button secondary compact question-host-message-reveal-preview"
-            type="button"
-            onClick={() => setShowRevealPreview(true)}
-          >
-            Preview animation
-          </button>
-        </div>
-      )}
+        ) : (
+          <small className="question-host-message-reveal-description">
+            See the message exactly as it will interrupt the board.
+          </small>
+        )}
+        <button
+          className="button secondary compact question-host-message-reveal-preview"
+          type="button"
+          disabled={!message.text.trim()}
+          onClick={() => setShowRevealPreview(true)}
+        >
+          {hasRandomVariable && revealStyle === "spin-wheel" ? "Preview animation" : "Preview message"}
+        </button>
+      </div>
       {message.text.trim() && (
         <div className="question-host-message-preview">
           <span>Example only — not the saved result</span>
@@ -200,7 +206,7 @@ function HostMessageEditor({
       {showRevealPreview && (
         <HostMessageOverlay
           key={`${message.id}-${revealStyle}`}
-          message={{ ...message, revealStyle }}
+          message={{ ...message, revealStyle: hasRandomVariable ? revealStyle : "direct" }}
           resolution={preview}
           teams={teams}
           answeredQuestionCount={message.afterQuestionCount}
@@ -518,6 +524,7 @@ export default function QuestionConfigPage() {
   const [dragOver, setDragOver] = useState<PointValue | null>(null);
   const [isMobile, setIsMobile] = useState(false);
   const [showFinaleMusicPreview, setShowFinaleMusicPreview] = useState(false);
+  const [hostMessagesExpanded, setHostMessagesExpanded] = useState(false);
   const [expandedQuestions, setExpandedQuestions] = useState<Set<string>>(
     () => new Set(),
   );
@@ -570,6 +577,7 @@ export default function QuestionConfigPage() {
         },
       ],
     }));
+    setHostMessagesExpanded(true);
   };
 
   const updateHostMessage = (
@@ -2047,36 +2055,51 @@ const TimelineFields = React.memo(function TimelineFields({
           </div>
         </div>
 
-        <div className="question-host-messages-setting">
+        <div className={`question-host-messages-setting${hostMessagesExpanded ? " expanded" : " collapsed"}`}>
           <div className="question-host-messages-heading">
             <div>
               <strong>Host messages</strong>
               <small>
-                Pause the board after a chosen number of questions. The current board has {playableBoardQuestionCount} playable questions.
+                {hostMessages.length} {hostMessages.length === 1 ? "message" : "messages"} scheduled · {playableBoardQuestionCount} playable board questions
               </small>
             </div>
-            <button className="button secondary compact" type="button" onClick={addHostMessage}>
-              + Add message
-            </button>
+            <div className="question-host-messages-actions">
+              <button
+                className="button ghost compact"
+                type="button"
+                aria-expanded={hostMessagesExpanded}
+                aria-controls="question-host-message-list"
+                onClick={() => setHostMessagesExpanded((expanded) => !expanded)}
+              >
+                {hostMessagesExpanded ? "Collapse messages" : "Expand messages"}
+              </button>
+              <button className="button secondary compact" type="button" onClick={addHostMessage}>
+                + Add message
+              </button>
+            </div>
           </div>
 
-          {hostMessages.length === 0 ? (
-            <div className="question-host-messages-empty">
-              No messages scheduled. Add one for reminders such as “Fellesskål”.
-            </div>
-          ) : (
-            <div className="question-host-message-list">
-              {hostMessages.map((message, index) => (
-                <HostMessageEditor
-                  key={message.id}
-                  message={message}
-                  index={index}
-                  teams={teams}
-                  playableQuestionCount={playableBoardQuestionCount}
-                  onUpdate={(updates) => updateHostMessage(message.id, updates)}
-                  onRemove={() => removeHostMessage(message.id)}
-                />
-              ))}
+          {hostMessagesExpanded && (
+            <div id="question-host-message-list">
+              {hostMessages.length === 0 ? (
+                <div className="question-host-messages-empty">
+                  No messages scheduled. Add one for reminders such as “Fellesskål”.
+                </div>
+              ) : (
+                <div className="question-host-message-list">
+                  {hostMessages.map((message, index) => (
+                    <HostMessageEditor
+                      key={message.id}
+                      message={message}
+                      index={index}
+                      teams={teams}
+                      playableQuestionCount={playableBoardQuestionCount}
+                      onUpdate={(updates) => updateHostMessage(message.id, updates)}
+                      onRemove={() => removeHostMessage(message.id)}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>

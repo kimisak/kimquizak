@@ -2,6 +2,7 @@
 
 import { Fragment, type CSSProperties } from "react";
 import { getTeamAccent, getTeamMarker } from "@/lib/teamPresentation";
+import { parseHostMessageNumberRange } from "@/lib/hostMessageTemplates";
 import type { ResolvedHostMessage, Team } from "@/lib/types";
 
 type Props = {
@@ -12,7 +13,7 @@ type Props = {
 
 type MessagePart = {
   value: string;
-  kind?: "team" | "player";
+  kind?: "team" | "player" | "number";
   team?: Team;
 };
 
@@ -36,15 +37,16 @@ function createMessageParts(template: string, resolution: ResolvedHostMessage, t
     const variable = match[1].toLowerCase();
     const memberMatch = variable.match(/^team(\d+)\.member(\d+)$/);
     const teamMatch = variable.match(/^team(\d+)$/);
+    const numberRange = parseHostMessageNumberRange(variable);
     let value = resolution.variables[variable] ?? match[0];
     let kind: MessagePart["kind"];
     let team: Team | undefined;
 
-    if (variable === "random.team" || variable === "random.player") {
+    if (variable === "random.team" || variable === "random.player" || numberRange) {
       const selection = resolution.randomSelections?.[randomSelectionIndex];
       randomSelectionIndex += 1;
       value = selection?.value ?? resolution.variables[variable] ?? match[0];
-      kind = variable === "random.team" ? "team" : "player";
+      kind = numberRange ? "number" : variable === "random.team" ? "team" : "player";
       team = selection?.teamId
         ? teams.find((candidate) => candidate.id === selection.teamId)
         : kind === "team"
@@ -70,6 +72,13 @@ export function HostMessageRichText({ template, resolution, teams }: Props) {
   const parts = createMessageParts(template, resolution, teams);
 
   return parts.map((part, index) => {
+    if (part.kind === "number") {
+      return (
+        <span className="host-message-entity host-message-number" key={index}>
+          <span className="host-message-entity-name">{part.value}</span>
+        </span>
+      );
+    }
     if (!part.kind || !part.team) return <Fragment key={index}>{part.value}</Fragment>;
     const accent = getTeamAccent(part.team);
     const density = part.value.length > 28
