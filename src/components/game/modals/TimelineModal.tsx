@@ -15,7 +15,6 @@ type Props = {
   placedLeft: PlacedEvent[];
   placedRight: PlacedEvent[];
   onPlace: (slot: { index: number; onYear?: number | null }) => void;
-  onClose: () => void;
   disableActions?: boolean;
   winnerName?: string | null;
   winnerTeamId?: string | null;
@@ -40,7 +39,6 @@ export function TimelineModal({
   placedLeft,
   placedRight,
   onPlace,
-  onClose,
   disableActions,
   winnerName,
   winnerTeamId,

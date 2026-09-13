@@ -29,6 +29,8 @@ const fallbackTurnState: TurnState = {
   boardIndex: 0,
   lyricsIndex: 0,
   revealedCategories: [],
+  dismissedHostMessageIds: [],
+  resolvedHostMessages: {},
 };
 
 function readLocalStorage<T>(key: string, fallback: T): T {

@@ -20,10 +20,20 @@ import {
   type Team,
 } from "@/lib/types";
 import { makeId } from "@/lib/defaultData";
-import { DEFAULT_SETTINGS } from "@/lib/settings";
+import { DEFAULT_SETTINGS, type HostMessage, type HostMessageRevealStyle } from "@/lib/settings";
+import {
+  createHostMessagePreviewRandom,
+  getHostMessageRandomPoolIssues,
+  getUnavailableHostMessageVariables,
+  getUnknownHostMessageVariables,
+  HOST_MESSAGE_VARIABLES,
+  resolveHostMessageTemplate,
+} from "@/lib/hostMessageTemplates";
+import { HostMessageRichText } from "@/components/game/HostMessageRichText";
+import { HostMessageOverlay } from "@/components/game/HostMessageOverlay";
 import { buildYouTubeEmbedUrl, getYouTubeStartSeconds } from "@/lib/youtube";
 import { extractEmbedUrl, isSafeHttpUrl } from "@/lib/embed";
-import { getQuestionIssues } from "@/lib/questionValidation";
+import { getQuestionIssues, isQuestionReady } from "@/lib/questionValidation";
 
 type FieldProps = {
   category: string;
@@ -47,6 +57,160 @@ type FieldProps = {
 };
 
 type QuestionType = NonNullable<Question["type"]>;
+
+type HostMessageEditorProps = {
+  message: HostMessage;
+  index: number;
+  teams: Team[];
+  playableQuestionCount: number;
+  onUpdate: (updates: Partial<HostMessage>) => void;
+  onRemove: () => void;
+};
+
+const HOST_MESSAGE_REVEAL_STYLES: Array<{ value: HostMessageRevealStyle; label: string }> = [
+  { value: "spin-wheel", label: "Spin the wheel" },
+  { value: "direct", label: "Direct" },
+];
+
+function HostMessageEditor({
+  message,
+  index,
+  teams,
+  playableQuestionCount,
+  onUpdate,
+  onRemove,
+}: HostMessageEditorProps) {
+  const [showRevealPreview, setShowRevealPreview] = useState(false);
+  const unknownVariables = getUnknownHostMessageVariables(message.text);
+  const unavailableVariables = getUnavailableHostMessageVariables(message.text, teams);
+  const randomPoolIssues = getHostMessageRandomPoolIssues(message.text, teams);
+  const preview = resolveHostMessageTemplate(
+    message.text,
+    teams,
+    createHostMessagePreviewRandom(message.id),
+  );
+  const memberRanges = teams
+    .map((team, teamIndex) => `team${teamIndex + 1}: 1–${team.players.length}`)
+    .join(" · ");
+  const appendVariable = (token: string) => {
+    const separator = message.text && !/\s$/.test(message.text) ? " " : "";
+    onUpdate({ text: `${message.text}${separator}${token}` });
+  };
+  const hasRandomVariable = /\{random\.(team|player)\}/i.test(message.text);
+  const revealStyle = message.revealStyle === "direct" ? "direct" : "spin-wheel";
+
+  return (
+    <div className="question-host-message-row">
+      <span className="question-host-message-index" aria-hidden>{index + 1}</span>
+      <label className="question-host-message-trigger">
+        <span>After</span>
+        <input
+          className={`input${playableQuestionCount > 0 && message.afterQuestionCount > playableQuestionCount ? " beyond-board" : ""}`}
+          type="number"
+          min={1}
+          step={1}
+          value={message.afterQuestionCount}
+          aria-label={`Show message ${index + 1} after this many questions`}
+          onChange={(event) => onUpdate({
+            afterQuestionCount: Math.max(1, Math.round(Number(event.target.value) || 1)),
+          })}
+        />
+        <span>questions</span>
+      </label>
+      <input
+        className="input question-host-message-copy"
+        value={message.text}
+        aria-label={`Message ${index + 1} text`}
+        placeholder="e.g. A challenge for {random.team}!"
+        onChange={(event) => onUpdate({ text: event.target.value })}
+      />
+      <button
+        className="question-host-message-remove"
+        type="button"
+        aria-label={`Remove message ${index + 1}`}
+        onClick={onRemove}
+      >
+        ×
+      </button>
+      <div className="question-host-message-variables" aria-label="Insert a message variable">
+        <span>Insert</span>
+        {HOST_MESSAGE_VARIABLES.map((variable) => (
+          <button key={variable.token} type="button" onClick={() => appendVariable(variable.token)} title={variable.label}>
+            {variable.token}
+          </button>
+        ))}
+      </div>
+      <small className="question-host-message-variable-help">
+        The insert buttons use team 1 as an example. Edit the numbers directly in the message.
+        {teams.length > 0
+          ? ` Team range: 1–${teams.length}. Member ranges: ${memberRanges}.`
+          : " Add teams to make numbered variables available."}
+      </small>
+      {hasRandomVariable && (
+        <div className="question-host-message-reveal-setting">
+          <span>Random reveal</span>
+          <div className="question-host-message-reveal-options">
+            {HOST_MESSAGE_REVEAL_STYLES.map((style) => (
+              <button
+                className={revealStyle === style.value ? "selected" : ""}
+                type="button"
+                key={style.value}
+                onClick={() => onUpdate({ revealStyle: style.value })}
+              >
+                {style.label}
+              </button>
+            ))}
+          </div>
+          <button
+            className="button secondary compact question-host-message-reveal-preview"
+            type="button"
+            onClick={() => setShowRevealPreview(true)}
+          >
+            Preview animation
+          </button>
+        </div>
+      )}
+      {message.text.trim() && (
+        <div className="question-host-message-preview">
+          <span>Example only — not the saved result</span>
+          <p><HostMessageRichText template={message.text} resolution={preview} teams={teams} /></p>
+          {message.text.includes("{random.") && (
+            <small>The actual result is drawn live and saved when this message appears.</small>
+          )}
+        </div>
+      )}
+      {playableQuestionCount > 0 && message.afterQuestionCount > playableQuestionCount && (
+        <small className="question-host-message-warning">
+          This is beyond the current board and will not appear.
+        </small>
+      )}
+      {unknownVariables.length > 0 && (
+        <small className="question-host-message-variable-error">
+          Unknown {unknownVariables.length === 1 ? "variable" : "variables"}: {unknownVariables.join(", ")}
+        </small>
+      )}
+      {unavailableVariables.length > 0 && (
+        <small className="question-host-message-variable-error">
+          Add the referenced team or named player before using: {unavailableVariables.join(", ")}
+        </small>
+      )}
+      {randomPoolIssues.map((issue) => (
+        <small className="question-host-message-variable-error" key={issue}>{issue}</small>
+      ))}
+      {showRevealPreview && (
+        <HostMessageOverlay
+          key={`${message.id}-${revealStyle}`}
+          message={{ ...message, revealStyle }}
+          resolution={preview}
+          teams={teams}
+          answeredQuestionCount={message.afterQuestionCount}
+          playableQuestionCount={Math.max(playableQuestionCount, message.afterQuestionCount)}
+          onDismiss={() => setShowRevealPreview(false)}
+        />
+      )}
+    </div>
+  );
+}
 
 const QUESTION_TYPE_META: Record<
   QuestionType,
@@ -357,7 +521,7 @@ export default function QuestionConfigPage() {
   const [expandedQuestions, setExpandedQuestions] = useState<Set<string>>(
     () => new Set(),
   );
-  const [, setTeams] = usePersistentState<Team[]>(
+  const [teams, setTeams] = usePersistentState<Team[]>(
     TEAM_STORAGE_KEY,
     [],
     [LEGACY_TEAM_STORAGE_KEY],
@@ -382,6 +546,50 @@ export default function QuestionConfigPage() {
     startSeconds: finaleMusicStartSeconds,
     endSeconds: finaleMusicEndSeconds,
   }) : "";
+  const hostMessages = settings.hostMessages ?? DEFAULT_SETTINGS.hostMessages;
+  const playableBoardQuestionCount = questions.filter(isQuestionReady).length;
+
+  const addHostMessage = () => {
+    const lastTrigger = hostMessages.reduce(
+      (highest, message) => Math.max(highest, message.afterQuestionCount),
+      0,
+    );
+    setSettings((previous) => ({
+      ...previous,
+      hostMessages: [
+        ...(previous.hostMessages ?? []),
+        {
+          id: makeId("host-message"),
+          afterQuestionCount: lastTrigger > 0
+            ? lastTrigger + 5
+            : playableBoardQuestionCount > 0
+              ? Math.min(5, playableBoardQuestionCount)
+              : 5,
+          text: "",
+          revealStyle: "spin-wheel",
+        },
+      ],
+    }));
+  };
+
+  const updateHostMessage = (
+    id: string,
+    updates: Partial<HostMessage>,
+  ) => {
+    setSettings((previous) => ({
+      ...previous,
+      hostMessages: (previous.hostMessages ?? []).map((message) =>
+        message.id === id ? { ...message, ...updates } : message,
+      ),
+    }));
+  };
+
+  const removeHostMessage = (id: string) => {
+    setSettings((previous) => ({
+      ...previous,
+      hostMessages: (previous.hostMessages ?? []).filter((message) => message.id !== id),
+    }));
+  };
 
   const categories = useMemo(() => {
     const list = questionsHydrated && Array.isArray(questions) ? questions : [];
@@ -612,7 +820,7 @@ export default function QuestionConfigPage() {
 
   const resetGameProgress = () => {
     if (!window.confirm(
-      "Reset all scores, played tiles, turn order, revealed categories, and score history? Team and question content will be kept.",
+      "Reset all scores, played tiles, turn order, revealed categories, dismissed host messages, and score history? Team and question content will be kept.",
     )) return;
 
     setQuestions((prev) => prev.map((q) => ({ ...q, answered: false })));
@@ -1837,6 +2045,53 @@ const TimelineFields = React.memo(function TimelineFields({
               />
             )}
           </div>
+        </div>
+
+        <div className="question-host-messages-setting">
+          <div className="question-host-messages-heading">
+            <div>
+              <strong>Host messages</strong>
+              <small>
+                Pause the board after a chosen number of questions. The current board has {playableBoardQuestionCount} playable questions.
+              </small>
+            </div>
+            <button className="button secondary compact" type="button" onClick={addHostMessage}>
+              + Add message
+            </button>
+          </div>
+
+          {hostMessages.length === 0 ? (
+            <div className="question-host-messages-empty">
+              No messages scheduled. Add one for reminders such as “Fellesskål”.
+            </div>
+          ) : (
+            <div className="question-host-message-list">
+              {hostMessages.map((message, index) => (
+                <HostMessageEditor
+                  key={message.id}
+                  message={message}
+                  index={index}
+                  teams={teams}
+                  playableQuestionCount={playableBoardQuestionCount}
+                  onUpdate={(updates) => updateHostMessage(message.id, updates)}
+                  onRemove={() => removeHostMessage(message.id)}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
+
+      <section className="question-content-divider" aria-labelledby="question-content-title">
+        <div className="question-content-divider-copy">
+          <span className="question-studio-kicker">Board content</span>
+          <h2 id="question-content-title">Categories &amp; questions</h2>
+          <p>Organize the board, name each category, and write the clues players will choose.</p>
+        </div>
+        <div className="question-content-divider-mark" aria-hidden>
+          <span>100</span>
+          <span>200</span>
+          <span>300</span>
         </div>
       </section>
 

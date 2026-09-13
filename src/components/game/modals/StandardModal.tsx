@@ -1,288 +1,111 @@
 'use client';
 
-import type { Question, Team } from "@/lib/types";
-import { TeamPill } from "@/components/game/TeamPill";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
+import type { Question } from "@/lib/types";
+import { ExpandableImage } from "./ExpandableImage";
+import { QuestionModalActions } from "./QuestionModalActions";
+import { QuestionModalHeader } from "./QuestionModalHeader";
 
 type Props = {
   question: Question;
-  teams: Team[];
   currentTeamName?: string;
   currentTeamEmoji?: string | null;
   answeringTeamName?: string;
   answeringTeamEmoji?: string | null;
   currentTeamColor?: string;
   answeringTeamColor?: string;
-  onClose: () => void;
   onRevealAnswer: () => void;
   showAnswer: boolean;
   onCorrect: () => void;
   onWrong: () => void;
   disableActions?: boolean;
-  flashKey?: number;
 };
+
+function getTextDensity(value?: string | null) {
+  const length = (value || "").trim().length;
+  if (length > 280) return "text-density-xlong";
+  if (length > 175) return "text-density-long";
+  if (length > 95) return "text-density-medium";
+  return "text-density-short";
+}
 
 export function StandardModal({
   question,
-  teams,
   currentTeamName,
   currentTeamEmoji,
   answeringTeamName,
   answeringTeamEmoji,
   currentTeamColor,
   answeringTeamColor,
-  onClose,
   onRevealAnswer,
   showAnswer,
   onCorrect,
   onWrong,
   disableActions,
-  flashKey,
 }: Props) {
-  const [showAnswerImage, setShowAnswerImage] = useState(false);
-  const frontImage = useMemo(() => {
-    if (question.imageData) {
-      return { src: question.imageData, alt: question.imageName || "Question image" };
-    }
-    return null;
-  }, [question.imageData, question.imageName, question.answerImageData, question.answerImageName]);
-  const backImage = useMemo(() => {
-    if (question.answerImageData) {
-      return { src: question.answerImageData, alt: question.answerImageName || "Answer image" };
-    }
-    return frontImage;
-  }, [question.answerImageData, question.answerImageName, frontImage]);
-  const flipActive = showAnswer && Boolean(backImage);
+  const frontImage = useMemo(() => question.imageData
+    ? { src: question.imageData, alt: question.imageName || "Question image" }
+    : null, [question.imageData, question.imageName]);
+  const answerImage = useMemo(() => question.answerImageData
+    ? { src: question.answerImageData, alt: question.answerImageName || "Answer image" }
+    : null, [question.answerImageData, question.answerImageName]);
+  const teamName = answeringTeamName || currentTeamName;
+  const teamColor = answeringTeamName ? answeringTeamColor : currentTeamColor;
+  const teamEmoji = answeringTeamName ? answeringTeamEmoji : currentTeamEmoji;
+  const displayedImage = showAnswer ? (answerImage || frontImage) : frontImage;
+
   return (
-    <>
-      <div
-        className={`flip-inner round-stage round-standard ${showAnswer ? "flipped" : ""}`}
-        style={{
-          position: "relative",
-          width: "100%",
-          minHeight: "360px",
-          transformStyle: "preserve-3d",
-          transition: "transform 0.5s ease",
-        }}
-      >
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            backfaceVisibility: "hidden",
-          }}
-        >
-          <div
-            className="card"
-            style={{
-              padding: "22px",
-              background: "rgba(10, 12, 18, 0.96)",
-              borderColor: "rgba(255,255,255,0.18)",
-              position: "relative",
-              overflow: "hidden",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: "12px",
-              }}
-            >
-            <div>
-              <div
-                style={{
-                  fontWeight: 800,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.05em",
-                  color: "var(--muted)",
-                }}
-              >
-                {question.category} · Standard
+    <article className={`card round-stage round-standard question-modal-card standard-question-modal${showAnswer ? " answer-visible" : ""}`}>
+      <QuestionModalHeader
+        category={question.category}
+        typeLabel="Standard"
+        points={question.points}
+        teamName={teamName}
+        teamColor={teamColor}
+        teamEmoji={teamEmoji}
+        teamLabel={showAnswer ? "Answered by" : answeringTeamName ? "Answering" : "Current team"}
+      />
+
+      <div className="question-modal-scroll standard-modal-scroll">
+        <section className={`standard-fluid-stage${displayedImage ? " has-image" : ""}`}>
+          <div className="standard-fluid-copy">
+            {!showAnswer ? (
+              <>
+              <span className="question-modal-eyebrow">Question</span>
+              <h1 className={getTextDensity(question.prompt)}>{question.prompt || "No clue entered yet."}</h1>
+              </>
+            ) : (
+              <>
+              <div className="standard-answer-reveal">
+                <span className="question-modal-eyebrow">Answer</span>
+                <h1 className={getTextDensity(question.answer)}>{question.answer || "No answer provided."}</h1>
               </div>
-              <div style={{ fontSize: "2rem", fontWeight: 800 }}>
-                {question.points} pts
+              <div className="standard-answer-question">
+                <span>Original question</span>
+                <p className={getTextDensity(question.prompt)}>{question.prompt || "No clue entered yet."}</p>
               </div>
-            {answeringTeamName && !showAnswer && (
-              <TeamPill
-                label="Answering"
-                name={answeringTeamName}
-                color={answeringTeamColor}
-                emoji={answeringTeamEmoji}
-              />
+              </>
             )}
-            </div>
           </div>
-          <div style={{ fontSize: "2.2rem", lineHeight: 1.35 }}>
-            {question.prompt || "No clue entered yet."}
-          </div>
-          {frontImage && (
-            <div
-              style={{
-                marginTop: "12px",
-                borderRadius: "12px",
-                overflow: "hidden",
-                border: "1px solid rgba(255,255,255,0.12)",
-              }}
-            >
-              <img
-                src={frontImage.src}
-                alt={frontImage.alt}
-                style={{
-                  width: "100%",
-                  maxHeight: "520px",
-                  height: "auto",
-                  objectFit: "contain",
-                  display: "block",
-                }}
-              />
-            </div>
+          {displayedImage && (
+            <ExpandableImage
+              src={displayedImage.src}
+              alt={displayedImage.alt}
+              label={showAnswer && answerImage ? "Answer image" : "Question image"}
+              presentation="fluid"
+              className="standard-fluid-media"
+            />
           )}
-            <div
-              style={{
-                marginTop: "18px",
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                gap: "10px",
-                flexWrap: "wrap",
-              }}
-            >
-              <button className="button ghost" onClick={onClose}>
-                Close
-              </button>
-              <button className="button primary" onClick={onRevealAnswer}>
-                Reveal answer
-            </button>
-          </div>
-        </div>
+        </section>
       </div>
 
-      <div
-        style={{
-          position: "absolute",
-          inset: 0,
-          backfaceVisibility: "hidden",
-          transform: "rotateY(180deg)",
-        }}
-      >
-        <div
-          className="card"
-          style={{
-            padding: "22px",
-            background: "rgba(10, 14, 19, 0.96)",
-            borderColor: "rgba(255,255,255,0.2)",
-          }}
-        >
-          <div style={{ marginBottom: "12px" }}>
-            <div
-              style={{
-                textTransform: "uppercase",
-                color: "var(--muted)",
-                letterSpacing: "0.05em",
-                fontWeight: 800,
-              }}
-            >
-              {question.category} · Standard
-            </div>
-            <div style={{ fontWeight: 800, fontSize: "2rem", marginTop: "6px" }}>
-              {question.points} pts
-            </div>
-          </div>
-          <div style={{ fontSize: "2rem", lineHeight: 1.4, fontWeight: 800 }}>
-            <div
-              style={{
-                color: "var(--muted)",
-                marginBottom: "6px",
-                fontSize: "1.05rem",
-                fontWeight: 600,
-              }}
-            >
-              Answer
-            </div>
-            <div style={{ wordBreak: "break-word", overflowWrap: "anywhere" }}>
-              {question.answer || "No answer provided."}
-            </div>
-          </div>
-          {backImage && (
-            <div
-              style={{
-                marginTop: "14px",
-                borderRadius: "12px",
-                overflow: "hidden",
-                border: "1px solid rgba(255,255,255,0.12)",
-                position: "relative",
-              }}
-            >
-              <img
-                src={showAnswerImage ? backImage.src : frontImage?.src || backImage.src}
-                alt={(showAnswerImage ? backImage.alt : frontImage?.alt) || backImage.alt}
-                style={{
-                  width: "100%",
-                  maxHeight: "520px",
-                  height: "auto",
-                  objectFit: "contain",
-                  display: "block",
-                }}
-              />
-              {frontImage && question.answerImageData && (
-                <button
-                  className="button secondary"
-                  onClick={() => setShowAnswerImage((prev) => !prev)}
-                  style={{
-                    position: "absolute",
-                    top: "10px",
-                    right: "10px",
-                    padding: "6px 10px",
-                    backdropFilter: "blur(6px)",
-                  }}
-                >
-                  {showAnswerImage ? "Show question image" : "Show answer image"}
-                </button>
-              )}
-            </div>
-          )}
-          <div
-            style={{
-              marginTop: "18px",
-              display: "grid",
-              gap: "10px",
-            }}
-          >
-            {answeringTeamName && (
-              <TeamPill
-                label="Answered by"
-                name={answeringTeamName}
-                color={answeringTeamColor}
-                emoji={answeringTeamEmoji}
-              />
-            )}
-            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-              <button
-                className="button secondary"
-                onClick={onCorrect}
-                disabled={disableActions}
-                style={{ opacity: disableActions ? 0.6 : 1 }}
-              >
-                ✓ Correct
-              </button>
-              <button
-                className="button ghost"
-                onClick={onWrong}
-                disabled={disableActions}
-                style={{ opacity: disableActions ? 0.6 : 1 }}
-              >
-                ✕ Wrong
-              </button>
-              <button className="button ghost" onClick={onClose}>
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-      </div>
-    </>
+      <QuestionModalActions
+        revealed={showAnswer}
+        onReveal={onRevealAnswer}
+        onCorrect={onCorrect}
+        onWrong={onWrong}
+        disabled={disableActions}
+      />
+    </article>
   );
 }

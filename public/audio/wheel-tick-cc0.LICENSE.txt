@@ -1,0 +1,8 @@
+Asset: Click Sound
+Author: curato
+Source: https://opengameart.org/content/click-sound
+Original file: sound_click.wav
+License: Creative Commons Zero (CC0 1.0)
+License URL: https://creativecommons.org/publicdomain/zero/1.0/
+
+The bundled OGG is trimmed, faded, and locally encoded from the original CC0 recording.

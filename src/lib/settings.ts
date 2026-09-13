@@ -1,3 +1,12 @@
+export type HostMessageRevealStyle = "spin-wheel" | "direct";
+
+export type HostMessage = {
+  id: string;
+  afterQuestionCount: number;
+  text: string;
+  revealStyle?: HostMessageRevealStyle;
+};
+
 export type AppSettings = {
   quizTitle: string;
   themeId: string;
@@ -8,6 +17,7 @@ export type AppSettings = {
   finaleMusicEndSeconds: number;
   finaleMusicDurationSeconds?: number;
   finaleMusicVolume: number;
+  hostMessages: HostMessage[];
 };
 
 export const SETTINGS_STORAGE_KEY = "kimquizak_settings_v1";
@@ -21,4 +31,5 @@ export const DEFAULT_SETTINGS: AppSettings = {
   finaleMusicStartSeconds: 84,
   finaleMusicEndSeconds: 108,
   finaleMusicVolume: 35,
+  hostMessages: [],
 };

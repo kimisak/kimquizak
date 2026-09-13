@@ -73,11 +73,36 @@ export type ScoreTransaction = {
   questionId?: string;
 };
 
+export type ResolvedHostMessage = {
+  text: string;
+  variables: Record<string, string>;
+  randomSelections?: Array<{
+    kind: "team" | "player";
+    value: string;
+    candidates: string[];
+    selectedIndex: number;
+    teamId?: string;
+    playerId?: string;
+    launchX?: number;
+    launchVelocityX?: number;
+    wheelInitialAngularVelocity?: number;
+    wheelAngularDeceleration?: number;
+    wheelStartAngle?: number;
+    candidateIds?: Array<{
+      teamId: string;
+      playerId?: string;
+    }>;
+    physicsVersion?: number;
+  }>;
+};
+
 export type TurnState = {
   order: string[];
   boardIndex: number;
   lyricsIndex: number;
   revealedCategories?: string[];
+  dismissedHostMessageIds?: string[];
+  resolvedHostMessages?: Record<string, ResolvedHostMessage>;
 };
 
 export type TimelineEvent = {

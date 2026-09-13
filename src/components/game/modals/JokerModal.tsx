@@ -33,7 +33,6 @@ type Props = {
   progress: JokerProgress;
   onGuess: (position: "above" | "below") => void;
   onFinish: () => void;
-  onClose: () => void;
   disableActions?: boolean;
   maxScore: number;
   rotateInfo?: boolean;
@@ -65,7 +64,6 @@ export function JokerModal({
   progress,
   onGuess,
   onFinish,
-  onClose,
   disableActions,
   maxScore,
   rotateInfo,
@@ -298,9 +296,6 @@ export function JokerModal({
           style={{ opacity: !progress.finished || disableActions ? 0.6 : 1 }}
         >
           Apply score{answeringTeamName ? ` to ${answeringTeamName}` : ""}
-        </button>
-        <button className="button ghost" onClick={onClose}>
-          Close
         </button>
         {foundJoker && (
           <span style={{ color: "#f2c14f", fontWeight: 700 }}>

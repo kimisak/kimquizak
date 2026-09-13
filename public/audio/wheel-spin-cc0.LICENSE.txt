@@ -1,0 +1,8 @@
+Asset: Spinning Wheel
+Author: themightyglider
+Source: https://opengameart.org/content/spinning-wheel-0
+Original file: spinning.ogg
+License: Creative Commons Zero (CC0 1.0)
+License URL: https://creativecommons.org/publicdomain/zero/1.0/
+
+The bundled OGG is a locally encoded copy of the original CC0 recording.

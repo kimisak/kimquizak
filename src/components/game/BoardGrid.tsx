@@ -26,16 +26,20 @@ export function BoardGrid({
   onRevealCategory,
   onOpen,
 }: Props) {
+  const tileWidthFactor = Math.max(5.5, Math.min(10, 40 / Math.max(1, categories.length)));
   return (
-    <div className="quiz-board-scroll" tabIndex={0} role="region" aria-label="Quiz board; scroll horizontally for more categories">
+    <div className="quiz-board-scroll" role="region" aria-label="Quiz board">
     <div
       className="quiz-board"
       style={{
+        "--board-columns": categories.length,
+        "--board-tile-height": `clamp(78px, ${tileWidthFactor}cqw, 150px)`,
+        "--board-header-height": `clamp(54px, ${tileWidthFactor * 0.48}cqw, 84px)`,
         display: "grid",
         gridTemplateColumns: `repeat(${categories.length}, minmax(140px, 1fr))`,
         gap: "8px",
         minWidth: `${Math.max(680, categories.length * 150)}px`,
-      }}
+      } as CSSProperties}
     >
       {categories.map((category, index) => {
         const isConcealed = concealCategoryHeaders && !revealedCategories.has(category);

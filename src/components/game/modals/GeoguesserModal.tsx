@@ -2,6 +2,8 @@
 
 import type { Question, Team } from "@/lib/types";
 import { TeamPill } from "@/components/game/TeamPill";
+import { ExpandableImage } from "./ExpandableImage";
+import { QuestionModalActions } from "./QuestionModalActions";
 
 type Props = {
   question: Question;
@@ -12,7 +14,6 @@ type Props = {
   answeringTeamEmoji?: string | null;
   mapLocked: boolean;
   onToggleLock: () => void;
-  onClose: () => void;
   onRevealAnswer: () => void;
   showAnswer: boolean;
   onCorrect: () => void;
@@ -32,7 +33,6 @@ export function GeoguesserModal({
   answeringTeamEmoji,
   mapLocked,
   onToggleLock,
-  onClose,
   onRevealAnswer,
   showAnswer,
   onCorrect,
@@ -204,22 +204,7 @@ export function GeoguesserModal({
               No Street View embed URL provided.
             </div>
           )}
-          <div
-            style={{
-              marginTop: "18px",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              gap: "10px",
-            }}
-          >
-            <button className="button ghost" onClick={onClose}>
-              Close
-            </button>
-            <button className="button primary" onClick={onRevealAnswer}>
-              Reveal answer
-            </button>
-          </div>
+          <QuestionModalActions revealed={false} onReveal={onRevealAnswer} />
         </div>
       </div>
 
@@ -330,68 +315,19 @@ export function GeoguesserModal({
               )}
             </div>
             {question.answerImageData && (
-              <div
-                style={{
-                  borderRadius: "12px",
-                  overflow: "hidden",
-                  border: "1px solid rgba(255,255,255,0.12)",
-                  background: "rgba(255,255,255,0.04)",
-                  display: "grid",
-                  placeItems: "center",
-                  padding: "6px",
-                }}
-              >
-                <img
-                  src={question.answerImageData}
-                  alt={question.answerImageName || "Answer image"}
-                  style={{
-                    width: "100%",
-                    maxHeight: "520px",
-                    height: "auto",
-                    objectFit: "contain",
-                    display: "block",
-                  }}
-                />
-              </div>
-            )}
-          </div>
-          <div
-            style={{
-              marginTop: "18px",
-              display: "grid",
-              gap: "10px",
-            }}
-          >
-            {answeringTeamName && (
-              <TeamPill
-                label="Answered by"
-                name={answeringTeamName}
-                color={answeringTeamColor}
-                emoji={answeringTeamEmoji}
+              <ExpandableImage
+                src={question.answerImageData}
+                alt={question.answerImageName || "Answer image"}
+                label="Answer image"
               />
             )}
-            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-              <button
-                className="button secondary"
-                onClick={onCorrect}
-                disabled={disableActions}
-                style={{ opacity: disableActions ? 0.6 : 1 }}
-              >
-                ✓ Correct
-              </button>
-              <button
-                className="button ghost"
-                onClick={onWrong}
-                disabled={disableActions}
-                style={{ opacity: disableActions ? 0.6 : 1 }}
-              >
-                ✕ Wrong
-              </button>
-              <button className="button ghost" onClick={onClose}>
-                Close
-              </button>
-            </div>
           </div>
+          <QuestionModalActions
+            revealed
+            onCorrect={onCorrect}
+            onWrong={onWrong}
+            disabled={disableActions}
+          />
         </div>
       </div>
       </div>

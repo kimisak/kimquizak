@@ -60,6 +60,7 @@ export function Leaderboard({ teams, onAdjust, onSet, history = [], onUndo, comp
               <div
                 key={team.id}
                 className={`card scoreboard-team${isCurrentTurn ? " current" : ""}`}
+                data-rank={idx + 1}
                 data-emoji-surface={accent.emojiSurface}
                 style={{
                   "--team-accent": accent.onLight,
@@ -118,15 +119,6 @@ export function Leaderboard({ teams, onAdjust, onSet, history = [], onUndo, comp
                       <span className="scoreboard-team-name">{team.name}</span>
                       {isCurrentTurn && <span className="turn-badge">TURN</span>}
                     </span>
-                    {compact && namedPlayers.length > 0 && (
-                      <ul className="scoreboard-player-list" aria-label={`Players in ${team.name}`}>
-                        {namedPlayers.map((player) => (
-                          <li key={player.id} title={player.name.trim()}>
-                            {player.name.trim()}
-                          </li>
-                        ))}
-                      </ul>
-                    )}
                   </div>
                   {!compact && <div
                     style={{
@@ -140,6 +132,15 @@ export function Leaderboard({ teams, onAdjust, onSet, history = [], onUndo, comp
                     {namedPlayers.map((player) => player.name.trim()).join(", ")}
                   </div>}
                 </div>
+                {compact && namedPlayers.length > 0 && (
+                  <ul className="scoreboard-player-list" aria-label={`Players in ${team.name}`}>
+                    {namedPlayers.map((player) => (
+                      <li key={player.id} title={player.name.trim()}>
+                        {player.name.trim()}
+                      </li>
+                    ))}
+                  </ul>
+                )}
                 <div className="scoreboard-controls" style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap", marginLeft: "auto", justifyContent: "flex-end" }}>
                   <button className="button ghost compact" type="button" onClick={() => onAdjust(team.id, -100)}>−100</button>
                   <div style={{ position: "relative" }}>

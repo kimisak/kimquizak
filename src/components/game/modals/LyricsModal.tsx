@@ -1,11 +1,14 @@
 'use client';
 
-import type { Question, Team } from "@/lib/types";
-import { TeamPill } from "@/components/game/TeamPill";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { Question } from "@/lib/types";
+import { QuestionModalActions } from "./QuestionModalActions";
+import { QuestionModalHeader } from "./QuestionModalHeader";
+import { buildYouTubeEmbedUrl, extractYouTubeId, getYouTubeStartSeconds } from "@/lib/youtube";
+import { loadYouTubePlayerApi, type YouTubePlayer } from "@/lib/youtubePlayer";
 
 type Props = {
   question: Question;
-  teams: Team[];
   lyricsRevealed: boolean[];
   isRed: (idx: number) => boolean;
   onRevealLine: (idx: number) => void;
@@ -20,13 +23,20 @@ type Props = {
   answeringTeamColor?: string;
   answeringTeamEmoji?: string | null;
   answerVideoUrl?: string | null;
+  answerVideoAutoplay?: boolean;
   onCorrect: () => void;
   onWrong: () => void;
   disableActions?: boolean;
-  onClose: () => void;
-  flashKey?: number;
   onNextTeam?: () => void;
 };
+
+function getAnswerDensity(value?: string | null) {
+  const length = (value || "").trim().length;
+  if (length > 220) return "text-density-xlong";
+  if (length > 120) return "text-density-long";
+  if (length > 65) return "text-density-medium";
+  return "text-density-short";
+}
 
 export function LyricsModal({
   question,
@@ -44,309 +54,239 @@ export function LyricsModal({
   answeringTeamColor,
   answeringTeamEmoji,
   answerVideoUrl,
+  answerVideoAutoplay = true,
   onCorrect,
   onWrong,
   disableActions,
-  onClose,
-  flashKey,
   onNextTeam,
 }: Props) {
+  const answerPlayerHostRef = useRef<HTMLDivElement | null>(null);
+  const answerPlayerRef = useRef<YouTubePlayer | null>(null);
+  const [answerVideoState, setAnswerVideoState] = useState<"idle" | "loading" | "ready" | "playing" | "error">("idle");
+  const [answerVideoStarted, setAnswerVideoStarted] = useState(false);
+  const [revealWithoutVideo, setRevealWithoutVideo] = useState(false);
+  const segments = question.lyricsSegments ?? [];
+  const revealedCount = segments.reduce((count, _, index) => count + (lyricsRevealed[index] ? 1 : 0), 0);
+  const passCount = segments.reduce(
+    (count, _, index) => count + (lyricsRevealed[index] && isRed(index) ? 1 : 0),
+    0,
+  );
+  const teamName = answeringTeamName || currentTeamName;
+  const teamColor = answeringTeamName ? answeringTeamColor : currentTeamColor;
+  const teamEmoji = answeringTeamName ? answeringTeamEmoji : currentTeamEmoji;
+  const answerVideoId = useMemo(() => extractYouTubeId(answerVideoUrl), [answerVideoUrl]);
+  const answerVideoStart = useMemo(() => getYouTubeStartSeconds(answerVideoUrl), [answerVideoUrl]);
+  const answerVideoEmbedUrl = useMemo(
+    () => buildYouTubeEmbedUrl(answerVideoUrl, { startSeconds: answerVideoStart }),
+    [answerVideoStart, answerVideoUrl],
+  );
+  const synchronizedReveal = Boolean(answerVideoId && answerVideoAutoplay);
+  const answerCanShow = !synchronizedReveal || answerVideoStarted || revealWithoutVideo;
+
+  useEffect(() => {
+    if (!showAnswer || !synchronizedReveal || !answerVideoId || !answerPlayerHostRef.current) return;
+    let cancelled = false;
+    let playbackStarted = false;
+    let autoplayFallbackTimer: number | null = null;
+    let player: YouTubePlayer | null = null;
+    const loadingTimer = window.setTimeout(() => {
+      if (!cancelled) {
+        setAnswerVideoState("loading");
+        setAnswerVideoStarted(false);
+        setRevealWithoutVideo(false);
+      }
+    }, 0);
+
+    loadYouTubePlayerApi()
+      .then((YT) => {
+        if (cancelled || !answerPlayerHostRef.current) return;
+        player = new YT.Player(answerPlayerHostRef.current, {
+          width: 640,
+          height: 360,
+          videoId: answerVideoId,
+          playerVars: {
+            controls: 1,
+            playsinline: 1,
+            rel: 0,
+            origin: window.location.origin,
+          },
+          events: {
+            onReady: (event) => {
+              if (cancelled) return;
+              answerPlayerRef.current = event.target;
+              setAnswerVideoState("loading");
+              event.target.loadVideoById({ videoId: answerVideoId, startSeconds: answerVideoStart });
+              autoplayFallbackTimer = window.setTimeout(() => {
+                if (!cancelled && !playbackStarted) setAnswerVideoState("ready");
+              }, 2500);
+            },
+            onStateChange: (event) => {
+              if (cancelled) return;
+              if (event.data === YT.PlayerState.PLAYING) {
+                playbackStarted = true;
+                if (autoplayFallbackTimer != null) window.clearTimeout(autoplayFallbackTimer);
+                setAnswerVideoState("playing");
+                setAnswerVideoStarted(true);
+              }
+              if (event.data === YT.PlayerState.BUFFERING) setAnswerVideoState("loading");
+            },
+            onAutoplayBlocked: () => {
+              if (!cancelled) setAnswerVideoState("ready");
+            },
+            onError: () => {
+              if (!cancelled) setAnswerVideoState("error");
+            },
+          },
+        });
+        answerPlayerRef.current = player;
+      })
+      .catch(() => {
+        if (!cancelled) setAnswerVideoState("error");
+      });
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(loadingTimer);
+      if (autoplayFallbackTimer != null) window.clearTimeout(autoplayFallbackTimer);
+      player?.destroy();
+      answerPlayerRef.current = null;
+    };
+  }, [answerVideoId, answerVideoStart, showAnswer, synchronizedReveal]);
+
   return (
-    <>
-      <div
-        className={`flip-inner round-stage round-lyrics ${showAnswer ? "flipped" : ""}`}
-        style={{
-          position: "relative",
-          width: "100%",
-          minHeight: "360px",
-          transformStyle: "preserve-3d",
-          transition: "transform 0.5s ease",
-        }}
-      >
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            backfaceVisibility: "hidden",
-          }}
-        >
-          <div
-            className="card"
-            style={{
-              padding: "22px",
-              background: "rgba(10, 12, 18, 0.96)",
-              borderColor: "rgba(255,255,255,0.18)",
-              position: "relative",
-              overflow: "hidden",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: "12px",
-              }}
-            >
-            <div>
-              <div
-                style={{
-                  fontWeight: 800,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.05em",
-                  color: "var(--muted)",
-                }}
-              >
-                {question.category} · Text Grid
+    <article className={`card round-stage round-lyrics question-modal-card text-grid-modal${showAnswer ? " answer-visible" : ""}`}>
+      <QuestionModalHeader
+        category={question.category}
+        typeLabel="Text grid"
+        points={question.points}
+        teamName={teamName}
+        teamColor={teamColor}
+        teamEmoji={teamEmoji}
+        teamLabel={showAnswer ? "Answered by" : answeringTeamName ? "Answering" : "Current team"}
+      />
+
+      <div className="question-modal-scroll text-grid-scroll">
+        {!showAnswer ? (
+          <section className="text-grid-stage">
+            <header className="text-grid-intro">
+              <div>
+                <span className="question-modal-eyebrow">Reveal board</span>
+                <h1>{question.prompt || "Open tiles to reveal the hidden text."}</h1>
               </div>
-            <div style={{ fontSize: "2rem", fontWeight: 800 }}>
-              {question.points} pts
+              <div className="text-grid-progress" aria-label={`${revealedCount} of ${segments.length} tiles revealed`}>
+                <strong>{revealedCount}<span>/{segments.length}</span></strong>
+                <small>revealed</small>
+              </div>
+            </header>
+
+            <div className="text-grid-rule">
+              <span aria-hidden>✦</span>
+              <p><strong>Choose a tile.</strong> A cranberry pass tile moves play to the next team without changing the score.</p>
+              {passCount > 0 && <small>{passCount} pass {passCount === 1 ? "tile" : "tiles"} found</small>}
             </div>
-            <div style={{ color: "var(--muted)", fontSize: "0.95rem" }}>
-              Red tiles pass play to the next team without changing the points. A wrong final answer scores zero.
-            </div>
-            {answeringTeamName && (
-              <TeamPill
-                label="Answering"
-                name={answeringTeamName}
-                color={answeringTeamColor}
-                emoji={answeringTeamEmoji}
-              />
+
+            {segments.length > 0 ? (
+              <div className="text-grid-board">
+                {segments.map((line, index) => {
+                  const revealed = lyricsRevealed[index];
+                  const red = isRed(index);
+                  return (
+                    <button
+                      key={index}
+                      type="button"
+                      onClick={() => onRevealLine(index)}
+                      className={`text-grid-tile ${revealed ? red ? "is-pass" : "is-revealed" : "is-concealed"}`}
+                      disabled={revealed}
+                      aria-label={revealed ? `${red ? "Pass tile" : "Revealed tile"}: ${line || "blank"}` : `Reveal tile ${index + 1}`}
+                    >
+                      <span className="text-grid-tile-number">{String(index + 1).padStart(2, "0")}</span>
+                      {revealed ? (
+                        <strong>{line || "(blank)"}</strong>
+                      ) : (
+                        <span className="text-grid-tile-seal" aria-hidden>✦</span>
+                      )}
+                      {revealed && red && <small>Pass</small>}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="text-grid-empty">No text-grid lines have been configured.</div>
             )}
-            </div>
-          </div>
-          {question.prompt && (
-            <div style={{ marginBottom: "10px", fontWeight: 700, fontSize: "1.15rem", lineHeight: 1.35 }}>
-              {question.prompt}
-            </div>
-          )}
-          <div style={{ color: "var(--muted)", marginBottom: "8px", fontSize: "0.95rem" }}>
-            Red tiles rotate the turn without a score penalty. The team in control must eventually guess or reveal.
-          </div>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
-              gap: "10px",
-            }}
-          >
-            {(question.lyricsSegments ?? []).map((line, idx) => {
-              const revealed = lyricsRevealed[idx];
-              const red = isRed(idx);
-              return (
-                <button
-                  key={idx}
-                  onClick={() => onRevealLine(idx)}
-                  className={`lyrics-tile ${revealed ? "revealed" : "concealed"}`}
-                  style={{
-                    minHeight: "80px",
-                    borderRadius: "12px",
-                    border: revealed
-                      ? red
-                        ? "1px solid rgba(207,45,45,0.8)"
-                        : "1px solid rgba(28,111,77,0.7)"
-                      : "1px solid rgba(255,255,255,0.12)",
-                    background: revealed
-                      ? red
-                        ? "linear-gradient(135deg, rgba(207,45,45,0.6), rgba(146,26,26,0.8))"
-                        : "rgba(28,111,77,0.18)"
-                      : "rgba(255,255,255,0.08)",
-                    color: revealed ? "#f5f3ef" : "var(--foreground)",
-                    fontWeight: 700,
-                    fontSize: revealed ? "1.2rem" : "1rem",
-                    padding: "12px",
-                    textAlign: "center",
-                    cursor: revealed ? "default" : "pointer",
-                    animation: revealed && red ? "boom 450ms ease-out" : undefined,
-                  }}
-                  disabled={revealed}
-                >
-                  {revealed ? line || "(blank)" : idx + 1}
-                </button>
-              );
-            })}
-          </div>
-          <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end", marginTop: "10px" }}>
-            <button
-              className="button ghost"
-              onClick={onRevealAll}
-              disabled={allRevealed}
-              style={{ opacity: allRevealed ? 0.6 : 1 }}
-            >
-              Reveal all lines
-            </button>
-          </div>
-          <div
-            style={{
-              marginTop: "18px",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              gap: "10px",
-            }}
-          >
-            <div style={{ display: "flex", gap: "8px" }}>
-              {onNextTeam && (
-                <button
-                  className="button secondary"
-                  onClick={onNextTeam}
-                  disabled={disableActions}
-                  style={{
-                    opacity: disableActions ? 0.6 : 1,
-                    background:
-                      "linear-gradient(135deg, rgba(238,174,202,0.16), rgba(148,187,233,0.12))",
-                    borderColor: "rgba(255,255,255,0.24)",
-                  }}
-                >
-                  Next team (wrong guess)
-                </button>
-              )}
-            </div>
-            <button className="button primary" onClick={onRevealAnswer}>
-              Reveal answer
-            </button>
-            <button className="button ghost" onClick={onClose}>
-              Close
-            </button>
-          </div>
-        </div>
+          </section>
+        ) : (
+          <section className={`text-grid-answer-stage${answerVideoEmbedUrl ? " has-video" : ""}${answerCanShow ? " reveal-ready" : " reveal-waiting"}`}>
+            {answerCanShow ? (
+              <div className="text-grid-answer-copy">
+                <span className="question-modal-eyebrow">Answer</span>
+                <h1 className={getAnswerDensity(question.answer)}>{question.answer || "No answer provided."}</h1>
+                {question.prompt && (
+                  <p><span>Original prompt</span>{question.prompt}</p>
+                )}
+              </div>
+            ) : (
+              <div className="text-grid-video-curtain" role="status" aria-live="polite">
+                <span className="text-grid-video-loader" aria-hidden>♪</span>
+                <small>Answer held backstage</small>
+                <h2>{answerVideoState === "error" ? "The video could not start" : answerVideoState === "ready" ? "Video ready" : "Preparing the reveal"}</h2>
+                <p>{answerVideoState === "ready" ? "Your browser needs one more click before playback can begin." : answerVideoState === "error" ? "You can continue without the video and reveal the answer manually." : "The answer will appear as soon as YouTube starts playing."}</p>
+                {answerVideoState === "ready" && (
+                  <button className="button text-grid-start-video" type="button" onClick={() => answerPlayerRef.current?.playVideo()}>
+                    Start video & reveal
+                  </button>
+                )}
+                {answerVideoState === "error" && (
+                  <button className="button text-grid-start-video" type="button" onClick={() => setRevealWithoutVideo(true)}>
+                    Reveal without video
+                  </button>
+                )}
+              </div>
+            )}
+            {answerVideoEmbedUrl && (
+              <div className="text-grid-answer-video">
+                {synchronizedReveal ? (
+                  <div className="text-grid-youtube-player" ref={answerPlayerHostRef} />
+                ) : (
+                  <iframe
+                    title="Text grid answer video"
+                    src={answerVideoEmbedUrl}
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                  />
+                )}
+              </div>
+            )}
+            {answerCanShow && segments.length > 0 && (
+              <div className="text-grid-transcript">
+                <span>Complete grid</span>
+                <div>
+                  {segments.map((line, index) => <strong key={index}>{line || "(blank)"}</strong>)}
+                </div>
+              </div>
+            )}
+          </section>
+        )}
       </div>
 
-      <div
-        style={{
-          position: "absolute",
-          inset: 0,
-          backfaceVisibility: "hidden",
-          transform: "rotateY(180deg)",
-        }}
-      >
-        <div
-          className="card"
-          style={{
-            padding: "22px",
-            background: "rgba(10, 14, 19, 0.96)",
-            borderColor: "rgba(255,255,255,0.2)",
-          }}
-        >
-          <div
-            style={{
-              marginBottom: "12px",
-            }}
-          >
-            <div
-              style={{
-                textTransform: "uppercase",
-                color: "var(--muted)",
-                letterSpacing: "0.05em",
-                fontWeight: 800,
-              }}
-            >
-              {question.category} · Text Grid
-            </div>
-            <div style={{ fontWeight: 800, fontSize: "2rem", marginTop: "6px" }}>
-              {question.points} pts
-            </div>
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-            <div style={{ color: "var(--muted)", fontSize: "1rem" }}>
-              Answer
-            </div>
-            <div
-              style={{
-                fontWeight: 800,
-                fontSize: "2rem",
-                lineHeight: 1.4,
-                wordBreak: "break-word",
-                overflowWrap: "anywhere",
-              }}
-            >
-              {question.answer || "No answer provided."}
-            </div>
-            {answerVideoUrl && (
-              <div
-                style={{
-                  borderRadius: "12px",
-                  overflow: "hidden",
-                  border: "1px solid rgba(255,255,255,0.12)",
-                  background: "rgba(255,255,255,0.04)",
-                  marginTop: "8px",
-                }}
-              >
-                <iframe
-                  src={answerVideoUrl}
-                  style={{ width: "100%", height: "240px", border: "0" }}
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  allowFullScreen
-                />
-              </div>
+      <QuestionModalActions
+        revealed={showAnswer}
+        onReveal={onRevealAnswer}
+        onCorrect={onCorrect}
+        onWrong={onWrong}
+        disabled={disableActions || (showAnswer && !answerCanShow)}
+        before={!showAnswer ? (
+          <>
+            <button className="button text-grid-reveal-all" type="button" onClick={onRevealAll} disabled={allRevealed}>
+              Reveal all tiles
+            </button>
+            {onNextTeam && (
+              <button className="button text-grid-next-team" type="button" onClick={onNextTeam} disabled={disableActions}>
+                Next team
+              </button>
             )}
-            {question.lyricsSegments && question.lyricsSegments.length > 0 && (
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
-                  gap: "10px",
-                }}
-              >
-                {question.lyricsSegments.map((line, idx) => (
-                  <div
-                    key={idx}
-                    style={{
-                      borderRadius: "12px",
-                      border: "1px solid rgba(255,255,255,0.12)",
-                      background: "rgba(255,255,255,0.05)",
-                      padding: "12px",
-                      fontWeight: 700,
-                      fontSize: "1.1rem",
-                      textAlign: "center",
-                    }}
-                  >
-                    {line}
-                  </div>
-                ))}
-              </div>
-            )}
-            <div
-              style={{
-                marginTop: "18px",
-                display: "grid",
-                gap: "10px",
-              }}
-            >
-              {answeringTeamName && (
-                <TeamPill
-                  label="Answered by"
-                  name={answeringTeamName}
-                  color={answeringTeamColor}
-                  emoji={answeringTeamEmoji}
-                />
-              )}
-              <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-                <button
-                  className="button secondary"
-                  onClick={onCorrect}
-                  disabled={disableActions}
-                  style={{ opacity: disableActions ? 0.6 : 1 }}
-                >
-                  ✓ Correct
-                </button>
-                <button
-                  className="button ghost"
-                  onClick={onWrong}
-                  disabled={disableActions}
-                  style={{ opacity: disableActions ? 0.6 : 1 }}
-                >
-                  ✕ Wrong
-                </button>
-                <button className="button ghost" onClick={onClose}>
-                  Close
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-      </div>
-    </>
+          </>
+        ) : null}
+      />
+    </article>
   );
 }

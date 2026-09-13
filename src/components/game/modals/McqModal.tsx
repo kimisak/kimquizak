@@ -2,6 +2,7 @@
 
 import type { Question, Team } from "@/lib/types";
 import { TeamPill } from "@/components/game/TeamPill";
+import { ExpandableImage } from "./ExpandableImage";
 import { useMemo } from "react";
 
 type Props = {
@@ -18,7 +19,6 @@ type Props = {
   correctIndex?: number;
   resolvedInfo?: { teamName: string; points: number } | null;
   onSelect: (idx: number) => void;
-  onClose: () => void;
 };
 
 export function McqModal({
@@ -34,7 +34,6 @@ export function McqModal({
   correctIndex = 0,
   resolvedInfo = null,
   onSelect,
-  onClose,
 }: Props) {
   const rawOptions = question.mcqOptions?.slice(0, 4) ?? [];
   const hasFour =
@@ -101,9 +100,6 @@ export function McqModal({
             <TeamPill label="Current" name={currentTeamName} color={currentTeamColor} emoji={currentTeamEmoji} />
           )}
         </div>
-        <button className="button ghost" onClick={onClose}>
-          Close
-        </button>
       </div>
       {question.prompt && (
         <div style={{ fontSize: "1.35rem", lineHeight: 1.45, marginBottom: "16px" }}>
@@ -132,16 +128,11 @@ export function McqModal({
                 filter: blurFront ? "blur(14px) brightness(0.5)" : "none",
               }}
               >
-                <img
-                  src={frontImage.src ?? undefined}
-                  alt={frontImage.alt ?? "Question image"}
-                  style={{
-                  width: "100%",
-                  height: "100%",
-                  objectFit: "contain",
-                  background: "rgba(0,0,0,0.3)",
-                  display: "block",
-                }}
+                <ExpandableImage
+                  src={frontImage.src!}
+                  alt={frontImage.alt || "Question image"}
+                  label="Question image"
+                  className="question-image-fill"
                 />
               {blurFront && (
                 <div
@@ -173,16 +164,11 @@ export function McqModal({
                   border: "1px solid rgba(255,255,255,0.1)",
                 }}
               >
-                <img
-                  src={backImage.src ?? undefined}
-                  alt={backImage.alt ?? "Answer image"}
-                  style={{
-                    width: "100%",
-                    height: "100%",
-                    objectFit: "contain",
-                    background: "rgba(0,0,0,0.3)",
-                    display: "block",
-                  }}
+                <ExpandableImage
+                  src={backImage.src!}
+                  alt={backImage.alt || "Answer image"}
+                  label="Answer image"
+                  className="question-image-fill"
                 />
               </div>
             )}

@@ -1,8 +1,15 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { BoardGrid } from "@/components/game/BoardGrid";
 import { FinalCelebration } from "@/components/game/FinalCelebration";
+import { HostMessageOverlay } from "@/components/game/HostMessageOverlay";
 import { Leaderboard } from "@/components/game/Leaderboard";
 import { GeoguesserModal } from "@/components/game/modals/GeoguesserModal";
 import {
@@ -32,6 +39,7 @@ import {
 import { type Question, type ScoreTransaction, type Team, type TimelineEvent } from "@/lib/types";
 import { buildDefaultTeams, makeId } from "@/lib/defaultData";
 import { DEFAULT_SETTINGS } from "@/lib/settings";
+import { resolveHostMessageTemplate } from "@/lib/hostMessageTemplates";
 import { isQuestionReady } from "@/lib/questionValidation";
 import { getTeamAccent, reconcileTeamTheme } from "@/lib/teamPresentation";
 
@@ -39,6 +47,7 @@ type ActiveQuestion = Question & { category: string };
 type PlacedTimelineEvent = TimelineEvent & {
   status?: "correct" | "wrong";
 };
+
 export default function GameBoardPage() {
   const [settings] = useSettings();
   const {
@@ -176,6 +185,38 @@ export default function GameBoardPage() {
     [questions],
   );
   const remainingQuestionCount = Math.max(0, playableQuestionCount - answeredQuestionCount);
+  const activeHostMessage = useMemo(() => {
+    const dismissed = new Set(turnState.dismissedHostMessageIds ?? []);
+    return (settings.hostMessages ?? [])
+      .map((message, index) => ({ message, index }))
+      .filter(({ message }) =>
+        message.text.trim()
+        && message.afterQuestionCount > 0
+        && message.afterQuestionCount <= answeredQuestionCount
+        && !dismissed.has(message.id),
+      )
+      .sort((left, right) =>
+        left.message.afterQuestionCount - right.message.afterQuestionCount
+        || left.index - right.index,
+      )[0]?.message ?? null;
+  }, [answeredQuestionCount, settings.hostMessages, turnState.dismissedHostMessageIds]);
+  const activeHostMessageResolution = activeHostMessage
+    ? turnState.resolvedHostMessages?.[activeHostMessage.id]
+    : undefined;
+  useEffect(() => {
+    if (!activeHostMessage || activeHostMessageResolution) return;
+    const resolution = resolveHostMessageTemplate(activeHostMessage.text, teams);
+    setTurnState((previous) => {
+      if (previous.resolvedHostMessages?.[activeHostMessage.id]) return previous;
+      return {
+        ...previous,
+        resolvedHostMessages: {
+          ...(previous.resolvedHostMessages ?? {}),
+          [activeHostMessage.id]: resolution,
+        },
+      };
+    });
+  }, [activeHostMessage, activeHostMessageResolution, setTurnState, teams]);
   const boardProgressPercent = playableQuestionCount > 0
     ? (answeredQuestionCount / playableQuestionCount) * 100
     : 0;
@@ -278,15 +319,6 @@ export default function GameBoardPage() {
     (activeQuestion?.lyricsSegments?.length ?? 0) > 0 &&
     lyricsRevealed.length === (activeQuestion?.lyricsSegments?.length ?? 0) &&
     lyricsRevealed.every(Boolean);
-
-  const buildVideoSrc = (url: string | null, shouldAutoplay: boolean) => {
-    if (!url) return "";
-    const joiner = url.includes("?") ? "&" : "?";
-    if (showAnswer && shouldAutoplay) {
-      return `${url}${joiner}autoplay=1&playsinline=1`;
-    }
-    return url;
-  };
 
   const isRedLyric = (idx: number) =>
     activeQuestion?.type === "lyrics" && lyricsPattern.includes(idx);
@@ -654,6 +686,7 @@ export default function GameBoardPage() {
 
   useEffect(() => {
     if (activeQuestion) return;
+    if (activeHostMessage) return;
     if (showFinalLeaderboard) return;
     if (finalLeaderboardShown) return;
     if (questions.length === 0) return;
@@ -664,7 +697,7 @@ export default function GameBoardPage() {
       setShowFinalLeaderboard(true);
       setFinalLeaderboardShown(true);
     }
-  }, [questions, activeQuestion, showFinalLeaderboard, finalLeaderboardShown]);
+  }, [questions, activeQuestion, activeHostMessage, showFinalLeaderboard, finalLeaderboardShown]);
 
   const toggleGeoLock = () => {
     if (!activeQuestion || activeQuestion.type !== "geoguesser") return;
@@ -737,7 +770,15 @@ export default function GameBoardPage() {
     if (remainingQuestionCount === 1 && isQuestionReady(activeQuestion) && !activeQuestion.answered) {
       setFinaleRevealed(false);
       setFinaleDrumrollFinished(false);
-      startFinaleDrumroll(() => setFinaleDrumrollFinished(true));
+      const dismissed = new Set(turnState.dismissedHostMessageIds ?? []);
+      const messageComesFirst = (settings.hostMessages ?? []).some((message) =>
+        message.text.trim()
+        && message.afterQuestionCount <= answeredQuestionCount + 1
+        && !dismissed.has(message.id),
+      );
+      if (!messageComesFirst) {
+        startFinaleDrumroll(() => setFinaleDrumrollFinished(true));
+      }
     }
     const basePoints = activeQuestion.points ?? 0;
     const teamIdToScore =
@@ -1031,16 +1072,10 @@ export default function GameBoardPage() {
 
   const renderModal = () => {
     if (!activeQuestion) return null;
-    const answerVideoUrl = buildVideoSrc(
-      activeQuestion.answerVideoUrl || null,
-      activeQuestion.answerVideoAutoplay ?? true,
-    );
-
     if (activeQuestion.type === "lyrics") {
       return (
         <LyricsModal
           question={activeQuestion}
-          teams={teams}
           lyricsRevealed={lyricsRevealed}
           isRed={isRedLyric}
           onRevealLine={handleRevealLine}
@@ -1058,12 +1093,12 @@ export default function GameBoardPage() {
           answeringTeamName={answeringTeam?.name}
           answeringTeamColor={answeringTeamColor}
           answeringTeamEmoji={answeringTeamEmoji}
-          answerVideoUrl={answerVideoUrl}
+          answerVideoUrl={activeQuestion.answerVideoUrl}
+          answerVideoAutoplay={activeQuestion.answerVideoAutoplay ?? true}
           onNextTeam={handleLyricsNextTeam}
           onCorrect={() => markAnswered(true)}
           onWrong={() => markAnswered(false)}
           disableActions={!answeringTeam}
-          onClose={closeModal}
         />
       );
     }
@@ -1078,7 +1113,6 @@ export default function GameBoardPage() {
           answeringTeamEmoji={answeringTeamEmoji}
           mapLocked={mapLocked}
           onToggleLock={toggleGeoLock}
-          onClose={closeModal}
           onRevealAnswer={() => setShowAnswer(true)}
           showAnswer={showAnswer}
           onCorrect={() => markAnswered(true)}
@@ -1103,7 +1137,6 @@ export default function GameBoardPage() {
           answeringTeamEmoji={answeringTeamEmoji}
           eliminated={mcqEliminated}
           onSelect={handleMcqSelect}
-          onClose={closeModal}
           resolved={mcqResolved}
           correctIndex={activeQuestion.mcqCorrectIndex ?? 0}
           resolvedInfo={mcqResolvedInfo}
@@ -1123,7 +1156,6 @@ export default function GameBoardPage() {
           progress={jokerProgress}
           onGuess={handleJokerGuess}
           onFinish={finishJokerQuestion}
-          onClose={closeModal}
           disableActions={!answeringTeam}
           maxScore={getMaxJokerScore()}
           rotateInfo={activeQuestion.jokerRotateOnMiss ?? true}
@@ -1146,7 +1178,6 @@ export default function GameBoardPage() {
           placedLeft={timelinePlacedLeft ?? []}
           placedRight={timelinePlacedRight ?? []}
           onPlace={handleTimelinePlace}
-          onClose={closeModal}
           disableActions={!timelineTeamId}
           winnerName={timelineWinnerName}
           winnerTeamId={timelineWinnerId}
@@ -1180,7 +1211,6 @@ export default function GameBoardPage() {
           showAnswer={showAnswer}
           onCorrect={() => markAnswered(true)}
           onWrong={() => markAnswered(false)}
-          onClose={closeModal}
           disableActions={!answeringTeam}
         />
       );
@@ -1188,14 +1218,12 @@ export default function GameBoardPage() {
     return (
       <StandardModal
         question={activeQuestion}
-        teams={teams}
         currentTeamName={currentTeam?.name}
         currentTeamColor={currentTeamColor}
         currentTeamEmoji={currentTeamEmoji}
         answeringTeamName={answeringTeam?.name}
         answeringTeamColor={answeringTeamColor}
         answeringTeamEmoji={answeringTeamEmoji}
-        onClose={closeModal}
         onRevealAnswer={() => setShowAnswer(true)}
         showAnswer={showAnswer}
         onCorrect={() => markAnswered(true)}
@@ -1208,7 +1236,11 @@ export default function GameBoardPage() {
   return (
     <main className="game-page" style={{ display: "grid", gap: "14px" }}>
       <div className="game-stage">
-      <section className="game-board-panel" style={{ padding: "6px" }}>
+      <section
+        className="game-board-panel board-viewport-panel"
+        id="game-board-stage"
+        style={{ padding: "6px" }}
+      >
         <div
           className="game-command-bar"
           style={{
@@ -1331,8 +1363,9 @@ export default function GameBoardPage() {
             Add categories and questions first in the config pages.
           </div>
         ) : (
-          <div style={{ position: "relative" }}>
-            <div inert={!activeTurnOrder.length ? true : undefined} aria-hidden={!activeTurnOrder.length || undefined}>
+          <>
+          <div className="board-viewport-frame">
+            <div className="board-viewport-grid" inert={!activeTurnOrder.length ? true : undefined} aria-hidden={!activeTurnOrder.length || undefined}>
               <BoardGrid
                 categories={categories}
                 questions={questions}
@@ -1363,10 +1396,11 @@ export default function GameBoardPage() {
               </div>
             )}
           </div>
+          </>
         )}
       </section>
 
-      <div className="game-leaderboard-panel">
+      <div className="game-leaderboard-panel" id="game-podium">
         <Leaderboard
           teams={sortedTeams}
           onAdjust={adjustScore}
@@ -1488,6 +1522,46 @@ export default function GameBoardPage() {
             onStart: finaleSoundtrack.requestPlay,
           }}
           onClose={closeFinalLeaderboard}
+        />
+      )}
+      {activeHostMessage && activeHostMessageResolution && !activeQuestion && !showFinalLeaderboard && (
+        <HostMessageOverlay
+          key={activeHostMessage.id}
+          message={activeHostMessage}
+          resolution={activeHostMessageResolution}
+          teams={teams}
+          answeredQuestionCount={answeredQuestionCount}
+          playableQuestionCount={playableQuestionCount}
+          onResolutionChange={(resolution) => {
+            setTurnState((previous) => ({
+              ...previous,
+              resolvedHostMessages: {
+                ...(previous.resolvedHostMessages ?? {}),
+                [activeHostMessage.id]: resolution,
+              },
+            }));
+          }}
+          onDismiss={() => {
+            const dismissed = new Set(turnState.dismissedHostMessageIds ?? []);
+            dismissed.add(activeHostMessage.id);
+            const anotherMessageIsDue = (settings.hostMessages ?? []).some((message) =>
+              message.id !== activeHostMessage.id
+              && message.text.trim()
+              && message.afterQuestionCount <= answeredQuestionCount
+              && !dismissed.has(message.id),
+            );
+            if (boardComplete && !anotherMessageIsDue) {
+              setFinaleDrumrollFinished(false);
+              startFinaleDrumroll(() => setFinaleDrumrollFinished(true));
+            }
+            setTurnState((previous) => ({
+              ...previous,
+              dismissedHostMessageIds: Array.from(new Set([
+                ...(previous.dismissedHostMessageIds ?? []),
+                activeHostMessage.id,
+              ])),
+            }));
+          }}
         />
       )}
       <div className="finale-soundtrack-player" aria-hidden="true">

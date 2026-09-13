@@ -15,6 +15,8 @@ export function useTurnState() {
       boardIndex: 0,
       lyricsIndex: 0,
       revealedCategories: [],
+      dismissedHostMessageIds: [],
+      resolvedHostMessages: {},
     },
     [LEGACY_TURN_STATE_STORAGE_KEY],
   );
@@ -47,6 +49,8 @@ export function useTurnState() {
       boardIndex: 0,
       lyricsIndex: 0,
       revealedCategories: [],
+      dismissedHostMessageIds: [],
+      resolvedHostMessages: {},
     });
 
   return { turnState, setTurnState, setOrder, advanceBoard, advanceLyrics, reset };

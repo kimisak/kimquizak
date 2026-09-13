@@ -1,13 +1,11 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import type { Question } from "@/lib/types";
-import { TeamPill } from "@/components/game/TeamPill";
+import { QuestionModalActions } from "./QuestionModalActions";
+import { QuestionModalHeader } from "./QuestionModalHeader";
 import { buildYouTubeEmbedUrl, extractYouTubeId, getYouTubeStartSeconds } from "@/lib/youtube";
-import {
-  loadYouTubePlayerApi,
-  type YouTubePlayer,
-} from "@/lib/youtubePlayer";
+import { loadYouTubePlayerApi, type YouTubePlayer } from "@/lib/youtubePlayer";
 
 type Props = {
   question: Question;
@@ -21,11 +19,18 @@ type Props = {
   onRevealAnswer: () => void;
   onCorrect: () => void;
   onWrong: () => void;
-  onClose: () => void;
   disableActions?: boolean;
 };
 
 const DEFAULT_STOP_SECONDS = 10;
+
+function getTextDensity(value?: string | null) {
+  const length = (value || "").trim().length;
+  if (length > 280) return "text-density-xlong";
+  if (length > 175) return "text-density-long";
+  if (length > 95) return "text-density-medium";
+  return "text-density-short";
+}
 
 export function AudioModal({
   question,
@@ -39,7 +44,6 @@ export function AudioModal({
   onRevealAnswer,
   onCorrect,
   onWrong,
-  onClose,
   disableActions,
 }: Props) {
   const playerHostRef = useRef<HTMLDivElement | null>(null);
@@ -88,9 +92,7 @@ export function AudioModal({
     playerRef.current?.pauseVideo();
     setIsPlaying(false);
     setIsLoading(false);
-    if (!keepRemaining) {
-      setRemaining(0);
-    }
+    if (!keepRemaining) setRemaining(0);
   }, [clearPlaybackMonitor]);
 
   const startPlaybackMonitor = useCallback(() => {
@@ -148,9 +150,7 @@ export function AudioModal({
             onStateChange: (event) => {
               if (!playRequestedRef.current) return;
               if (event.data === YT.PlayerState.PLAYING) {
-                if (playbackOriginRef.current == null) {
-                  playbackOriginRef.current = event.target.getCurrentTime();
-                }
+                if (playbackOriginRef.current == null) playbackOriginRef.current = event.target.getCurrentTime();
                 setIsLoading(false);
                 setIsPlaying(true);
                 startPlaybackMonitor();
@@ -187,9 +187,7 @@ export function AudioModal({
 
   useEffect(() => {
     const id = setTimeout(() => {
-      if (showAnswer) {
-        stopPlayback();
-      }
+      if (showAnswer) stopPlayback();
     }, 0);
     return () => clearTimeout(id);
   }, [showAnswer, stopPlayback]);
@@ -204,367 +202,128 @@ export function AudioModal({
     return () => clearTimeout(id);
   }, [embedUrl, question.audioStopSeconds, stopPlayback]);
 
+  const teamName = answeringTeamName || currentTeamName;
+  const teamColor = answeringTeamName ? answeringTeamColor : currentTeamColor;
+  const teamEmoji = answeringTeamName ? answeringTeamEmoji : currentTeamEmoji;
+  const playDisabled = !embedUrl || !playerReady || isLoading || isPlaying || hasPlayed;
+  const progress = Math.max(0, Math.min(1, remaining / stopAfter));
+  const playerState = playerError
+    ? "error"
+    : isPlaying
+      ? "playing"
+      : isLoading
+        ? "loading"
+        : hasPlayed
+          ? "complete"
+          : playerReady
+            ? "ready"
+            : "preparing";
+  const statusCopy = playerError
+    || (!embedUrl ? "No YouTube clip configured" : null)
+    || (isPlaying ? `${remaining.toFixed(1)} seconds remaining` : null)
+    || (isLoading ? "YouTube connected · timer waits for the first sound" : null)
+    || (hasPlayed ? "Clip complete · reveal when the team has answered" : null)
+    || (playerReady ? "Clip loaded and ready" : "Preparing the clip in the background");
+
   return (
-    <div
-      className="card round-stage round-audio"
-      style={{
-        padding: "22px",
-        background: "rgba(10, 12, 18, 0.96)",
-        borderColor: "rgba(255,255,255,0.18)",
-        position: "relative",
-        overflow: "visible",
-        minHeight: "620px",
-        borderRadius: "18px",
-      }}
-    >
-      <div
-        className={`flip-inner ${showAnswer ? "flipped" : ""}`}
-        style={{
-          position: "relative",
-          width: "100%",
-          minHeight: "580px",
-          transformStyle: "preserve-3d",
-          transition: "transform 0.5s ease",
-        }}
-      >
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            backfaceVisibility: "hidden",
-            display: "grid",
-            gridTemplateRows: "auto 1fr auto",
-            overflowY: "auto",
-            pointerEvents: showAnswer ? "none" : "auto",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: "12px",
-              gap: "10px",
-            }}
-          >
-            <div>
-              <div
-                style={{
-                  fontWeight: 800,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.05em",
-                  color: "var(--muted)",
-                }}
-              >
-                {question.category} · Audio
-              </div>
-              <div style={{ fontSize: "2rem", fontWeight: 800 }}>
-                {question.points} pts
-              </div>
-              {answeringTeamName && !showAnswer && (
-                <TeamPill
-                  label="Answering"
-                  name={answeringTeamName}
-                  color={answeringTeamColor}
-                  emoji={answeringTeamEmoji}
-                />
-              )}
-              {currentTeamName && !answeringTeamName && (
-                <TeamPill label="Current" name={currentTeamName} color={currentTeamColor} emoji={currentTeamEmoji} />
-              )}
-            </div>
-          </div>
+    <article className={`card round-stage round-audio question-modal-card audio-question-modal state-${playerState}${showAnswer ? " answer-visible" : ""}`}>
+      <QuestionModalHeader
+        category={question.category}
+        typeLabel="Guess the audio"
+        points={question.points}
+        teamName={teamName}
+        teamColor={teamColor}
+        teamEmoji={teamEmoji}
+        teamLabel={showAnswer ? "Answered by" : answeringTeamName ? "Answering" : "Current team"}
+      />
 
-          <div
-            style={{
-              display: "grid",
-              gap: "10px",
-              alignItems: "start",
-              alignContent: "start",
-              overflow: "hidden",
-            }}
-          >
-            <div style={{ fontSize: "2rem", lineHeight: 1.35, marginBottom: "0px" }}>
-              {question.prompt || "No prompt provided."}
+      <div className="question-modal-scroll audio-modal-scroll">
+        {!showAnswer ? (
+          <section className="audio-question-stage">
+            <div className={`audio-question-copy ${getTextDensity(question.prompt)}`}>
+              <span className="question-modal-eyebrow">Listen closely</span>
+              <h1 className={getTextDensity(question.prompt)}>{question.prompt || "What are you listening to?"}</h1>
+              <p>The clip can be played once. Its timer begins only when YouTube starts producing audio.</p>
             </div>
-            <div
-              style={{
-                position: "relative",
-                borderRadius: "14px",
-                border: "1px solid rgba(255,255,255,0.12)",
-                background:
-                  "linear-gradient(135deg, rgba(129,230,217,0.06), rgba(69,105,144,0.16))",
-                padding: "16px",
-                display: "grid",
-                alignItems: "stretch",
-                justifyItems: "stretch",
-                alignSelf: "center",
-                minHeight: "220px",
-              }}
-            >
-              <div
-                style={{
-                  position: "absolute",
-                  inset: 0,
-                  opacity: 0.6,
-                  pointerEvents: "none",
-                  background:
-                    "radial-gradient(circle at 20% 30%, rgba(255,255,255,0.06), transparent 30%), radial-gradient(circle at 80% 60%, rgba(255,255,255,0.08), transparent 32%)",
-                }}
-              />
-              <div
-                style={{
-                  display: "grid",
-                  placeItems: "center",
-                  height: "100%",
-                  zIndex: 1,
-                  gap: "16px",
-                }}
-              >
-                <div
-                  style={{
-                    display: "grid",
-                    gap: "8px",
-                    width: "100%",
-                    maxWidth: "520px",
-                  }}
-                >
-                  <div
+
+            <div className="audio-console">
+              <div className="audio-console-status">
+                <span className="audio-status-light" aria-hidden />
+                <strong>{playerState}</strong>
+                <small>{startAt > 0 ? `From ${startAt}s` : "From the beginning"} · {stopAfter}s clip</small>
+              </div>
+
+              <div className="audio-waveform" aria-hidden>
+                {new Array(32).fill(0).map((_, index) => (
+                  <span
+                    key={index}
                     style={{
-                      display: "grid",
-                      gridTemplateColumns: "repeat(24, 1fr)",
-                      gap: "6px",
-                      alignItems: "end",
-                      height: "140px",
-                    }}
-                  >
-                    {new Array(24).fill(0).map((_, idx) => {
-                      const phase = (idx % 5) * 60;
-                      const active = isPlaying;
-                      const height = active
-                        ? `${30 + ((idx * 7) % 70)}%`
-                        : `${20 + (idx % 6) * 4}%`;
-                      return (
-                        <span
-                          key={idx}
-                          style={{
-                            display: "block",
-                            width: "100%",
-                            borderRadius: "6px 6px 2px 2px",
-                            background: active ? "#81e6d9" : "rgba(255,255,255,0.28)",
-                            height,
-                            transition: "height 0.2s ease, background 0.2s ease",
-                            animation: active ? `vizPulse 1.2s ease-in-out ${phase}ms infinite` : "none",
-                          }}
-                        />
-                      );
-                    })}
-                  </div>
-                  <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap", justifyContent: "center", marginTop: "18px" }}>
-                    <button
-                      className="button secondary"
-                      onClick={startPlayback}
-                      disabled={!embedUrl || !playerReady || isLoading || isPlaying || hasPlayed}
-                      style={{
-                        position: "relative",
-                        overflow: "hidden",
-                        minWidth: "180px",
-                        opacity: !embedUrl || !playerReady || isLoading || isPlaying || hasPlayed ? 0.65 : 1,
-                        boxShadow: isPlaying
-                          ? "0 0 0 0 rgba(129, 230, 217, 0.55)"
-                          : "0 10px 26px rgba(0,0,0,0.35)",
-                        animation: isPlaying ? "pulse-ring 1.1s ease-in-out infinite" : "none",
-                      }}
-                    >
-                      {!playerReady
-                        ? "Preparing player…"
-                        : isLoading
-                          ? "Loading clip…"
-                          : isPlaying
-                            ? "Playing…"
-                            : hasPlayed
-                              ? "Clip played"
-                              : "Play clip"}
-                    </button>
-                    <button
-                      className="button ghost"
-                      onClick={() => stopPlayback()}
-                      disabled={!isPlaying && !isLoading}
-                      style={{ minWidth: "140px", opacity: !isPlaying && !isLoading ? 0.6 : 1 }}
-                    >
-                      Stop
-                    </button>
-                    <div style={{ color: "var(--muted)", fontSize: "0.95rem", display: "grid", gap: "4px", textAlign: "center", minWidth: "160px" }}>
-                      {isPlaying ? (
-                        <span style={{ color: "#81e6d9", fontWeight: 700 }}>
-                          {remaining?.toFixed(1)}s left
-                        </span>
-                      ) : isLoading ? (
-                        <span style={{ color: "#f7c948", fontWeight: 700 }}>
-                          Waiting for YouTube — timer has not started
-                        </span>
-                      ) : (
-                        <>
-                          <span>
-                            {startAt > 0
-                              ? `Starts at ${startAt}s, plays for ${stopAfter} second(s).`
-                              : `Plays for ${stopAfter} second(s).`}
-                          </span>
-                          {!embedUrl && <span style={{ color: "#f87171" }}>Missing YouTube URL</span>}
-                          {playerError && <span style={{ color: "#f87171" }}>{playerError}</span>}
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </div>
+                      "--audio-bar": `${24 + ((index * 17) % 70)}%`,
+                      "--audio-delay": `${(index % 8) * -90}ms`,
+                    } as CSSProperties}
+                  />
+                ))}
               </div>
-              <div
-                aria-hidden
-                style={{
-                  position: "fixed",
-                  width: "200px",
-                  height: "200px",
-                  left: "-10000px",
-                  top: "-10000px",
-                  opacity: 0,
-                  pointerEvents: "none",
-                }}
-              >
-                <div ref={playerHostRef} />
-              </div>
-            </div>
-          </div>
 
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              gap: "10px",
-              marginTop: "12px",
-            }}
-          >
-            <button className="button ghost" onClick={onClose}>
-              Close
-            </button>
-            <button className="button primary" onClick={onRevealAnswer}>
-              Reveal answer
-            </button>
-          </div>
-        </div>
+              <div className="audio-play-cluster">
+                <button
+                  className="audio-play-control"
+                  type="button"
+                  onClick={startPlayback}
+                  disabled={playDisabled}
+                  aria-label={isPlaying ? "Audio is playing" : hasPlayed ? "Audio clip has been played" : "Play audio clip"}
+                  style={{ "--audio-progress": `${progress * 360}deg` } as CSSProperties}
+                >
+                  <span className="audio-play-control-core" aria-hidden>
+                    {isLoading ? "···" : isPlaying ? "♫" : hasPlayed ? "✓" : "▶"}
+                  </span>
+                </button>
+                <strong>{isLoading ? "Connecting" : isPlaying ? "Now playing" : hasPlayed ? "Played once" : "Play clip"}</strong>
+                <small>{statusCopy}</small>
+              </div>
 
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            backfaceVisibility: "hidden",
-            transform: "rotateY(180deg)",
-            overflow: "hidden",
-          }}
-        >
-          <div
-            style={{
-              padding: "18px",
-              background: "rgba(10, 12, 18, 0.96)",
-              minHeight: "100%",
-              display: "grid",
-              gridTemplateRows: "auto auto 1fr auto auto",
-              gap: "14px",
-              overflow: "hidden",
-            }}
-          >
-            <div>
-              <div
-                style={{
-                  textTransform: "uppercase",
-                  color: "var(--muted)",
-                  letterSpacing: "0.05em",
-                  fontWeight: 800,
-                }}
-              >
-                {question.category} · Audio
-              </div>
-              <div style={{ fontWeight: 800, fontSize: "2rem", marginTop: "6px" }}>
-                {question.points} pts
+              <div className="audio-console-footer">
+                <span>{isPlaying ? `${remaining.toFixed(1)} / ${stopAfter.toFixed(1)} sec` : "One controlled playback"}</span>
+                <button className="audio-stop-control" type="button" onClick={() => stopPlayback()} disabled={!isPlaying && !isLoading}>
+                  ■ Stop
+                </button>
               </div>
             </div>
-            <div style={{ fontSize: "1.2rem", lineHeight: 1.4, fontWeight: 700 }}>
-              Answer:{" "}
-              <span style={{ fontWeight: 800 }}>
-                {question.answer || "No answer provided."}
-              </span>
+          </section>
+        ) : (
+          <section className="audio-answer-stage">
+            <div className={`audio-answer-copy ${getTextDensity(`${question.answer ?? ""} ${question.prompt ?? ""}`)}`}>
+              <span className="question-modal-eyebrow">Answer</span>
+              <h1 className={getTextDensity(question.answer)}>{question.answer || "No answer provided."}</h1>
+              {question.prompt && <p className={getTextDensity(question.prompt)}><span>Original prompt</span>{question.prompt}</p>}
             </div>
-            <div
-              style={{
-                borderRadius: "12px",
-                overflow: "hidden",
-                background: "rgba(255,255,255,0.03)",
-                border: "1px solid rgba(255,255,255,0.12)",
-                minHeight: "300px",
-                maxHeight: "360px",
-                position: "relative",
-                isolation: "isolate",
-              }}
-            >
+            <div className="audio-answer-video">
               {embedUrl ? (
                 <iframe
                   title="Answer video"
                   src={embedUrl}
                   allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                   allowFullScreen
-                  style={{
-                    width: "100%",
-                    height: "100%",
-                    border: 0,
-                    display: "block",
-                    position: "relative",
-                    zIndex: 2,
-                  }}
                 />
               ) : (
-                <div style={{ padding: "14px", color: "var(--muted)" }}>No video provided.</div>
+                <div>No video provided.</div>
               )}
             </div>
-            {answeringTeamName && (
-              <TeamPill
-                label="Answered by"
-                name={answeringTeamName}
-                color={answeringTeamColor}
-                emoji={answeringTeamEmoji}
-              />
-            )}
-            <div
-              style={{
-                display: "flex",
-                gap: "10px",
-                flexWrap: "wrap",
-                marginTop: "6px",
-                justifyContent: "flex-start",
-              }}
-            >
-              <button
-                className="button secondary"
-                onClick={onCorrect}
-                disabled={disableActions}
-                style={{ opacity: disableActions ? 0.6 : 1 }}
-              >
-                ✓ Correct
-              </button>
-              <button
-                className="button ghost"
-                onClick={onWrong}
-                disabled={disableActions}
-                style={{ opacity: disableActions ? 0.6 : 1 }}
-              >
-                ✕ Wrong
-              </button>
-              <button className="button ghost" onClick={onClose}>
-                Close
-              </button>
-            </div>
-          </div>
+          </section>
+        )}
+
+        <div className="audio-player-host" aria-hidden>
+          <div ref={playerHostRef} />
         </div>
       </div>
-    </div>
+
+      <QuestionModalActions
+        revealed={showAnswer}
+        onReveal={onRevealAnswer}
+        onCorrect={onCorrect}
+        onWrong={onWrong}
+        disabled={disableActions}
+      />
+    </article>
   );
 }
