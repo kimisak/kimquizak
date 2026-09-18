@@ -1,10 +1,20 @@
 export const POINT_VALUES = [100, 200, 300, 400, 500] as const;
 export type PointValue = (typeof POINT_VALUES)[number];
 
+export type PlayerBondKind = "besties" | "sweethearts" | "rivals";
+
+export type PlayerBond = {
+  playerId: string;
+  kind: PlayerBondKind;
+};
+
 export type Player = {
   id: string;
   name: string;
   placeholder?: string;
+  bonds?: PlayerBond[];
+  /** Legacy singular connection, migrated by the team configuration page. */
+  bond?: PlayerBond | null;
 };
 
 export type Team = {
@@ -28,7 +38,7 @@ export type Question = {
   imageName?: string | null;
   answerImageData?: string | null;
   answerImageName?: string | null;
-  type?: "standard" | "lyrics" | "geoguesser" | "joker" | "timeline" | "mcq" | "audio";
+  type?: "standard" | "lyrics" | "geoguesser" | "joker" | "timeline" | "mcq" | "audio" | "booby";
   lyricsSegments?: string[];
   lyricsInfoText?: string | null;
   mapEmbedUrl?: string | null;
@@ -38,6 +48,15 @@ export type Question = {
   answerVideoAutoplay?: boolean | null;
   geoTimerSeconds?: number | null;
   geoUnlockCost?: number | null;
+  geoUnlockLevels?: 1 | 2 | null;
+  geoExplorationMode?: "timed" | "look" | "free" | "stage" | null;
+  geoStageExploreSeconds?: number | null;
+  geoStageGuessSeconds?: number | null;
+  geoStageDistanceBandsKm?: number[] | null;
+  geoStageDistanceUnit?: "km" | "m" | null;
+  challengeTimerSeconds?: number | null;
+  challengeTimerMode?: "countdown" | "countup" | null;
+  challengeTimerShowTime?: boolean | null;
   lyricsRedPattern?: number[];
   jokerNumbers?: number[];
   jokerTargets?: number[];
@@ -59,6 +78,7 @@ export type Question = {
   audioUrl?: string | null;
   audioStopSeconds?: number | null;
   audioStartSeconds?: number | null;
+  audioReplayEnabled?: boolean | null;
 };
 
 export type TeamMap = Record<string, Team>;
@@ -106,6 +126,8 @@ export type TurnState = {
   revealedCategories?: string[];
   dismissedHostMessageIds?: string[];
   resolvedHostMessages?: Record<string, ResolvedHostMessage>;
+  audioPlaybackCounts?: Record<string, number>;
+  audioReplayValues?: Record<string, number>;
 };
 
 export type TimelineEvent = {

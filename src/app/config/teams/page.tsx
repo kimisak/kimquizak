@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useState, type CSSProperties } from "react";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { useSettings } from "@/hooks/useSettings";
 import {
@@ -9,7 +9,7 @@ import {
   TEAM_STORAGE_KEY,
   TURN_STATE_STORAGE_KEY,
 } from "@/lib/storage";
-import type { Player, Team } from "@/lib/types";
+import type { Player, PlayerBondKind, Team } from "@/lib/types";
 import {
   buildDefaultTeams,
   getThemeById,
@@ -44,6 +44,80 @@ const getAvailableDefaultPlayerNumbers = (teams: Team[], count: number) => {
   return availableNumbers;
 };
 
+const shuffleArray = <T,>(arr: T[]) => {
+  const copy = [...arr];
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+};
+
+const BOND_OPTIONS: Array<{ value: PlayerBondKind; label: string; emoji: string }> = [
+  { value: "besties", label: "Besties", emoji: "🤝" },
+  { value: "sweethearts", label: "Sweethearts", emoji: "💞" },
+  { value: "rivals", label: "Rivals", emoji: "⚡" },
+];
+
+const getPlayerBonds = (player: Player) => (
+  player.bonds ?? (player.bond ? [player.bond] : [])
+);
+
+const sanitizePlayerBonds = (teams: Team[]) => {
+  const players = new Map(teams.flatMap((team) => team.players.map((player) => [player.id, player] as const)));
+  let changed = false;
+  const sanitized = teams.map((team) => ({
+    ...team,
+    players: team.players.map((player) => {
+      const declaredBonds = getPlayerBonds(player);
+      const seenPartners = new Set<string>();
+      const validBonds = declaredBonds.filter((bond) => {
+        const partner = players.get(bond.playerId);
+        const reciprocal = partner && getPlayerBonds(partner).some((candidate) => (
+          candidate.playerId === player.id && candidate.kind === bond.kind
+        ));
+        if (!partner || partner.id === player.id || !reciprocal || seenPartners.has(partner.id)) {
+          return false;
+        }
+        seenPartners.add(partner.id);
+        return true;
+      });
+      const needsUpdate = player.bond !== undefined
+        || validBonds.length !== (player.bonds?.length ?? 0)
+        || validBonds.some((bond, index) => (
+          bond.playerId !== player.bonds?.[index]?.playerId
+          || bond.kind !== player.bonds?.[index]?.kind
+        ));
+      if (!needsUpdate) return player;
+      changed = true;
+      return {
+        ...player,
+        bonds: validBonds.length ? validBonds : undefined,
+        bond: undefined,
+      };
+    }),
+  }));
+  return changed ? sanitized : teams;
+};
+
+const withPlayerBond = (player: Player, partnerId: string, kind: PlayerBondKind): Player => ({
+  ...player,
+  bonds: [
+    ...getPlayerBonds(player).filter((bond) => bond.playerId !== partnerId),
+    { playerId: partnerId, kind },
+  ],
+  bond: undefined,
+});
+
+const withoutPlayerBond = (player: Player, partnerId: string): Player => {
+  const bonds = getPlayerBonds(player).filter((bond) => bond.playerId !== partnerId);
+  return {
+    ...player,
+    bonds: bonds.length ? bonds : undefined,
+    bond: undefined,
+  };
+};
+
 export default function TeamConfigPage() {
   const [settings] = useSettings();
   const [teams, setTeams, teamsHydrated] = usePersistentState<Team[]>(
@@ -53,6 +127,9 @@ export default function TeamConfigPage() {
   );
   const [isShuffling, setIsShuffling] = useState(false);
   const [shuffleMillisLeft, setShuffleMillisLeft] = useState<number | null>(null);
+  const [connectionFromId, setConnectionFromId] = useState("");
+  const [connectionToId, setConnectionToId] = useState("");
+  const [connectionKind, setConnectionKind] = useState<PlayerBondKind>("besties");
 
   useEffect(() => {
     if (teamsHydrated && teams.length === 0) {
@@ -79,34 +156,29 @@ export default function TeamConfigPage() {
         if (next !== team) changed = true;
         return next;
       });
-      return changed ? reconciled : previous;
+      const sanitized = sanitizePlayerBonds(reconciled);
+      return changed || sanitized !== reconciled ? sanitized : previous;
     });
   }, [teamsHydrated, settings.themeId, setTeams, teams.length]);
 
-  const shuffleArray = <T,>(arr: T[]) => {
-    const copy = [...arr];
-    for (let i = copy.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [copy[i], copy[j]] = [copy[j], copy[i]];
-    }
-    return copy;
-  };
-
-  const shufflePlayersAcrossTeams = () => {
+  const shufflePlayersAcrossTeams = useCallback(() => {
     setTeams((prev) => {
-      const allNames = prev.flatMap((team) => team.players.map((player) => player.name));
-      if (!allNames.some((name) => name.trim())) return prev;
-      const shuffledNames = shuffleArray(allNames);
+      const allPlayers = prev.flatMap((team) => team.players);
+      if (!allPlayers.some((player) => player.name.trim())) return prev;
+      const shuffledPlayers = shuffleArray(allPlayers);
       let cursor = 0;
       return prev.map((team) => ({
         ...team,
-        players: team.players.map((player) => ({
-          ...player,
-          name: shuffledNames[cursor++],
-        })),
+        players: team.players.map((slot) => {
+          const player = shuffledPlayers[cursor++];
+          return {
+            ...player,
+            placeholder: slot.placeholder,
+          };
+        }),
       }));
     });
-  };
+  }, [setTeams]);
 
   const startShuffling = () => {
     if (isShuffling || !teams.some((team) => team.players.some((player) => player.name.trim()))) return;
@@ -189,7 +261,7 @@ export default function TeamConfigPage() {
 
   const removePlayer = (teamId: string, playerId: string) => {
     setTeams((prev) =>
-      prev.map((team) => {
+      sanitizePlayerBonds(prev.map((team) => {
         if (team.id !== teamId) return team;
 
         const removedPlayer = team.players.find((player) => player.id === playerId);
@@ -211,7 +283,7 @@ export default function TeamConfigPage() {
           });
 
         return { ...team, players: remainingPlayers };
-      }),
+      })),
     );
   };
 
@@ -240,7 +312,36 @@ export default function TeamConfigPage() {
   };
 
   const removeTeam = (teamId: string) => {
-    setTeams((prev) => prev.filter((team) => team.id !== teamId));
+    setTeams((prev) => sanitizePlayerBonds(prev.filter((team) => team.id !== teamId)));
+  };
+
+  const setConnection = () => {
+    if (!connectionFromId || !connectionToId || connectionFromId === connectionToId) return;
+    setTeams((previous) => previous.map((team) => ({
+      ...team,
+      players: team.players.map((player) => {
+        if (player.id === connectionFromId) {
+          return withPlayerBond(player, connectionToId, connectionKind);
+        }
+        if (player.id === connectionToId) {
+          return withPlayerBond(player, connectionFromId, connectionKind);
+        }
+        return player;
+      }),
+    })));
+    setConnectionFromId("");
+    setConnectionToId("");
+  };
+
+  const removeConnection = (firstPlayerId: string, secondPlayerId: string) => {
+    setTeams((previous) => previous.map((team) => ({
+      ...team,
+      players: team.players.map((player) => {
+        if (player.id === firstPlayerId) return withoutPlayerBond(player, secondPlayerId);
+        if (player.id === secondPlayerId) return withoutPlayerBond(player, firstPlayerId);
+        return player;
+      }),
+    })));
   };
 
   const resetTurnOrder = () => {
@@ -254,6 +355,22 @@ export default function TeamConfigPage() {
 
   const activeTheme = getThemeById(settings.themeId);
   const emojiOptions = activeTheme.options;
+  const connectionPlayers = teams.flatMap((team) => team.players
+    .filter((player) => player.name.trim())
+    .map((player) => ({
+      id: player.id,
+      name: player.name.trim(),
+      teamName: team.name,
+      bonds: getPlayerBonds(player),
+    })));
+  const playerById = new Map(connectionPlayers.map((player) => [player.id, player]));
+  const connections = connectionPlayers.flatMap((player) => {
+    return player.bonds.flatMap((bond) => {
+      if (player.id > bond.playerId) return [];
+      const partner = playerById.get(bond.playerId);
+      return partner ? [{ first: player, second: partner, kind: bond.kind }] : [];
+    });
+  });
 
   return (
     <main className="admin-page teams-page">
@@ -294,6 +411,97 @@ export default function TeamConfigPage() {
           </button>
         </div>
       </div>
+
+      <section
+        className="card"
+        aria-labelledby="connections-title"
+        style={{
+          display: "grid",
+          gap: "12px",
+          marginBottom: "16px",
+          padding: "14px 16px",
+        }}
+      >
+        <div>
+          <h2 id="connections-title" style={{ margin: 0, fontSize: "1rem" }}>Connections</h2>
+          <p style={{ margin: "3px 0 0", color: "var(--muted)", fontSize: ".82rem" }}>
+            Optional podium-only relationships. Players can have several connections.
+          </p>
+        </div>
+        <div style={{ display: "flex", alignItems: "end", gap: "8px", flexWrap: "wrap" }}>
+          <label className="label" style={{ display: "grid", gap: "4px", minWidth: "170px", flex: "1 1 190px" }}>
+            Player
+            <select className="input" value={connectionFromId} onChange={(event) => setConnectionFromId(event.target.value)}>
+              <option value="">Choose player…</option>
+              {connectionPlayers.map((player) => (
+                <option key={player.id} value={player.id}>{player.name} · {player.teamName}</option>
+              ))}
+            </select>
+          </label>
+          <label className="label" style={{ display: "grid", gap: "4px", minWidth: "145px", flex: "0 1 170px" }}>
+            Connection
+            <select className="input" value={connectionKind} onChange={(event) => setConnectionKind(event.target.value as PlayerBondKind)}>
+              {BOND_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>{option.emoji} {option.label}</option>
+              ))}
+            </select>
+          </label>
+          <label className="label" style={{ display: "grid", gap: "4px", minWidth: "170px", flex: "1 1 190px" }}>
+            With
+            <select className="input" value={connectionToId} onChange={(event) => setConnectionToId(event.target.value)}>
+              <option value="">Choose player…</option>
+              {connectionPlayers.filter((player) => player.id !== connectionFromId).map((player) => (
+                <option key={player.id} value={player.id}>{player.name} · {player.teamName}</option>
+              ))}
+            </select>
+          </label>
+          <button
+            className="button secondary"
+            type="button"
+            disabled={!connectionFromId || !connectionToId || connectionFromId === connectionToId}
+            onClick={setConnection}
+            style={{ minHeight: "40px" }}
+          >
+            Connect
+          </button>
+        </div>
+        {connections.length > 0 && (
+          <div style={{ display: "flex", gap: "7px", flexWrap: "wrap" }}>
+            {connections.map(({ first, second, kind }) => {
+              const option = BOND_OPTIONS.find((candidate) => candidate.value === kind) ?? BOND_OPTIONS[0];
+              return (
+                <span
+                  key={`${first.id}-${second.id}`}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    padding: "5px 6px 5px 10px",
+                    border: "1px solid rgba(74,48,37,.2)",
+                    borderRadius: "999px",
+                    background: "rgba(255,253,245,.68)",
+                    fontSize: ".78rem",
+                    fontWeight: 800,
+                  }}
+                >
+                  <span aria-hidden>{option.emoji}</span>
+                  {first.name} + {second.name}
+                  <button
+                    className="button ghost compact"
+                    type="button"
+                    aria-label={`Remove connection between ${first.name} and ${second.name}`}
+                    title="Remove connection"
+                    onClick={() => removeConnection(first.id, second.id)}
+                    style={{ minWidth: "25px", padding: "2px 6px", borderRadius: "999px" }}
+                  >
+                    ×
+                  </button>
+                </span>
+              );
+            })}
+          </div>
+        )}
+      </section>
 
       <div
         className="team-editor-grid"

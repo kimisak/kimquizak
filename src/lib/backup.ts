@@ -31,6 +31,8 @@ const fallbackTurnState: TurnState = {
   revealedCategories: [],
   dismissedHostMessageIds: [],
   resolvedHostMessages: {},
+  audioPlaybackCounts: {},
+  audioReplayValues: {},
 };
 
 function readLocalStorage<T>(key: string, fallback: T): T {
@@ -83,6 +85,8 @@ export function buildBackupPayload(): BackupPayload {
     questions,
     turnState:
       turnState.order.length > 0 || turnState.boardIndex > 0 || turnState.lyricsIndex > 0
+      || Object.keys(turnState.audioPlaybackCounts ?? {}).length > 0
+      || Object.keys(turnState.audioReplayValues ?? {}).length > 0
         ? turnState
         : legacyTurnState,
     settings: withSettingsDefaults(

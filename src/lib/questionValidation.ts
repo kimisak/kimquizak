@@ -1,5 +1,5 @@
 import type { Question } from "@/lib/types";
-import { isSafeHttpUrl } from "@/lib/embed";
+import { parseStreetViewSource } from "@/lib/geoguesser";
 import { extractYouTubeId } from "@/lib/youtube";
 
 function hasText(value: string | null | undefined): boolean {
@@ -11,6 +11,11 @@ export function getQuestionIssues(question: Question): string[] {
   const issues: string[] = [];
 
   if (type === "joker") return issues;
+
+  if (type === "booby") {
+    if (!hasText(question.prompt)) issues.push("Add the challenge instructions");
+    return issues;
+  }
 
   if (type === "timeline") {
     const events = question.timelineEvents ?? [];
@@ -28,8 +33,8 @@ export function getQuestionIssues(question: Question): string[] {
   }
 
   if (type === "geoguesser") {
-    if (!question.mapEmbedUrl || !isSafeHttpUrl(question.mapEmbedUrl)) {
-      issues.push("Add a valid Street View embed");
+    if (!parseStreetViewSource(question.mapEmbedUrl)) {
+      issues.push("Add a Google Street View link with coordinates");
     }
     if (!hasText(question.answer)) issues.push("Add the location answer");
     return issues;

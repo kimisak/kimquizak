@@ -23,6 +23,10 @@ type Props = {
 
 const podiumMedals = ["🥇", "🥈", "🥉"];
 const celebrationEmoji = ["✨", "🎊", "⭐", "🥂", "🎉", "❄️", "💫", "🎄"];
+const playerMoods = ["🥳", "😄", "🤩", "😁", "😆", "☺️"];
+const flushReactions = ["😱", "😢", "😬", "🤢", "🤮"];
+const playerCheers = ["🍻", "🥂", "🍺", "🎉", "🎊", "🍾", "✨"];
+const flushDrift = [-100, -38, 38, 100];
 const fireworkOrigins = [
   { left: "13%", top: "25%", delay: "0s" },
   { left: "86%", top: "20%", delay: "-.85s" },
@@ -42,6 +46,9 @@ export function FinalCelebration({
   const winner = podium[0];
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
   const [forceMotion, setForceMotion] = useState(preview);
+  const [cheerBeat, setCheerBeat] = useState(0);
+  const [flushVisible, setFlushVisible] = useState(false);
+  const [flushBeat, setFlushBeat] = useState(0);
 
   useEffect(() => {
     const media = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -58,6 +65,70 @@ export function FinalCelebration({
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
+
+  useEffect(() => {
+    if (!revealed || (prefersReducedMotion && !forceMotion)) return;
+    const interval = window.setInterval(() => setCheerBeat((beat) => beat + 1), 2600);
+    return () => window.clearInterval(interval);
+  }, [revealed, prefersReducedMotion, forceMotion]);
+
+  useEffect(() => {
+    if (!flushVisible) return;
+    const interval = window.setInterval(() => setFlushBeat((beat) => beat + 1), 1000);
+    return () => window.clearInterval(interval);
+  }, [flushVisible]);
+
+  useEffect(() => {
+    if (!revealed || teams.length < 4 || (prefersReducedMotion && !forceMotion)) return;
+    // A single multi-wave gag; preview brings it forward for testing.
+    const delay = preview ? 4000 : 10000;
+    let hideTimer: number | undefined;
+    const showTimer = window.setTimeout(() => {
+      setFlushBeat(0);
+      setFlushVisible(true);
+      hideTimer = window.setTimeout(() => setFlushVisible(false), 6200);
+    }, delay);
+    return () => {
+      window.clearTimeout(showTimer);
+      if (hideTimer !== undefined) window.clearTimeout(hideTimer);
+    };
+  }, [revealed, preview, teams.length, prefersReducedMotion, forceMotion]);
+
+  const renderPlayers = (team: Team, teamIndex: number) => {
+    const accent = getTeamAccent(team);
+    const marker = getTeamMarker(team);
+    const namedPlayers = team.players.filter((player) => player.name.trim());
+    if (!namedPlayers.length) return null;
+    return (
+      <div
+        className="finale-player-list"
+        aria-label={`Players in ${team.name}`}
+        style={{ "--team-base": accent.base } as CSSProperties}
+      >
+        {namedPlayers.map((player, playerIndex) => {
+          const isAffected = flushVisible && teamIndex >= 3;
+          const mood = isAffected
+            ? flushReactions[(flushBeat + playerIndex + (teamIndex - 3) * 2) % flushReactions.length]
+            : playerMoods[(cheerBeat + playerIndex + teamIndex * 2) % playerMoods.length];
+          const cheer = playerCheers[(playerIndex + teamIndex) % playerCheers.length];
+          const secondCheer = playerCheers[(playerIndex + teamIndex + 3) % playerCheers.length];
+          return (
+            <span
+              className={`finale-player-pill${isAffected ? " is-flushed" : ""}`}
+              key={player.id}
+              style={{ "--player-delay": `${(playerIndex + teamIndex * 2) * -0.31}s` } as CSSProperties}
+            >
+              <span className="finale-player-marker" aria-hidden>{marker}</span>
+              <span className="finale-player-name">{player.name.trim()}</span>
+              <span className="finale-player-mood" aria-hidden>{mood}</span>
+              <span className="finale-player-cheer" aria-hidden>{cheer}</span>
+              <span className="finale-player-cheer is-second" aria-hidden>{secondCheer}</span>
+            </span>
+          );
+        })}
+      </div>
+    );
+  };
 
   if (!revealed) {
     const soundtrackReady = !music?.configured || ["ready", "blocked", "ended", "error"].includes(music.status);
@@ -175,11 +246,10 @@ export function FinalCelebration({
         <section className="finale-podium" aria-label="Final podium">
           {podium.length > 0 ? podium.map((team, index) => {
             const accent = getTeamAccent(team);
-            const namedPlayers = team.players.filter((player) => player.name.trim());
             return (
               <article
                 key={team.id}
-                className={`finale-team finale-team-${index + 1}`}
+                className={`finale-team finale-team-${index + 1}${index === 2 && flushVisible ? " is-flushing" : ""}`}
                 style={{
                   "--finale-team-base": accent.base,
                   "--finale-team-accent": accent.onLight,
@@ -200,20 +270,27 @@ export function FinalCelebration({
                       emoji={getTeamMarker(team)}
                     />
                   </div>
-                  {namedPlayers.length > 0 && (
-                    <div className="finale-player-list" aria-label={`Players in ${team.name}`}>
-                      {namedPlayers.map((player, playerIndex) => (
-                        <span
-                          key={player.id}
-                          style={{ "--player-delay": `${playerIndex * -0.19}s` } as CSSProperties}
-                        >
-                          {player.name.trim()}
-                        </span>
-                      ))}
-                    </div>
-                  )}
+                  {renderPlayers(team, index)}
                 </div>
                 <strong className="finale-score">{team.score}<small> pts</small></strong>
+                {index === 2 && flushVisible && teams.length > 3 && (
+                  <div className="finale-flush" aria-hidden="true">
+                    <span className="finale-flush-source">🚽</span>
+                    <span className="finale-flush-swirl">🌀</span>
+                    {Array.from({ length: 3 }, (_, wave) => flushDrift.map((drift, pieceIndex) => (
+                      <span
+                        className="finale-flush-piece"
+                        key={`${wave}-${pieceIndex}`}
+                        style={{
+                          "--flush-drift": `${drift}px`,
+                          "--flush-mid": `${Math.round(drift * 0.18)}px`,
+                          "--flush-end": `${Math.round(drift * 1.2)}px`,
+                          "--flush-delay": `${wave * 1.25 + pieceIndex * 0.14}s`,
+                        } as CSSProperties}
+                      >💩</span>
+                    )))}
+                  </div>
+                )}
               </article>
             );
           }) : (
@@ -225,10 +302,11 @@ export function FinalCelebration({
           <div className="finale-everyone">
             <span>And a huge cheer for</span>
             <div>
-              {teams.slice(3).map((team) => (
-                <span key={team.id} title={team.name}>
-                  <span aria-hidden>{getTeamMarker(team)}</span> {team.name}
-                </span>
+              {teams.slice(3).map((team, index) => (
+                <div className="finale-encore-team" key={team.id}>
+                  <span className="finale-encore-name"><span aria-hidden>{getTeamMarker(team)}</span> {team.name}</span>
+                  {renderPlayers(team, index + 3)}
+                </div>
               ))}
             </div>
           </div>

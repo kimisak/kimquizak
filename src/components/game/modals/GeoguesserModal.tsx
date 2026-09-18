@@ -1,14 +1,20 @@
 'use client';
 
-import type { Question, Team } from "@/lib/types";
-import { TeamPill } from "@/components/game/TeamPill";
+import { useState } from "react";
+import type { Question } from "@/lib/types";
+import { getGeoExploreValue } from "@/lib/geoguesser";
+import { StreetViewPanorama } from "@/components/game/StreetViewPanorama";
 import { ExpandableImage } from "./ExpandableImage";
 import { QuestionModalActions } from "./QuestionModalActions";
+import { QuestionModalHeader } from "./QuestionModalHeader";
+import { GeoStageModal } from "./GeoStageModal";
 
 type Props = {
   question: Question;
-  teams: Team[];
+  boardValues: readonly number[];
   currentTeamName?: string;
+  currentTeamColor?: string;
+  currentTeamEmoji?: string | null;
   answeringTeamName?: string;
   answeringTeamColor?: string;
   answeringTeamEmoji?: string | null;
@@ -20,14 +26,17 @@ type Props = {
   onWrong: () => void;
   disableActions?: boolean;
   countdownSeconds?: number | null;
-  flashKey?: number;
   timerUsed?: boolean;
   potentialPoints?: number;
+  onStageFinish?: (points: number, distanceKm: number | null) => void;
 };
 
 export function GeoguesserModal({
   question,
+  boardValues,
   currentTeamName,
+  currentTeamColor,
+  currentTeamEmoji,
   answeringTeamName,
   answeringTeamColor,
   answeringTeamEmoji,
@@ -39,311 +48,124 @@ export function GeoguesserModal({
   onWrong,
   disableActions,
   countdownSeconds,
-  flashKey,
   timerUsed,
   potentialPoints,
+  onStageFinish,
 }: Props) {
-  const lockDisabled = timerUsed ? true : !mapLocked && countdownSeconds !== null;
-  const unlockCost = question.geoUnlockCost ?? 0;
-  const unlockDuration = question.geoTimerSeconds ?? 10;
-  return (
-    <>
-      <div
-        className={`flip-inner round-stage round-geo ${showAnswer ? "flipped" : ""}`}
-        style={{
-          position: "relative",
-          width: "100%",
-          minHeight: "360px",
-          transformStyle: "preserve-3d",
-          transition: "transform 0.5s ease",
-        }}
-      >
-      <div
-        style={{
-          position: "absolute",
-          inset: 0,
-          backfaceVisibility: "hidden",
-        }}
-      >
-        <div
-          className="card"
-          style={{
-            padding: "22px",
-            background: "rgba(10, 12, 18, 0.96)",
-            borderColor: "rgba(255,255,255,0.18)",
-            position: "relative",
-            overflow: "hidden",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: "12px",
-              position: "relative",
-              zIndex: 1,
-            }}
-          >
-            <div>
-              <div
-                style={{
-                  fontWeight: 800,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.05em",
-                  color: "var(--muted)",
-                }}
-              >
-                {question.category ? `${question.category} · Geoguesser` : "Geoguesser"}
-              </div>
-              <div style={{ fontSize: "2rem", fontWeight: 800 }}>
-                {potentialPoints ?? question.points} pts available
-              </div>
-              {answeringTeamName && !showAnswer && (
-                <TeamPill
-                  label="Answering"
-                  name={answeringTeamName}
-                  color={answeringTeamColor}
-                  emoji={answeringTeamEmoji}
-                />
-              )}
-            </div>
-            {question.mapEmbedUrl && (
-              <div style={{ display: "grid", gap: "6px", justifyItems: "end" }}>
-                <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
-                  <div style={{ color: "var(--muted)", fontSize: "0.95rem" }}>
-                    {mapLocked ? "View-only panorama" : "Exploring · move now"}
-                    {!mapLocked && countdownSeconds !== null && (
-                      <strong style={{ color: "#f7c948", marginLeft: "8px" }}>
-                        {countdownSeconds}s
-                      </strong>
-                    )}
-                  </div>
-                  <button
-                    className="button ghost"
-                    onClick={onToggleLock}
-                    disabled={lockDisabled}
-                    style={{
-                      opacity: lockDisabled ? 0.7 : 1,
-                      cursor: lockDisabled ? "not-allowed" : "pointer",
-                    }}
-                  >
-                    {timerUsed
-                      ? "Exploration used"
-                      : mapLocked
-                      ? `Explore for ${unlockDuration}s${unlockCost > 0 ? ` (−${unlockCost} pts)` : ""}`
-                      : "Stop exploring"}
-                  </button>
-                </div>
-                <div style={{ color: "var(--muted)", fontSize: "0.9rem", textAlign: "right" }}>
-                  {unlockCost > 0 ? (
-                    <>
-                      Team choice: stay here for <strong style={{ color: "#6ee7b7" }}>+{question.points}</strong>, or explore for{" "}
-                      <strong style={{ color: "#f7c948" }}>{unlockDuration}s</strong> and play for{" "}
-                      <strong style={{ color: "#f7c948" }}>+{Math.max(0, question.points - unlockCost)}</strong>. A wrong answer after exploring is{" "}
-                      <strong style={{ color: "#fca5a5" }}>−{question.points + unlockCost}</strong>.
-                    </>
-                  ) : (
-                    <>
-                      Unlocking opens the map for <strong style={{ color: "#f7c948" }}>{unlockDuration}s</strong>.
-                    </>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-          {question.prompt && (
-            <div style={{ fontSize: "1.4rem", lineHeight: 1.45, marginBottom: "10px" }}>
-              {question.prompt}
-            </div>
-          )}
-              {question.mapEmbedUrl ? (
-            <div
-              style={{
-                position: "relative",
-                borderRadius: "14px",
-                overflow: "visible",
-                height: "420px",
-                boxShadow: "0 10px 28px rgba(0,0,0,0.35)",
-                zIndex: 1,
-              }}
-            >
-              <div
-                style={{
-                  position: "absolute",
-                  inset: 0,
-                  overflow: "hidden",
-                  borderRadius: "14px",
-                  border: "1px solid rgba(255,255,255,0.05)",
-                  background: "rgba(255,255,255,0.015)",
-                }}
-              >
-                <iframe
-                  src={question.mapEmbedUrl}
-                  style={{
-                    width: "100%",
-                    height: "900px",
-                    border: "0",
-                    marginTop: "-220px",
-                    pointerEvents: mapLocked ? "none" : "auto",
-                  }}
-                  allowFullScreen
-                  loading="lazy"
-                />
-              </div>
-            </div>
-          ) : (
-            <div
-              style={{
-                padding: "14px",
-                borderRadius: "12px",
-                border: "1px dashed rgba(255,255,255,0.2)",
-                color: "var(--muted)",
-              }}
-            >
-              No Street View embed URL provided.
-            </div>
-          )}
-          <QuestionModalActions revealed={false} onReveal={onRevealAnswer} />
-        </div>
-      </div>
+  const duration = Math.max(3, Math.min(90, question.geoTimerSeconds ?? 10));
+  const levels = question.geoUnlockLevels === 2 ? 2 : 1;
+  const exploredValue = getGeoExploreValue(question.points, levels, boardValues);
+  const availablePoints = potentialPoints ?? question.points;
+  const sourceUrl = question.mapEmbedUrl ?? "";
+  const teamName = answeringTeamName || currentTeamName;
+  const [panoramaReady, setPanoramaReady] = useState(false);
+  const mode = question.geoExplorationMode ?? "timed";
+  const interaction = mode === "look" ? "look" : mode === "free" || !mapLocked ? "explore" : "fixed";
 
-      <div
-        style={{
-          position: "absolute",
-          inset: 0,
-          backfaceVisibility: "hidden",
-          transform: "rotateY(180deg)",
-        }}
-      >
-        <div
-          className="card"
-          style={{
-            padding: "22px",
-            background: "rgba(10, 14, 19, 0.96)",
-            borderColor: "rgba(255,255,255,0.2)",
-            position: "relative",
-          }}
-        >
-          <div
-            style={{
-              marginBottom: "12px",
-            }}
-          >
-            <div
-            style={{
-              textTransform: "uppercase",
-              color: "var(--muted)",
-              letterSpacing: "0.05em",
-              fontWeight: 800,
-            }}
-          >
-              {question.category ? `${question.category} · Geoguesser` : "Geoguesser"}
-            </div>
-            <div style={{ fontWeight: 800, fontSize: "2rem", marginTop: "6px" }}>
-              {question.points} pts
-            </div>
-          </div>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: question.answerImageData ? "1fr 1fr" : "1fr",
-              gap: "16px",
-              alignItems: "start",
-              marginTop: "6px",
-            }}
-          >
-            <div>
-              <div
-                style={{
-                  color: "var(--muted)",
-                  marginBottom: "6px",
-                  fontSize: "1rem",
-                }}
-              >
-                Answer
+  if (mode === "stage") {
+    return <GeoStageModal
+      question={question}
+      currentTeamName={currentTeamName}
+      currentTeamColor={currentTeamColor}
+      currentTeamEmoji={currentTeamEmoji}
+      answeringTeamName={answeringTeamName}
+      answeringTeamColor={answeringTeamColor}
+      answeringTeamEmoji={answeringTeamEmoji}
+      showAnswer={showAnswer}
+      onRevealAnswer={onRevealAnswer}
+      onFinish={onStageFinish ?? (() => undefined)}
+      disableActions={disableActions}
+    />;
+  }
+
+  return (
+    <article className="card round-stage round-geo question-modal-card geo-question-modal">
+      <QuestionModalHeader
+        category={question.category}
+        typeLabel="Geoguesser"
+        points={availablePoints}
+        teamName={teamName}
+        teamColor={answeringTeamName ? answeringTeamColor : currentTeamColor}
+        teamEmoji={answeringTeamName ? answeringTeamEmoji : currentTeamEmoji}
+        teamLabel={showAnswer ? "Answered by" : answeringTeamName ? "Answering" : "Current team"}
+      />
+
+      <div className="question-modal-scroll geo-modal-scroll">
+        {!showAnswer ? (
+          <section className="geo-question-stage">
+            <div className="geo-question-intro">
+              <div>
+                <span className="question-modal-eyebrow">Where are we?</span>
+                {question.prompt && <h1>{question.prompt}</h1>}
               </div>
-              <div
-                style={{
-                  fontWeight: 800,
-                  fontSize: "2rem",
-                  lineHeight: 1.4,
-                  wordBreak: "break-word",
-                  overflowWrap: "anywhere",
-                }}
-              >
-                {question.answer || "No answer provided."}
+              <div className={`geo-exploration-status${interaction !== "fixed" ? " exploring" : ""}`} role="status">
+                <span aria-hidden>{interaction === "fixed" ? "⌖" : "◌"}</span>
+                <strong>{mode === "look" ? "Look & zoom" : mode === "free" ? "Explore freely" : mapLocked ? timerUsed ? "Exploration complete" : "View locked" : "Explore now"}</strong>
+                {mode === "timed" && !mapLocked && countdownSeconds != null && <b>{countdownSeconds}s</b>}
               </div>
+            </div>
+            <StreetViewPanorama sourceUrl={sourceUrl} interaction={interaction} allowZoom={mode !== "timed"} className="geo-question-panorama" onReadyChange={setPanoramaReady} />
+            <p className="geo-panorama-caption">
+              {mode === "look"
+                ? "Turn and zoom to inspect the scene. Moving to another spot is disabled; full points remain available."
+                : mode === "free"
+                  ? "Move, turn, and zoom as long as you like. No point cost."
+                  : mapLocked
+                ? "This is the host's chosen starting view. Exploring is a team choice."
+                : `Explore while the timer runs. This question is now worth ${availablePoints} pts.`}
+            </p>
+          </section>
+        ) : (
+          <section className={`geo-answer-stage${question.answerImageData ? " has-image" : ""}`}>
+            <div className="geo-answer-copy">
+              <span className="question-modal-eyebrow">The location</span>
+              <h1>{question.answer || "No answer provided."}</h1>
+              {question.prompt && <p>{question.prompt}</p>}
               {question.answerLocationUrl && (
-                <a
-                  href={question.answerLocationUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="button ghost"
-                  style={{ marginTop: "10px", display: "inline-flex" }}
-                >
-                  Open in Google Maps
+                <a className="geo-answer-link" href={question.answerLocationUrl} target="_blank" rel="noreferrer">
+                  Open location in Google Maps ↗
                 </a>
               )}
-              {question.mapEmbedUrl && (
-                <div
-                  style={{
-                    marginTop: "12px",
-                    borderRadius: "12px",
-                    overflow: "hidden",
-                    border: "1px solid rgba(255,255,255,0.12)",
-                    height: "420px",
-                    position: "relative",
-                    background: "rgba(255,255,255,0.04)",
-                  }}
-                >
-                  <iframe
-                    src={question.mapEmbedUrl}
-                    style={{
-                      width: "100%",
-                      height: "900px",
-                      border: "0",
-                      marginTop: "-220px",
-                      pointerEvents: "auto",
-                    }}
-                    allowFullScreen
-                    loading="lazy"
-                    referrerPolicy="no-referrer"
-                    sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-presentation"
-                  />
-                </div>
-              )}
             </div>
-            {question.answerImageData && (
+            {question.answerImageData ? (
               <ExpandableImage
                 src={question.answerImageData}
                 alt={question.answerImageName || "Answer image"}
                 label="Answer image"
+                className="geo-answer-image"
+                presentation="fluid"
               />
+            ) : (
+              <StreetViewPanorama sourceUrl={sourceUrl} interaction="explore" allowZoom className="geo-answer-panorama" />
             )}
+          </section>
+        )}
+      </div>
+
+      <QuestionModalActions
+        revealed={showAnswer}
+        onReveal={onRevealAnswer}
+        onCorrect={onCorrect}
+        onWrong={onWrong}
+        disabled={disableActions}
+        before={mode === "timed" && !showAnswer && (
+          <div className="geo-explore-choice">
+            <button
+              className="button ghost geo-explore-button"
+              type="button"
+              onClick={onToggleLock}
+              disabled={!panoramaReady || Boolean(timerUsed && mapLocked)}
+            >
+              {!mapLocked
+                ? "Stop exploring"
+                : timerUsed
+                  ? "Exploration used"
+                  : `Look around & move ${duration}s · ${exploredValue} pts`}
+            </button>
+            {!timerUsed && <small>Costs {levels} point level{levels === 2 ? "s" : ""} · {question.points} → {exploredValue}</small>}
           </div>
-          <QuestionModalActions
-            revealed
-            onCorrect={onCorrect}
-            onWrong={onWrong}
-            disabled={disableActions}
-          />
-        </div>
-      </div>
-      </div>
-      <style jsx>{`
-        @keyframes shadowFlash {
-          0% {
-            box-shadow: 0 0 0 12px rgba(255, 255, 255, 0.55), 0 0 36px 18px rgba(255, 255, 255, 0.45);
-          }
-          60% {
-            box-shadow: 0 0 20px 6px rgba(255, 255, 255, 0.2);
-          }
-          100% {
-            box-shadow: 0 0 20px 6px rgba(255, 255, 255, 0);
-          }
-        }
-      `}</style>
-    </>
+        )}
+      />
+    </article>
   );
 }

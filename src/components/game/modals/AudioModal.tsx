@@ -6,9 +6,11 @@ import { QuestionModalActions } from "./QuestionModalActions";
 import { QuestionModalHeader } from "./QuestionModalHeader";
 import { buildYouTubeEmbedUrl, extractYouTubeId, getYouTubeStartSeconds } from "@/lib/youtube";
 import { loadYouTubePlayerApi, type YouTubePlayer } from "@/lib/youtubePlayer";
+import { getAudioAvailablePoints, getAudioReplayValue } from "@/lib/audioScoring";
 
 type Props = {
   question: Question;
+  boardValues: readonly number[];
   currentTeamName?: string;
   currentTeamColor?: string;
   currentTeamEmoji?: string | null;
@@ -20,6 +22,9 @@ type Props = {
   onCorrect: () => void;
   onWrong: () => void;
   disableActions?: boolean;
+  playbackCount: number;
+  lockedReplayValue?: number;
+  onPlaybackStarted: (mode: "first" | "replay", replayValue: number | null) => void;
 };
 
 const DEFAULT_STOP_SECONDS = 10;
@@ -34,6 +39,7 @@ function getTextDensity(value?: string | null) {
 
 export function AudioModal({
   question,
+  boardValues,
   answeringTeamName,
   answeringTeamColor,
   answeringTeamEmoji,
@@ -45,17 +51,23 @@ export function AudioModal({
   onCorrect,
   onWrong,
   disableActions,
+  playbackCount,
+  lockedReplayValue,
+  onPlaybackStarted,
 }: Props) {
   const playerHostRef = useRef<HTMLDivElement | null>(null);
   const playerRef = useRef<YouTubePlayer | null>(null);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const playRequestedRef = useRef(false);
+  const pendingModeRef = useRef<"first" | "replay" | null>(null);
+  const pendingReplayValueRef = useRef<number | null>(null);
+  const onPlaybackStartedRef = useRef(onPlaybackStarted);
   const playbackOriginRef = useRef<number | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [playerReady, setPlayerReady] = useState(false);
   const [playerError, setPlayerError] = useState("");
-  const [hasPlayed, setHasPlayed] = useState(false);
+  const [lastAttemptMode, setLastAttemptMode] = useState<"first" | "replay">("first");
   const [remaining, setRemaining] = useState<number>(question.audioStopSeconds ?? DEFAULT_STOP_SECONDS);
 
   const stopAfter = useMemo(
@@ -73,11 +85,14 @@ export function AudioModal({
   const videoId = useMemo(() => extractYouTubeId(question.audioUrl), [question.audioUrl]);
   const startAtRef = useRef(startAt);
   const stopAfterRef = useRef(stopAfter);
-
   useEffect(() => {
     startAtRef.current = startAt;
     stopAfterRef.current = stopAfter;
   }, [startAt, stopAfter]);
+
+  useEffect(() => {
+    onPlaybackStartedRef.current = onPlaybackStarted;
+  }, [onPlaybackStarted]);
 
   const clearPlaybackMonitor = useCallback(() => {
     if (tickRef.current) {
@@ -88,6 +103,8 @@ export function AudioModal({
 
   const stopPlayback = useCallback((keepRemaining = false) => {
     playRequestedRef.current = false;
+    pendingModeRef.current = null;
+    pendingReplayValueRef.current = null;
     clearPlaybackMonitor();
     playerRef.current?.pauseVideo();
     setIsPlaying(false);
@@ -109,14 +126,23 @@ export function AudioModal({
     }, 100);
   }, [clearPlaybackMonitor, stopPlayback]);
 
-  const startPlayback = () => {
-    if (!videoId || !playerRef.current || !playerReady || hasPlayed) return;
+  const replayValue = getAudioReplayValue(question.points, boardValues);
+  const replayEnabled = Boolean(question.audioReplayEnabled && replayValue !== null && !question.answered);
+  const hasPlayed = playbackCount > 0;
+  const availablePoints = getAudioAvailablePoints(question.points, playbackCount, boardValues, lockedReplayValue);
+
+  const startPlayback = (mode: "first" | "replay") => {
+    if (!videoId || !playerRef.current || !playerReady || isLoading || isPlaying) return;
+    if (mode === "first" && hasPlayed) return;
+    if (mode === "replay" && (!replayEnabled || playbackCount !== 1)) return;
     stopPlayback(true);
     setRemaining(stopAfter);
     setPlayerError("");
     setIsLoading(true);
-    setHasPlayed(true);
+    setLastAttemptMode(mode);
     playRequestedRef.current = true;
+    pendingModeRef.current = mode;
+    pendingReplayValueRef.current = mode === "replay" ? replayValue : null;
     playbackOriginRef.current = null;
     playerRef.current.loadVideoById({ videoId, startSeconds: startAt });
   };
@@ -150,6 +176,11 @@ export function AudioModal({
             onStateChange: (event) => {
               if (!playRequestedRef.current) return;
               if (event.data === YT.PlayerState.PLAYING) {
+                if (pendingModeRef.current) {
+                  onPlaybackStartedRef.current(pendingModeRef.current, pendingReplayValueRef.current);
+                  pendingModeRef.current = null;
+                  pendingReplayValueRef.current = null;
+                }
                 if (playbackOriginRef.current == null) playbackOriginRef.current = event.target.getCurrentTime();
                 setIsLoading(false);
                 setIsPlaying(true);
@@ -163,10 +194,21 @@ export function AudioModal({
             },
             onError: () => {
               playRequestedRef.current = false;
+              pendingModeRef.current = null;
+              pendingReplayValueRef.current = null;
               clearPlaybackMonitor();
               setIsPlaying(false);
               setIsLoading(false);
-              setPlayerError("YouTube could not play this clip.");
+              setPlayerError("YouTube could not play this clip. No value was lost unless playback had started.");
+            },
+            onAutoplayBlocked: () => {
+              playRequestedRef.current = false;
+              pendingModeRef.current = null;
+              pendingReplayValueRef.current = null;
+              clearPlaybackMonitor();
+              setIsPlaying(false);
+              setIsLoading(false);
+              setPlayerError("YouTube blocked playback. Try again; no value was lost.");
             },
           },
         });
@@ -179,6 +221,8 @@ export function AudioModal({
     return () => {
       cancelled = true;
       playRequestedRef.current = false;
+      pendingModeRef.current = null;
+      pendingReplayValueRef.current = null;
       clearPlaybackMonitor();
       player?.destroy();
       playerRef.current = null;
@@ -196,7 +240,6 @@ export function AudioModal({
     const id = setTimeout(() => {
       stopPlayback(true);
       setIsPlaying(false);
-      setHasPlayed(false);
       setRemaining(question.audioStopSeconds ?? DEFAULT_STOP_SECONDS);
     }, 0);
     return () => clearTimeout(id);
@@ -221,8 +264,9 @@ export function AudioModal({
   const statusCopy = playerError
     || (!embedUrl ? "No YouTube clip configured" : null)
     || (isPlaying ? `${remaining.toFixed(1)} seconds remaining` : null)
-    || (isLoading ? "YouTube connected · timer waits for the first sound" : null)
-    || (hasPlayed ? "Clip complete · reveal when the team has answered" : null)
+    || (isLoading ? lastAttemptMode === "replay" ? `Preparing replay · still worth ${availablePoints} pts` : "YouTube connected · timer waits for the first sound" : null)
+    || (playbackCount >= 2 ? `Replay used · ${availablePoints} pts available` : null)
+    || (hasPlayed ? replayEnabled ? `First listen complete · replay for ${replayValue} pts or answer now` : "Clip complete · reveal when the team has answered" : null)
     || (playerReady ? "Clip loaded and ready" : "Preparing the clip in the background");
 
   return (
@@ -230,7 +274,7 @@ export function AudioModal({
       <QuestionModalHeader
         category={question.category}
         typeLabel="Guess the audio"
-        points={question.points}
+        points={availablePoints}
         teamName={teamName}
         teamColor={teamColor}
         teamEmoji={teamEmoji}
@@ -243,7 +287,9 @@ export function AudioModal({
             <div className={`audio-question-copy ${getTextDensity(question.prompt)}`}>
               <span className="question-modal-eyebrow">Listen closely</span>
               <h1 className={getTextDensity(question.prompt)}>{question.prompt || "What are you listening to?"}</h1>
-              <p>The clip can be played once. Its timer begins only when YouTube starts producing audio.</p>
+              <p>{replayEnabled
+                ? `One replay is available. If used, a correct answer pays ${replayValue} instead of ${question.points} points.`
+                : "The clip can be played once."} Its timer begins only when YouTube starts playing.</p>
             </div>
 
             <div className="audio-console">
@@ -269,7 +315,7 @@ export function AudioModal({
                 <button
                   className="audio-play-control"
                   type="button"
-                  onClick={startPlayback}
+                  onClick={() => startPlayback("first")}
                   disabled={playDisabled}
                   aria-label={isPlaying ? "Audio is playing" : hasPlayed ? "Audio clip has been played" : "Play audio clip"}
                   style={{ "--audio-progress": `${progress * 360}deg` } as CSSProperties}
@@ -278,15 +324,22 @@ export function AudioModal({
                     {isLoading ? "···" : isPlaying ? "♫" : hasPlayed ? "✓" : "▶"}
                   </span>
                 </button>
-                <strong>{isLoading ? "Connecting" : isPlaying ? "Now playing" : hasPlayed ? "Played once" : "Play clip"}</strong>
+                <strong>{isLoading ? "Connecting" : isPlaying ? "Now playing" : playbackCount >= 2 ? "Replay used" : hasPlayed ? "Played once" : "Play clip"}</strong>
                 <small>{statusCopy}</small>
               </div>
 
               <div className="audio-console-footer">
-                <span>{isPlaying ? `${remaining.toFixed(1)} / ${stopAfter.toFixed(1)} sec` : "One controlled playback"}</span>
-                <button className="audio-stop-control" type="button" onClick={() => stopPlayback()} disabled={!isPlaying && !isLoading}>
-                  ■ Stop
-                </button>
+                <span>{isPlaying ? `${remaining.toFixed(1)} / ${stopAfter.toFixed(1)} sec` : `${availablePoints} pts available${playbackCount >= 2 ? ` · ${question.points} original` : ""}`}</span>
+                <div className="audio-console-controls">
+                  {replayEnabled && playbackCount === 1 && (
+                    <button className="audio-replay-control" type="button" onClick={() => startPlayback("replay")} disabled={!playerReady || isLoading || isPlaying}>
+                      ↻ Replay for {replayValue} pts
+                    </button>
+                  )}
+                  <button className="audio-stop-control" type="button" onClick={() => stopPlayback()} disabled={!isPlaying && !isLoading}>
+                    ■ Stop
+                  </button>
+                </div>
               </div>
             </div>
           </section>

@@ -4,6 +4,7 @@ import type { CSSProperties } from "react";
 import { POINT_VALUES, type Question, type ScoreTransaction, type Team } from "@/lib/types";
 import { isQuestionReady } from "@/lib/questionValidation";
 import { getTeamAccent, getTeamMarker } from "@/lib/teamPresentation";
+import { TeamPill } from "./TeamPill";
 
 type Props = {
   categories: string[];
@@ -72,7 +73,7 @@ export function BoardGrid({
           const matchingResults = q?.answered
             ? scoreHistory.filter((entry) => entry.questionId === q.id)
             : [];
-          const legacyResult = q?.answered && matchingResults.length === 0
+          const legacyResult = q?.answered && q.type !== "booby" && matchingResults.length === 0
             ? scoreHistory.find((entry) => entry.reason.startsWith(`${category} · ${points}`))
             : undefined;
           const resultByTeam = [...matchingResults, ...(legacyResult ? [legacyResult] : [])]
@@ -84,14 +85,14 @@ export function BoardGrid({
               return results;
             }, new Map());
           const results = Array.from(resultByTeam.values())
-            .filter((entry) => entry.delta !== 0)
+            .filter((entry) => entry.delta !== 0 || q?.type === "booby" || q?.geoExplorationMode === "stage")
             .sort((first, second) => second.delta - first.delta);
           return (
             <button
               key={`${category}-${points}`}
               className={`quiz-board-tile${q?.answered ? " played" : ""}${results.length ? " scored" : ""}${results.length > 1 ? " multi-score" : ""}${!ready ? " needs-setup" : ""}`}
               disabled={disabled}
-              aria-label={`${category}, ${points} points${q?.answered ? results.length ? `, played, ${results.map((result) => `${result.teamName} ${result.delta >= 0 ? "gained" : "lost"} ${Math.abs(result.delta)} points`).join(", ")}` : ", played" : !ready ? ", needs setup" : ""}`}
+              aria-label={`${category}, ${points} points${q?.answered ? results.length ? `, played, ${results.map((result) => `${result.teamName} ${result.delta === 0 ? "received 0" : `${result.delta > 0 ? "gained" : "lost"} ${Math.abs(result.delta)}`} points`).join(", ")}` : ", played" : !ready ? ", needs setup" : ""}`}
               onClick={() => ready && onOpen(q)}
             >
               {q?.answered ? (
@@ -110,19 +111,25 @@ export function BoardGrid({
                             "--result-glow": resultAccent.glow,
                           } as CSSProperties : undefined}
                         >
-                          <strong className="tile-result-team">
-                            {resultTeam && <span aria-hidden="true">{getTeamMarker(resultTeam)}</span>}
-                            <span>{result.teamName}</span>
-                          </strong>
+                          {q.type === "booby" && resultTeam ? (
+                            <span className="tile-result-identity"><TeamPill name={result.teamName} color={resultAccent?.base} emoji={getTeamMarker(resultTeam)} /></span>
+                          ) : (
+                            <strong className="tile-result-team">
+                              {resultTeam && <span aria-hidden="true">{getTeamMarker(resultTeam)}</span>}
+                              <span>{result.teamName}</span>
+                            </strong>
+                          )}
                           <span className={result.delta >= 0 ? "tile-result-score won" : "tile-result-score lost"}>
-                            {result.delta >= 0 ? "+" : ""}{result.delta}
+                            {result.delta === 0 ? "0 pts" : `${result.delta > 0 ? "+" : ""}${result.delta}`}
                           </span>
                         </span>
                       );
                     })}
                   </span>
                 ) : (
-                  <span style={{ fontSize: "0.8rem", textTransform: "uppercase", letterSpacing: "0.06em" }}>Played</span>
+                  <span style={{ fontSize: "0.8rem", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                    Played
+                  </span>
                 )
               ) : points}
               {!ready && (

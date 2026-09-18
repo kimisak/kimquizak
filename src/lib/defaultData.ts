@@ -157,6 +157,7 @@ export function buildDefaultQuestions(): Question[] {
     answerVideoUrl: null,
     answerVideoAutoplay: true,
     geoUnlockCost: 0,
+    geoUnlockLevels: 1,
     jokerCount: 5,
     jokerMin: 1,
     jokerMax: 9,

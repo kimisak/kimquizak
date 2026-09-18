@@ -22,6 +22,7 @@ import { TimelineModal } from "@/components/game/modals/TimelineModal";
 import { LyricsModal } from "@/components/game/modals/LyricsModal";
 import { StandardModal } from "@/components/game/modals/StandardModal";
 import { AudioModal } from "@/components/game/modals/AudioModal";
+import { BoobyModal } from "@/components/game/modals/BoobyModal";
 import { TurnOrderRail } from "@/components/game/TurnOrderRail";
 import { useAudioCue } from "@/hooks/useAudioCue";
 import { useFinaleSoundtrack } from "@/hooks/useFinaleSoundtrack";
@@ -43,6 +44,8 @@ import { resolveHostMessageTemplate } from "@/lib/hostMessageTemplates";
 import { isQuestionReady } from "@/lib/questionValidation";
 import { getTeamAccent, reconcileTeamTheme } from "@/lib/teamPresentation";
 import { allocateTimelinePoints, type TimelinePlacementOutcome } from "@/lib/timelineScoring";
+import { getAudioAvailablePoints } from "@/lib/audioScoring";
+import { getGeoExploreValue } from "@/lib/geoguesser";
 
 type ActiveQuestion = Question & { category: string };
 type PlacedTimelineEvent = TimelineEvent & {
@@ -735,13 +738,15 @@ export default function GameBoardPage() {
     if (geoTimerUsed && mapLocked) return;
     if (mapLocked) {
       if (!geoCostApplied) {
-        const cost = activeQuestion.geoUnlockCost ?? 0;
-        if (cost > 0) {
-          setGeoPotential((prev) => Math.max(0, prev - cost));
-        }
+        const levels = activeQuestion.geoUnlockLevels === 2 ? 2 : 1;
+        setGeoPotential(getGeoExploreValue(
+          activeQuestion.points,
+          levels,
+          questions.map((question) => question.points),
+        ));
         setGeoCostApplied(true);
       }
-      const duration = activeQuestion.geoTimerSeconds ?? 10;
+      const duration = Math.max(3, Math.min(90, activeQuestion.geoTimerSeconds ?? 10));
       setGeoTimerUsed(true);
       setGeoCountdown(duration);
       setMapLocked(false);
@@ -796,7 +801,7 @@ export default function GameBoardPage() {
     );
   };
 
-  const markAnswered = (correct: boolean) => {
+  const markAnswered = (correct: boolean, stageResult?: { points: number; distanceKm: number | null }) => {
     if (!activeQuestion) return;
     if (remainingQuestionCount === 1 && isQuestionReady(activeQuestion) && !activeQuestion.answered) {
       setFinaleRevealed(false);
@@ -817,17 +822,49 @@ export default function GameBoardPage() {
         ? getLyricsTeamId()
         : lastGuessTeamId || selectedTeamId || getBoardTeamId();
 
-    const rewardPoints = activeQuestion.type === "geoguesser"
-      ? Math.max(0, geoPotential)
-      : basePoints;
+    if (activeQuestion.type === "booby" && !correct && teamIdToScore) {
+      const team = teams.find((candidate) => candidate.id === teamIdToScore);
+      if (team) {
+        setScoreHistory((previous) => previous.some((entry) => entry.questionId === activeQuestion.id)
+          ? previous
+          : [{
+              id: makeId("score"),
+              teamId: team.id,
+              teamName: team.name,
+              delta: 0,
+              reason: `${activeQuestion.category} · ${activeQuestion.points} · Challenge not completed · 0 pts`,
+              createdAt: new Date().toISOString(),
+              questionId: activeQuestion.id,
+            }, ...previous].slice(0, 100));
+      }
+    }
 
-    if (teamIdToScore && correct) {
+    const rewardPoints = activeQuestion.type === "geoguesser"
+      ? stageResult ? Math.max(0, stageResult.points) : Math.max(0, geoPotential)
+      : activeQuestion.type === "audio"
+        ? getAudioAvailablePoints(
+            basePoints,
+            turnState.audioPlaybackCounts?.[activeQuestion.id] ?? 0,
+            questions.map((question) => question.points),
+            turnState.audioReplayValues?.[activeQuestion.id],
+          )
+        : basePoints;
+
+    if (teamIdToScore && correct && rewardPoints > 0) {
       applyScoreChange(
         teamIdToScore,
         rewardPoints,
-        `${activeQuestion.category} · ${activeQuestion.points} · Correct`,
+        `${activeQuestion.category} · ${activeQuestion.points} · ${stageResult ? `Pin the Globe · ${stageResult.distanceKm === null ? "No pin" : `${stageResult.distanceKm.toFixed(1)} km away`}` : activeQuestion.type === "booby" ? "Challenge completed" : "Correct"}${activeQuestion.type === "audio" && rewardPoints < basePoints ? ` after replay (${rewardPoints} awarded)` : ""}`,
         activeQuestion.id,
       );
+    }
+    if (stageResult && teamIdToScore && rewardPoints === 0) {
+      const team = teams.find((candidate) => candidate.id === teamIdToScore);
+      if (team) setScoreHistory((previous) => [{
+        id: makeId("score"), teamId: team.id, teamName: team.name, delta: 0,
+        reason: `${activeQuestion.category} · ${activeQuestion.points} · Pin the Globe · ${stageResult.distanceKm === null ? "No pin" : `${stageResult.distanceKm.toFixed(1)} km away`} · 0 pts`,
+        createdAt: new Date().toISOString(), questionId: activeQuestion.id,
+      }, ...previous].slice(0, 100));
     }
     setQuestions((prev) =>
       prev.map((q) =>
@@ -1142,8 +1179,10 @@ export default function GameBoardPage() {
       return (
         <GeoguesserModal
           question={modalQuestion}
-          teams={teams}
+          boardValues={questions.map((question) => question.points)}
           currentTeamName={currentTeam?.name}
+          currentTeamColor={currentTeamColor}
+          currentTeamEmoji={currentTeamEmoji}
           answeringTeamColor={answeringTeamColor}
           answeringTeamName={answeringTeam?.name}
           answeringTeamEmoji={answeringTeamEmoji}
@@ -1157,6 +1196,7 @@ export default function GameBoardPage() {
           countdownSeconds={geoCountdown}
           timerUsed={geoTimerUsed}
           potentialPoints={geoPotential}
+          onStageFinish={(points, distanceKm) => markAnswered(points > 0, { points, distanceKm })}
         />
       );
     }
@@ -1230,6 +1270,26 @@ export default function GameBoardPage() {
       return (
         <AudioModal
           question={modalQuestion}
+          boardValues={questions.map((question) => question.points)}
+          playbackCount={turnState.audioPlaybackCounts?.[activeQuestion.id] ?? 0}
+          lockedReplayValue={turnState.audioReplayValues?.[activeQuestion.id]}
+          onPlaybackStarted={(mode, replayValue) => {
+            const questionId = activeQuestion.id;
+            const targetCount = mode === "replay" ? 2 : 1;
+            setTurnState((previous) => ({
+              ...previous,
+              audioPlaybackCounts: {
+                ...previous.audioPlaybackCounts,
+                [questionId]: Math.max(previous.audioPlaybackCounts?.[questionId] ?? 0, targetCount),
+              },
+              audioReplayValues: replayValue === null
+                ? previous.audioReplayValues
+                : {
+                    ...previous.audioReplayValues,
+                    [questionId]: previous.audioReplayValues?.[questionId] ?? replayValue,
+                  },
+            }));
+          }}
           currentTeamName={currentTeam?.name}
           currentTeamColor={currentTeamColor}
           currentTeamEmoji={currentTeamEmoji}
@@ -1241,6 +1301,22 @@ export default function GameBoardPage() {
           onCorrect={() => markAnswered(true)}
           onWrong={() => markAnswered(false)}
           disableActions={!answeringTeam}
+        />
+      );
+    }
+    if (activeQuestion.type === "booby") {
+      return (
+        <BoobyModal
+          key={activeQuestion.id}
+          question={modalQuestion}
+          showMessage={showAnswer}
+          onReveal={() => setShowAnswer(true)}
+          onWon={() => markAnswered(true)}
+          onLost={() => markAnswered(false)}
+          disableActions={!answeringTeam}
+          teamName={answeringTeam?.name ?? currentTeam?.name}
+          teamColor={answeringTeam ? answeringTeamColor : currentTeamColor}
+          teamEmoji={answeringTeam ? answeringTeamEmoji : currentTeamEmoji}
         />
       );
     }
@@ -1500,7 +1576,9 @@ export default function GameBoardPage() {
             tabIndex={-1}
             role="dialog"
             aria-modal="true"
-            aria-label={`${activeCategoryConcealed ? "Hidden category" : activeQuestion.category}, ${activeQuestion.points} point question`}
+            aria-label={activeQuestion.type === "booby" && showAnswer
+              ? `${activeCategoryConcealed ? "Hidden category" : activeQuestion.category}, challenge, ${activeQuestion.points} points at stake`
+              : `${activeCategoryConcealed ? "Hidden category" : activeQuestion.category}, ${activeQuestion.points} point question`}
             style={{
               position: "relative",
               width: "min(900px, 100%)",

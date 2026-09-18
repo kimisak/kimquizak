@@ -33,7 +33,11 @@ import {
 import { HostMessageRichText } from "@/components/game/HostMessageRichText";
 import { HostMessageOverlay } from "@/components/game/HostMessageOverlay";
 import { buildYouTubeEmbedUrl, getYouTubeStartSeconds } from "@/lib/youtube";
-import { extractEmbedUrl, isSafeHttpUrl } from "@/lib/embed";
+import { getAudioReplayValue } from "@/lib/audioScoring";
+import { extractEmbedUrl } from "@/lib/embed";
+import { DEFAULT_GEO_STAGE_BANDS_KM, getGeoExploreValue, getGeoStageBands, isGoogleMapsShortLink, parseStreetViewSource } from "@/lib/geoguesser";
+import { StreetViewPanorama } from "@/components/game/StreetViewPanorama";
+import { StreetViewPicker } from "@/components/config/StreetViewPicker";
 import { getQuestionIssues, isQuestionReady } from "@/lib/questionValidation";
 
 type FieldProps = {
@@ -226,6 +230,7 @@ const QUESTION_TYPE_META: Record<
   standard: { label: "Standard", icon: "Q", accent: "#60a5fa", soft: "rgba(96,165,250,0.14)" },
   mcq: { label: "Multiple choice", icon: "A", accent: "#a78bfa", soft: "rgba(167,139,250,0.14)" },
   audio: { label: "Guess the audio", icon: "♪", accent: "#f472b6", soft: "rgba(244,114,182,0.14)" },
+  booby: { label: "Challenge", icon: "🎁", accent: "#e8b86a", soft: "rgba(232,184,106,0.14)" },
   lyrics: { label: "Text grid", icon: "▦", accent: "#2dd4bf", soft: "rgba(45,212,191,0.14)" },
   geoguesser: { label: "Geoguesser", icon: "⌖", accent: "#f59e0b", soft: "rgba(245,158,11,0.14)" },
   joker: { label: "Joker high/low", icon: "♠", accent: "#fb7185", soft: "rgba(251,113,133,0.14)" },
@@ -233,6 +238,127 @@ const QUESTION_TYPE_META: Record<
 };
 
 const QUESTION_TYPES = Object.keys(QUESTION_TYPE_META) as QuestionType[];
+
+function isCardEdgeTogglePoint(card: HTMLElement, x: number, y: number): boolean {
+  const bounds = card.getBoundingClientRect();
+  const sideEdge = 36;
+  const horizontalEdge = 18;
+  return x - bounds.left <= sideEdge
+    || bounds.right - x <= sideEdge
+    || y - bounds.top <= horizontalEdge
+    || bounds.bottom - y <= horizontalEdge;
+}
+
+const BoobyFields = React.memo(function BoobyFields({
+  category,
+  points,
+  q,
+  upsertQuestion,
+  handleImageChange,
+}: FieldProps) {
+  const [message, setMessage] = useState(q?.prompt ?? "");
+  const [timerInput, setTimerInput] = useState(String(q?.challengeTimerSeconds ?? 60));
+  const timerEnabled = Boolean(q?.challengeTimerSeconds && q.challengeTimerSeconds > 0);
+  const timerMode = q?.challengeTimerMode === "countup" ? "countup" : "countdown";
+
+  React.useEffect(() => {
+    setMessage(q?.prompt ?? "");
+    setTimerInput(String(q?.challengeTimerSeconds ?? 60));
+  }, [q?.prompt, q?.challengeTimerSeconds]);
+
+  const normalizedTimerSeconds = () => {
+    const parsed = Number(timerInput);
+    return Number.isFinite(parsed) ? Math.max(5, Math.min(1800, Math.round(parsed))) : 60;
+  };
+
+  return (
+    <>
+      <p style={{ margin: "0 0 14px", color: "var(--muted)", fontSize: "0.88rem", lineHeight: 1.45 }}>
+        The board shows {points} points. The team earns all {points} if they complete the challenge; otherwise they earn 0. The host decides the outcome after the reveal.
+      </p>
+      <label className="label" htmlFor={`booby-message-${category}-${points}`}>Challenge instructions</label>
+      <textarea
+        id={`booby-message-${category}-${points}`}
+        value={message}
+        onChange={(event) => setMessage(event.target.value)}
+        onBlur={() => upsertQuestion(category, points, { prompt: message })}
+        placeholder="What should the team do to win the points?"
+        style={{ width: "100%", minHeight: "110px", padding: "10px", borderRadius: "10px", border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.04)", color: "var(--foreground)", resize: "vertical" }}
+      />
+      <label className="label" style={{ display: "block", marginTop: "10px" }}>Picture (optional)</label>
+      <label className="input" style={{ display: "inline-flex", alignItems: "center", width: "fit-content", padding: "0.6rem 0.8rem", cursor: "pointer" }}>
+        <input
+          type="file"
+          accept="image/*"
+          onChange={(event) => handleImageChange?.(category, points, event.target.files?.[0] ?? null)}
+          style={{ display: "none" }}
+        />
+        <span style={{ fontWeight: 600 }}>⬆️ Upload picture</span>
+      </label>
+      {q?.imageData && (
+        <div style={{ position: "relative", width: "fit-content", maxWidth: "100%", marginTop: "10px" }}>
+          <img src={q.imageData} alt={q.imageName || "Challenge picture"} style={{ display: "block", maxWidth: "100%", maxHeight: "220px", borderRadius: "12px" }} />
+          <button
+            type="button"
+            onClick={() => upsertQuestion(category, points, { imageData: null, imageName: null })}
+            aria-label="Remove picture"
+            style={{ position: "absolute", top: "7px", right: "7px", width: "28px", height: "28px", border: "1px solid rgba(255,255,255,.5)", borderRadius: "50%", background: "rgba(10,20,16,.8)", color: "white", cursor: "pointer" }}
+          >
+            ×
+          </button>
+        </div>
+      )}
+      <div className="challenge-timer-config">
+        <label className="challenge-timer-duration">
+          <span>Challenge clock</span>
+          <select
+            className="input"
+            value={timerEnabled ? timerMode : "none"}
+            onChange={(event) => upsertQuestion(category, points, {
+              challengeTimerSeconds: event.target.value === "none" ? null : normalizedTimerSeconds(),
+              challengeTimerMode: event.target.value === "countup" ? "countup" : "countdown",
+            })}
+          >
+            <option value="none">No clock</option>
+            <option value="countdown">Countdown · time runs down</option>
+            <option value="countup">Count-up timer · time runs up</option>
+          </select>
+        </label>
+        {timerEnabled && (
+          <>
+          <label className="challenge-timer-duration">
+            <span>Time limit (seconds)</span>
+            <input
+              className="input"
+              type="number"
+              min={5}
+              max={1800}
+              step={1}
+              value={timerInput}
+              onChange={(event) => setTimerInput(event.target.value)}
+              onBlur={() => {
+                const seconds = normalizedTimerSeconds();
+                setTimerInput(String(seconds));
+                upsertQuestion(category, points, { challengeTimerSeconds: seconds });
+              }}
+              onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }}
+            />
+          </label>
+          <label className="challenge-timer-toggle">
+            <input
+              type="checkbox"
+              checked={q?.challengeTimerShowTime !== false}
+              onChange={(event) => upsertQuestion(category, points, { challengeTimerShowTime: event.target.checked })}
+            />
+            <span>Show exact time during play</span>
+          </label>
+          </>
+        )}
+        <small>The host starts the clock after the challenge is revealed. With exact time hidden, teams still see the progress bar move. Reaching the limit does not decide the score automatically.</small>
+      </div>
+    </>
+  );
+});
 
 const McqFields = React.memo(function McqFields({
   category,
@@ -529,6 +655,7 @@ export default function QuestionConfigPage() {
   const [expandedQuestions, setExpandedQuestions] = useState<Set<string>>(
     () => new Set(),
   );
+  const cardPresses = React.useRef(new Map<string, { x: number; y: number; blocked: boolean }>());
   const [teams, setTeams] = usePersistentState<Team[]>(
     TEAM_STORAGE_KEY,
     [],
@@ -674,6 +801,7 @@ export default function QuestionConfigPage() {
           answerVideoUrl: null,
           answerVideoAutoplay: true,
           geoUnlockCost: 0,
+          geoUnlockLevels: 1,
           jokerCount: 5,
           jokerMin: 1,
           jokerMax: 9,
@@ -689,6 +817,7 @@ export default function QuestionConfigPage() {
           audioUrl: null,
           audioStopSeconds: null,
           audioStartSeconds: null,
+          audioReplayEnabled: false,
           ...updates,
         },
       ];
@@ -774,6 +903,7 @@ export default function QuestionConfigPage() {
           answerVideoUrl: null,
           answerVideoAutoplay: true,
           geoUnlockCost: 0,
+          geoUnlockLevels: 1,
           jokerCount: 5,
           jokerMin: 1,
           jokerMax: 9,
@@ -789,6 +919,7 @@ export default function QuestionConfigPage() {
           audioUrl: null,
           audioStopSeconds: null,
           audioStartSeconds: null,
+          audioReplayEnabled: false,
       }));
       return [...prev, ...additions];
     });
@@ -831,7 +962,7 @@ export default function QuestionConfigPage() {
 
   const resetGameProgress = () => {
     if (!window.confirm(
-      "Reset all scores, played tiles, turn order, revealed categories, dismissed host messages, and score history? Team and question content will be kept.",
+      "Reset all scores, played tiles, audio replay usage, turn order, revealed categories, dismissed host messages, and score history? Team and question content will be kept.",
     )) return;
 
     setQuestions((prev) => prev.map((q) => ({ ...q, answered: false })));
@@ -1121,7 +1252,8 @@ const AudioFields = React.memo(function AudioFields({
   points,
   q,
   upsertQuestion,
-}: FieldProps) {
+  boardValues,
+}: FieldProps & { boardValues: readonly number[] }) {
   const [prompt, setPrompt] = useState(q?.prompt ?? "");
   const [answer, setAnswer] = useState(q?.answer ?? "");
   const [audioUrl, setAudioUrl] = useState(q?.audioUrl ?? "");
@@ -1145,6 +1277,7 @@ const AudioFields = React.memo(function AudioFields({
     upsertQuestion(category, points, { audioStopSeconds: safe });
   };
   const validVideoUrl = buildYouTubeEmbedUrl(audioUrl, { startSeconds });
+  const replayValue = getAudioReplayValue(points, boardValues);
 
   return (
     <>
@@ -1262,7 +1395,22 @@ const AudioFields = React.memo(function AudioFields({
         placeholder="What answer should score as correct?"
       />
       <div style={{ color: "var(--muted)", marginTop: "6px", fontSize: "0.9rem" }}>
-        YouTube timestamps are detected automatically. The clip plays once.
+        YouTube timestamps are detected automatically. The first listen is always worth full points.
+      </div>
+      <label className="label" style={{ display: "inline-flex", alignItems: "center", gap: "8px", marginTop: "10px", cursor: replayValue !== null ? "pointer" : "default" }}>
+        <input
+          type="checkbox"
+          checked={replayValue !== null && Boolean(q?.audioReplayEnabled)}
+          disabled={replayValue === null}
+          onChange={(event) => upsertQuestion(category, points, { audioReplayEnabled: event.target.checked })}
+          style={{ width: "16px", height: "16px", cursor: replayValue !== null ? "pointer" : "default" }}
+        />
+        Allow one replay
+      </label>
+      <div style={{ color: "var(--muted)", marginTop: "4px", fontSize: "0.82rem" }}>
+        {replayValue !== null
+          ? `If replayed, this ${points}-point question pays ${replayValue} points for a correct answer. No existing points are deducted.`
+          : "Replay is unavailable because the board has no lower point tier."}
       </div>
     </>
   );
@@ -1487,15 +1635,24 @@ const GeoguesserFields = React.memo(function GeoguesserFields({
   points,
   q,
   upsertQuestion,
-  handleAnswerImageChange = () => {},
-}: FieldProps) {
+  boardValues,
+}: FieldProps & { boardValues: readonly number[] }) {
   const [prompt, setPrompt] = useState(q?.prompt ?? "");
   const [mapUrl, setMapUrl] = useState(q?.mapEmbedUrl ?? "");
   const [answer, setAnswer] = useState(q?.answer ?? "");
   const [answerLink, setAnswerLink] = useState(q?.answerLocationUrl ?? "");
   const [timerSeconds, setTimerSeconds] = useState<number>(q?.geoTimerSeconds ?? 10);
-  const [unlockCost, setUnlockCost] = useState<number>(q?.geoUnlockCost ?? 0);
+  const [unlockLevels, setUnlockLevels] = useState<1 | 2>(q?.geoUnlockLevels === 2 ? 2 : 1);
+  const [explorationMode, setExplorationMode] = useState<"timed" | "look" | "free" | "stage">(q?.geoExplorationMode ?? "timed");
+  const [stageExploreSeconds, setStageExploreSeconds] = useState(q?.geoStageExploreSeconds ?? 30);
+  const [stageGuessSeconds, setStageGuessSeconds] = useState(q?.geoStageGuessSeconds ?? 30);
+  const [stageBandsUnit, setStageBandsUnit] = useState<"km" | "m">(q?.geoStageDistanceUnit === "m" ? "m" : "km");
+  const [stageBandsText, setStageBandsText] = useState(getGeoStageBands(q?.geoStageDistanceBandsKm).map((band) => q?.geoStageDistanceUnit === "m" ? band * 1000 : band).join(", "));
+  const [stageBandsError, setStageBandsError] = useState("");
   const [showMapPreview, setShowMapPreview] = useState(false);
+  const [showMapPicker, setShowMapPicker] = useState(false);
+  const [linkLoading, setLinkLoading] = useState(false);
+  const [linkError, setLinkError] = useState("");
 
   React.useEffect(() => {
     setPrompt(q?.prompt ?? "");
@@ -1503,11 +1660,52 @@ const GeoguesserFields = React.memo(function GeoguesserFields({
     setAnswer(q?.answer ?? "");
     setAnswerLink(q?.answerLocationUrl ?? "");
     setTimerSeconds(q?.geoTimerSeconds ?? 10);
-    setUnlockCost(q?.geoUnlockCost ?? 0);
-  }, [q?.prompt, q?.mapEmbedUrl, q?.answer, q?.answerLocationUrl, q?.geoTimerSeconds, q?.geoUnlockCost]);
+    setUnlockLevels(q?.geoUnlockLevels === 2 ? 2 : 1);
+    setExplorationMode(q?.geoExplorationMode ?? "timed");
+    setStageExploreSeconds(q?.geoStageExploreSeconds ?? 30);
+    setStageGuessSeconds(q?.geoStageGuessSeconds ?? 30);
+    setStageBandsUnit(q?.geoStageDistanceUnit === "m" ? "m" : "km");
+    setStageBandsText(getGeoStageBands(q?.geoStageDistanceBandsKm).map((band) => q?.geoStageDistanceUnit === "m" ? band * 1000 : band).join(", "));
+  }, [q?.prompt, q?.mapEmbedUrl, q?.answer, q?.answerLocationUrl, q?.geoTimerSeconds, q?.geoUnlockLevels, q?.geoExplorationMode, q?.geoStageExploreSeconds, q?.geoStageGuessSeconds, q?.geoStageDistanceBandsKm, q?.geoStageDistanceUnit]);
 
   const normalizedMapUrl = extractEmbedUrl(mapUrl);
-  const validMapUrl = isSafeHttpUrl(normalizedMapUrl);
+  const validMapUrl = Boolean(parseStreetViewSource(normalizedMapUrl));
+  const shortMapUrl = isGoogleMapsShortLink(normalizedMapUrl);
+  const exploredValue = getGeoExploreValue(points, unlockLevels, boardValues);
+
+  const openMapPicker = async () => {
+    if (showMapPicker) {
+      setShowMapPicker(false);
+      return;
+    }
+    setLinkError("");
+    let resolvedUrl = normalizedMapUrl;
+    if (shortMapUrl) {
+      setLinkLoading(true);
+      try {
+        const response = await fetch("/api/maps/resolve-link", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: resolvedUrl }),
+        });
+        const result = await response.json() as { url?: string; error?: string };
+        if (!response.ok || !result.url) throw new Error(result.error || "Could not resolve this link.");
+        resolvedUrl = result.url;
+      } catch (error) {
+        setLinkError(error instanceof Error ? error.message : "Could not resolve this link.");
+        setLinkLoading(false);
+        return;
+      }
+      setLinkLoading(false);
+    }
+    if (!parseStreetViewSource(resolvedUrl)) {
+      setLinkError("Use a Google Maps link with a location, or a complete Street View iframe. If this is a short link, open it in Google Maps and copy the address-bar URL.");
+      return;
+    }
+    setMapUrl(resolvedUrl);
+    setShowMapPreview(false);
+    setShowMapPicker(true);
+  };
 
   return (
     <>
@@ -1532,9 +1730,9 @@ const GeoguesserFields = React.memo(function GeoguesserFields({
         placeholder="Optional hint or instructions"
       />
       <label className="label" style={{ marginTop: "8px", display: "flex", alignItems: "center", gap: "8px" }}>
-        <span>Street View embed</span>
+        <span>Street View location</span>
         <span
-          title="Find a place in Street View that does not show the street address on the road - this may be difficult."
+          title="Paste a Google Maps or Street View link. Adjust the opening frame before play. The player view hides Google's road names and address overlay; signs photographed in the scene remain visible."
           style={{
             display: "inline-flex",
             alignItems: "center",
@@ -1552,40 +1750,114 @@ const GeoguesserFields = React.memo(function GeoguesserFields({
           i
         </span>
       </label>
+      <p style={{ color: "var(--muted)", fontSize: "0.88rem", margin: "8px 0 4px" }}>Find the place in Google Maps, then paste its link here.</p>
       <input
         className="input"
         value={mapUrl}
-        onChange={(e) => setMapUrl(e.target.value)}
-        onBlur={() => {
+        onChange={(e) => { setMapUrl(e.target.value); setLinkError(""); }}
+        onBlur={(event) => {
+          if (showMapPicker || (event.relatedTarget instanceof Element && event.relatedTarget.closest(".geo-view-picker-actions"))) return;
           const normalized = extractEmbedUrl(mapUrl);
           setMapUrl(normalized);
-          upsertQuestion(category, points, {
-            mapEmbedUrl: normalized || null,
-          });
+          if (!normalized || parseStreetViewSource(normalized)) upsertQuestion(category, points, { mapEmbedUrl: normalized || null });
         }}
-        placeholder="Paste the URL or the complete <iframe> from Google Maps"
+        placeholder="Paste a Google Maps URL, share link, or Street View iframe"
       />
-      {mapUrl && !validMapUrl && (
+      {mapUrl && !validMapUrl && !shortMapUrl && (
         <div style={{ color: "#fca5a5", fontSize: "0.9rem", marginTop: "6px" }}>
-          Paste an embed URL or the complete iframe code copied from Google Maps.
+          Use a Google Maps link with coordinates, or the complete Street View iframe code.
         </div>
+      )}
+      {shortMapUrl && <p style={{ color: "var(--muted)", fontSize: "0.85rem", margin: "6px 0" }}>Short share link detected. Adjust starting view to load it.</p>}
+      {linkError && <p role="alert" style={{ color: "#fca5a5", fontSize: "0.9rem", margin: "6px 0" }}>{linkError}</p>}
+      <button className="button compact" type="button" disabled={linkLoading || !mapUrl.trim()} onPointerDown={(event) => event.preventDefault()} onClick={() => void openMapPicker()} style={{ marginTop: "8px" }}>
+        {linkLoading ? "Opening Google Maps link…" : showMapPicker ? "Close frame editor" : "Adjust starting view"}
+      </button>
+      {showMapPicker && (
+        <StreetViewPicker
+          sourceUrl={normalizedMapUrl}
+          onClose={() => {
+            setShowMapPicker(false);
+            if (validMapUrl) upsertQuestion(category, points, { mapEmbedUrl: normalizedMapUrl });
+          }}
+          onSave={(url) => {
+            setMapUrl(url);
+            upsertQuestion(category, points, { mapEmbedUrl: url });
+            setShowMapPicker(false);
+          }}
+        />
       )}
       {validMapUrl && (
         <div style={{ marginTop: "8px" }}>
-          <button className="button ghost compact" type="button" onClick={() => setShowMapPreview((value) => !value)}>
+          <button className="button ghost compact" type="button" onPointerDown={(event) => event.preventDefault()} onClick={() => setShowMapPreview((value) => !value)}>
             {showMapPreview ? "Hide player preview" : "Preview what players see"}
           </button>
           {showMapPreview && (
-            <div style={{ marginTop: "8px", height: "260px", borderRadius: "12px", overflow: "hidden", position: "relative", border: "1px solid rgba(255,255,255,0.12)" }}>
-              <iframe
-                title="Street View player preview"
-                src={normalizedMapUrl}
-                style={{ width: "100%", height: "560px", border: 0, marginTop: "-140px", pointerEvents: "none" }}
-              />
+            <div style={{ marginTop: "8px", height: "300px" }}>
+              <StreetViewPanorama key={normalizedMapUrl} sourceUrl={normalizedMapUrl} interaction={explorationMode === "look" ? "look" : explorationMode === "free" ? "explore" : "fixed"} allowZoom={explorationMode === "free"} />
             </div>
           )}
         </div>
       )}
+      <label className="label" style={{ marginTop: "8px" }}>Player exploration</label>
+      <select
+        className="input"
+        value={explorationMode}
+        onChange={(event) => {
+          const mode = event.target.value as "timed" | "look" | "free" | "stage";
+          setExplorationMode(mode);
+          upsertQuestion(category, points, { geoExplorationMode: mode });
+        }}
+      >
+        <option value="timed">Fixed view · pay to explore for a limited time</option>
+        <option value="look">Look around and zoom · no movement</option>
+        <option value="free">Explore freely · no time limit or point cost</option>
+        <option value="stage">Stage challenge · timed explore, then timed map guess</option>
+      </select>
+      {explorationMode === "stage" && <div className="geo-stage-config">
+        <p>One player explores, then places a pin on a world map. The map timer locks the pin; the host reveals the distance and awards points.</p>
+        <div className="geo-stage-config-times">
+          <label className="label">Street View time (seconds)
+            <input className="input" type="number" min={5} max={180} value={stageExploreSeconds} onChange={(event) => setStageExploreSeconds(Number(event.target.value))} onBlur={() => upsertQuestion(category, points, { geoStageExploreSeconds: Math.max(5, Math.min(180, stageExploreSeconds || 30)) })} />
+          </label>
+          <label className="label">Map guess time (seconds)
+            <input className="input" type="number" min={5} max={180} value={stageGuessSeconds} onChange={(event) => setStageGuessSeconds(Number(event.target.value))} onBlur={() => upsertQuestion(category, points, { geoStageGuessSeconds: Math.max(5, Math.min(180, stageGuessSeconds || 30)) })} />
+          </label>
+        </div>
+        <label className="label">Distance bands (nearest to farthest)</label>
+        <div className="geo-stage-bands-controls">
+          <input className="input" value={stageBandsText} onChange={(event) => { setStageBandsText(event.target.value); setStageBandsError(""); }} onBlur={() => {
+            const bands = stageBandsText.split(",").map((part) => Number(part.trim()));
+            if (bands.length !== 5 || bands.some((band, index) => !Number.isFinite(band) || band <= 0 || (index > 0 && band <= bands[index - 1]))) {
+              setStageBandsError("Enter five increasing distances, separated by commas.");
+              return;
+            }
+            upsertQuestion(category, points, { geoStageDistanceBandsKm: bands.map((band) => stageBandsUnit === "m" ? band / 1000 : band) });
+          }} placeholder={stageBandsUnit === "m" ? "25000, 100000, 500000, 2000000, 5000000" : "25, 100, 500, 2000, 5000"} />
+          <select className="input geo-stage-bands-unit" value={stageBandsUnit} aria-label="Distance band unit" onChange={(event) => {
+            const nextUnit = event.target.value === "m" ? "m" : "km";
+            const values = stageBandsText.split(",").map((part) => Number(part.trim()));
+            const valid = values.length === 5 && values.every((band, index) => Number.isFinite(band) && band > 0 && (index === 0 || band > values[index - 1]));
+            const bandsKm = valid ? values.map((band) => stageBandsUnit === "m" ? band / 1000 : band) : getGeoStageBands(q?.geoStageDistanceBandsKm);
+            setStageBandsUnit(nextUnit);
+            setStageBandsText(bandsKm.map((band) => nextUnit === "m" ? Number((band * 1000).toFixed(6)) : band).join(", "));
+            setStageBandsError("");
+            upsertQuestion(category, points, { geoStageDistanceUnit: nextUnit, geoStageDistanceBandsKm: bandsKm });
+          }}>
+            <option value="km">km</option>
+            <option value="m">m</option>
+          </select>
+          <button className="button ghost compact" type="button" onPointerDown={(event) => event.preventDefault()} onClick={() => {
+            const defaults = [...DEFAULT_GEO_STAGE_BANDS_KM];
+            setStageBandsText(defaults.map((band) => stageBandsUnit === "m" ? band * 1000 : band).join(", "));
+            setStageBandsError("");
+            upsertQuestion(category, points, { geoStageDistanceBandsKm: defaults });
+          }}>Reset distance bands</button>
+        </div>
+        {stageBandsError && <small role="alert" className="geo-stage-config-error">{stageBandsError}</small>}
+        <small>Within each band earns 100%, 80%, 60%, 40%, or 20% of the tile. Farther away, or no pin: 0 points.</small>
+      </div>}
+      {explorationMode === "timed" && <>
       <label className="label" style={{ marginTop: "8px" }}>
         Exploration time (seconds)
       </label>
@@ -1603,27 +1875,31 @@ const GeoguesserFields = React.memo(function GeoguesserFields({
         }
         placeholder="e.g. 10"
       />
-      <label className="label" style={{ marginTop: "8px" }}>
-        Exploration cost (points)
-      </label>
-      <input
+      <label className="label" style={{ marginTop: "8px" }}>Exploration cost</label>
+      <select
         className="input"
-        type="number"
-        min={0}
-        step={10}
-        value={unlockCost}
-        onChange={(e) => setUnlockCost(Number(e.target.value))}
-        onBlur={() =>
-          upsertQuestion(category, points, {
-            geoUnlockCost: Number.isFinite(unlockCost) ? unlockCost : 0,
-          })
-        }
-        placeholder="e.g. 50"
-      />
+        value={unlockLevels}
+        onChange={(event) => {
+          const levels = Number(event.target.value) === 2 ? 2 : 1;
+          setUnlockLevels(levels);
+          upsertQuestion(category, points, { geoUnlockLevels: levels });
+        }}
+      >
+        <option value={1}>One point level · {points} → {getGeoExploreValue(points, 1, boardValues)} pts</option>
+        <option value={2}>Two point levels · {points} → {getGeoExploreValue(points, 2, boardValues)} pts</option>
+      </select>
+      </>}
       <details className="question-help">
-        <summary>How movement works</summary>
+        <summary>How this mode works</summary>
         <p>
-          The panorama starts locked. Moving is an active choice that costs {unlockCost || 0} potential points and lasts {timerSeconds || 10} seconds. The crop hides Google&apos;s address header.
+          {explorationMode === "timed"
+            ? `Players first see only the saved starting frame. Choosing to explore unlocks movement for ${timerSeconds || 10} seconds and changes a correct answer from ${points} to ${exploredValue} points.`
+            : explorationMode === "stage"
+              ? "A player starts a timed Street View exploration. When it ends, a separate map timer starts only after the map loads. The last pin placed before time runs out is locked. The host then reveals a straight-line distance and awards points from the configured bands."
+            : explorationMode === "look"
+              ? "Players may turn and zoom immediately, but cannot move to another panorama. Full points remain available."
+              : "Players may turn, zoom, and move between panoramas for as long as they want. Full points remain available."}
+          {" "}On the answer side, the host can always explore freely. Google&apos;s road labels and address overlay are hidden, but words photographed in the scene are not.
         </p>
       </details>
       <label className="label" style={{ marginTop: "8px" }}>
@@ -2305,11 +2581,70 @@ const TimelineFields = React.memo(function TimelineFields({
                       ? `${q?.jokerCount ?? 5} circles · ${q?.jokerMin ?? 1}–${q?.jokerMax ?? 9}`
                       : questionType === "mcq"
                         ? `${q?.mcqOptions?.filter(Boolean).length ?? 0} answer options`
+                        : questionType === "booby"
+                          ? q?.prompt?.trim() || "Add the challenge instructions"
                         : q?.prompt?.trim() || q?.answer?.trim() || "Add the first detail";
                 return (
                   <div
                     key={`${category}-${points}`}
                     className={`question-card${isExpanded ? " expanded" : ""}${questionIssues.length ? " incomplete" : " ready"}`}
+                    tabIndex={-1}
+                    onKeyDown={(event) => {
+                      if (event.key !== "Escape" || !isExpanded || event.defaultPrevented) return;
+                      if (event.target instanceof Element && event.target.closest('[role="dialog"], [aria-modal="true"]')) return;
+                      event.preventDefault();
+                      event.stopPropagation();
+                      event.currentTarget.querySelector<HTMLButtonElement>(".question-card-toggle")?.focus({ preventScroll: true });
+                      setExpandedQuestions((previous) => {
+                        const next = new Set(previous);
+                        next.delete(questionKey);
+                        return next;
+                      });
+                    }}
+                    onClick={(event) => {
+                      const target = event.target;
+                      if (isExpanded) {
+                        const press = cardPresses.current.get(questionKey);
+                        cardPresses.current.delete(questionKey);
+                        const onToggleSurface = target instanceof Element && Boolean(target.closest(".question-card-identity"))
+                          || (target === event.currentTarget && isCardEdgeTogglePoint(event.currentTarget, event.clientX, event.clientY));
+                        if (!press?.blocked && onToggleSurface) {
+                          setExpandedQuestions((previous) => {
+                            const next = new Set(previous);
+                            next.delete(questionKey);
+                            return next;
+                          });
+                        }
+                        return;
+                      }
+                      if (target instanceof Element && target.closest("button, .question-card-actions")) return;
+                      event.currentTarget.focus({ preventScroll: true });
+                      setExpandedQuestions((previous) => new Set(previous).add(questionKey));
+                    }}
+                    onPointerDownCapture={(event) => {
+                      if (!isExpanded) return;
+                      const target = event.target;
+                      cardPresses.current.set(questionKey, {
+                        x: event.clientX,
+                        y: event.clientY,
+                        blocked: target instanceof Element && Boolean(target.closest(".question-editor, .question-type-picker, .question-issues")),
+                      });
+                    }}
+                    onPointerMove={(event) => {
+                      if (!isExpanded) return;
+                      const press = cardPresses.current.get(questionKey);
+                      if (press && Math.hypot(event.clientX - press.x, event.clientY - press.y) > 5) press.blocked = true;
+                      const target = event.target;
+                      const overOuterSurface = (target === event.currentTarget && isCardEdgeTogglePoint(event.currentTarget, event.clientX, event.clientY))
+                        || (target instanceof Element
+                          && !target.closest(".question-card-actions")
+                          && Boolean(target.closest(".question-card-topbar, .question-card-identity")));
+                      event.currentTarget.dataset.surfaceHover = overOuterSurface ? "true" : "false";
+                    }}
+                    onPointerLeave={(event) => {
+                      delete event.currentTarget.dataset.surfaceHover;
+                    }}
+                    onPointerCancel={() => cardPresses.current.delete(questionKey)}
                     style={{
                       "--question-accent": typeMeta.accent,
                       "--question-soft": typeMeta.soft,
@@ -2318,18 +2653,12 @@ const TimelineFields = React.memo(function TimelineFields({
                     } as React.CSSProperties}
                   >
                     <div className="question-card-topbar">
-                      <span className="question-points">{points}</span>
-                      <span className="question-points-unit">points</span>
-                      <span className="question-card-status" title={questionIssues.join(" · ")}>
-                        <span aria-hidden>{questionIssues.length ? "○" : "●"}</span>
-                        {questionIssues.length ? `${questionIssues.length} left` : "Ready"}
-                      </span>
-                      {q?.answered && <span className="question-played-status">Played</span>}
                       <div className="question-card-actions">
                         {canDrag ? (
                           <div
                             className="question-drag-handle"
                             title="Drag to reorder"
+                            aria-label={`Drag ${points} point question to reorder`}
                             draggable
                             onDragStart={(e) => {
                               setDragging({ category, points });
@@ -2358,7 +2687,6 @@ const TimelineFields = React.memo(function TimelineFields({
                             }}
                           >
                             <span aria-hidden>⠿</span>
-                            Reorder
                           </div>
                         ) : (
                           <div className="question-move-buttons">
@@ -2380,22 +2708,32 @@ const TimelineFields = React.memo(function TimelineFields({
                             </button>
                           </div>
                         )}
-                        <button
-                          className="question-edit-button"
-                          type="button"
-                          aria-expanded={isExpanded}
-                          onClick={() =>
-                            setExpandedQuestions((previous) => {
-                              const next = new Set(previous);
-                              if (isExpanded) next.delete(questionKey);
-                              else next.add(questionKey);
-                              return next;
-                            })
-                          }
-                        >
-                          {isExpanded ? "Collapse" : "Open"}
-                        </button>
                       </div>
+                      <button
+                        className="question-card-toggle"
+                        type="button"
+                        aria-expanded={isExpanded}
+                        aria-label={`${isExpanded ? "Collapse" : "Open"} ${points} point ${typeMeta.label} question`}
+                        onClick={() => setExpandedQuestions((previous) => {
+                          const next = new Set(previous);
+                          if (next.has(questionKey)) next.delete(questionKey);
+                          else next.add(questionKey);
+                          return next;
+                        })}
+                      >
+                        <span className="question-card-toggle-meta">
+                          <span className="question-points">{points}</span>
+                          <span className="question-points-unit">points</span>
+                          <span className="question-card-status" title={questionIssues.join(" · ")}>
+                            <span aria-hidden>{questionIssues.length ? "○" : "●"}</span>
+                            {questionIssues.length ? `${questionIssues.length} left` : "Ready"}
+                          </span>
+                          {q?.answered && <span className="question-played-status">Played</span>}
+                        </span>
+                        <span className="question-card-toggle-hint" aria-hidden>
+                          {isExpanded ? "Hide details" : "Show details"}
+                        </span>
+                      </button>
                     </div>
                     <div className="question-card-identity">
                       <span className="question-type-icon" aria-hidden>{typeMeta.icon}</span>
@@ -2404,13 +2742,14 @@ const TimelineFields = React.memo(function TimelineFields({
                     {!isExpanded && (
                       <button
                         type="button"
-                        onClick={() =>
+                        onClick={(event) => {
+                          event.currentTarget.parentElement?.focus({ preventScroll: true });
                           setExpandedQuestions((previous) => {
                             const next = new Set(previous);
                             next.add(questionKey);
                             return next;
-                          })
-                        }
+                          });
+                        }}
                         className="question-card-summary"
                       >
                         {summary}
@@ -2469,7 +2808,7 @@ const TimelineFields = React.memo(function TimelineFields({
                         points={points}
                         q={q}
                         upsertQuestion={upsertQuestion}
-                        handleAnswerImageChange={handleAnswerImageChange}
+                        boardValues={questions.map((question) => question.points)}
                       />
                     )}
                     {questionType === "joker" && (
@@ -2504,6 +2843,16 @@ const TimelineFields = React.memo(function TimelineFields({
                         points={points}
                         q={q}
                         upsertQuestion={upsertQuestion}
+                        boardValues={questions.map((question) => question.points)}
+                      />
+                    )}
+                    {questionType === "booby" && (
+                      <BoobyFields
+                        category={category}
+                        points={points}
+                        q={q}
+                        upsertQuestion={upsertQuestion}
+                        handleImageChange={handleImageChange}
                       />
                     )}
                         </div>
