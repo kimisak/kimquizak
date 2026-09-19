@@ -42,6 +42,7 @@ export function GeoStageModal({
   const [panoramaReady, setPanoramaReady] = useState(false);
   const [remaining, setRemaining] = useState<number | null>(null);
   const [guess, setGuess] = useState<GeoPoint | null>(null);
+  const [labelsVisible, setLabelsVisible] = useState(false);
   const deadlineRef = useRef(0);
   const answer = useMemo(() => parseStreetViewSource(question.mapEmbedUrl), [question.mapEmbedUrl]);
   const exploreSeconds = seconds(question.geoStageExploreSeconds, 30);
@@ -80,6 +81,13 @@ export function GeoStageModal({
     if (phase === "guessing" && Date.now() < deadlineRef.current) setGuess(point);
   }, [phase]);
 
+  const lockGuessNow = () => {
+    if (phase !== "guessing" || !guess) return;
+    deadlineRef.current = 0;
+    setRemaining(0);
+    setPhase("locked");
+  };
+
   const phaseLabel = phase === "waiting" ? "Ready for the player"
     : phase === "exploring" ? "Explore the street"
     : phase === "map-loading" ? "Opening the map"
@@ -103,10 +111,22 @@ export function GeoStageModal({
             <span className="question-modal-eyebrow">{phase === "waiting" ? "One player on stage" : phase === "exploring" ? "Phase 1 of 2" : "Phase 2 of 2"}</span>
             <h1>{showAnswer ? question.answer || "The answer" : question.prompt || phaseLabel}</h1>
           </div>
-          {phase !== "waiting" && <div className="geo-exploration-status exploring" role="status">
-            <span aria-hidden>{showingMap ? "◎" : "⌖"}</span>
-            <strong>{phaseLabel}</strong>
-            {(phase === "exploring" || phase === "guessing") && remaining !== null && <b>{remaining}s</b>}
+          {phase !== "waiting" && <div className="geo-stage-heading-tools">
+            <div className="geo-exploration-status exploring" role="status">
+              <span aria-hidden>{showingMap ? "◎" : "⌖"}</span>
+              <strong>{phaseLabel}</strong>
+              {(phase === "exploring" || phase === "guessing") && remaining !== null && <b>{remaining}s</b>}
+            </div>
+            {showAnswer && <button
+              className={`geo-stage-label-toggle${labelsVisible ? " active" : ""}`}
+              type="button"
+              role="switch"
+              aria-checked={labelsVisible}
+              onClick={() => setLabelsVisible((visible) => !visible)}
+            >
+              <span className="geo-stage-label-toggle-track" aria-hidden><i /></span>
+              <span>{labelsVisible ? "Labels on" : "Labels off"}</span>
+            </button>}
           </div>}
         </div>
         <div className="geo-stage-visual">
@@ -134,14 +154,27 @@ export function GeoStageModal({
               <p className="geo-stage-route-footnote">The map clock locks the pin. The host reveals the distance.</p>
             </div>
           </div>}
-          {showingMap && answer && <GeoGuessMap answer={answer} guess={guess} locked={phase !== "guessing"} revealed={showAnswer} onGuess={placeGuess} onReady={handleMapReady} />}
+          {showingMap && answer && <GeoGuessMap answer={answer} guess={guess} locked={phase !== "guessing"} revealed={showAnswer} labelsVisible={labelsVisible} onGuess={placeGuess} onReady={handleMapReady} />}
         </div>
-        {phase !== "waiting" && <div className="geo-stage-narrative" role="status">
-          {phase === "exploring" && "Look around, zoom, and move. The map will appear when time runs out."}
-          {phase === "map-loading" && "Street View is over. The map-guess timer will start when the map is ready."}
-          {phase === "guessing" && (guess ? "Pin placed. Click elsewhere to change it before time runs out." : "Click the map to place your pin. You can change it until the timer ends.")}
-          {phase === "locked" && !showAnswer && (guess ? "Time is up. The pin is locked. Host: reveal when ready." : "Time is up. No pin was placed. Host: reveal when ready.")}
-          {showAnswer && <strong>{guess && distanceKm !== null ? `The guess was ${displayDistance(distanceKm)} from the answer · ${points} pts` : "No pin placed · 0 pts"}</strong>}
+        {phase !== "waiting" && <div className={`geo-stage-narrative${phase === "guessing" ? " with-guess-controls" : ""}`}>
+          <span className="geo-stage-narrative-copy" role="status">
+            {phase === "exploring" && "Look around, zoom, and move. The map will appear when time runs out."}
+            {phase === "map-loading" && "Street View is over. The map-guess timer will start when the map is ready."}
+            {phase === "guessing" && (guess ? "Pin placed. Click elsewhere to change it before locking it in." : "Click the map to place your pin. You can change it until the timer ends.")}
+            {phase === "locked" && !showAnswer && (guess ? "The pin is locked. Host: reveal when ready." : "Time is up. No pin was placed. Host: reveal when ready.")}
+            {showAnswer && <strong>{guess && distanceKm !== null ? `The guess was ${displayDistance(distanceKm)} from the answer · ${points} pts` : "No pin placed · 0 pts"}</strong>}
+          </span>
+          {phase === "guessing" && <div className="geo-stage-guess-controls" aria-label="Map guess timer controls">
+            <button
+              className="button geo-stage-lock-guess"
+              type="button"
+              disabled={!guess}
+              title={guess ? "End the timer and lock this pin" : "Place a pin before ending the timer"}
+              onClick={lockGuessNow}
+            >
+              {guess ? "Lock pin now" : "Place pin first"}
+            </button>
+          </div>}
         </div>}
       </div>
       <footer className="question-modal-actions geo-stage-actions">

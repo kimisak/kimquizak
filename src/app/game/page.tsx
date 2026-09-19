@@ -46,6 +46,7 @@ import { allocateTimelinePoints, type TimelinePlacementOutcome } from "@/lib/tim
 import { getAudioAvailablePoints } from "@/lib/audioScoring";
 import { getGeoExploreValue } from "@/lib/geoguesser";
 import { getVisibleBoardQuestions } from "@/lib/boardReveal";
+import { changeJokerLevel, getJokerLevelPoints, JOKER_MAX_LEVEL } from "@/lib/jokerScoring";
 
 type ActiveQuestion = Question & { category: string };
 type PlacedTimelineEvent = TimelineEvent & {
@@ -122,6 +123,7 @@ export default function GameBoardPage() {
   const [mcqResolvedInfo, setMcqResolvedInfo] = useState<{
     teamName: string;
     points: number;
+    correct: boolean;
   } | null>(null);
   const prevAnsweringTeamRef = useRef<string | null>(null);
   const [slotFaces, setSlotFaces] = useState<Team[]>([]);
@@ -494,11 +496,7 @@ export default function GameBoardPage() {
         maxVal = minVal + 1;
       }
       playJokerSparkle();
-      const basePoints = question.points ?? 0;
-      const maxScore = basePoints * 2;
-      const computedIncrement =
-        count > 0 ? Math.max(0, Math.round((maxScore - basePoints) / count)) : 0;
-      const increment = computedIncrement;
+      const maximumReward = Math.max(0, question.points ?? 0);
       const rand = (min: number, max: number) =>
         Math.floor(Math.random() * (max - min + 1)) + min;
       const numbers = Array.from({ length: count }, () => rand(minVal, maxVal));
@@ -525,12 +523,12 @@ export default function GameBoardPage() {
         correctDirs,
         jokerIndex,
         jokerPosition,
-        increment,
       });
       setJokerProgress({
         currentIndex: 0,
         results: new Array(numbers.length).fill("pending"),
-        score: basePoints,
+        level: 1,
+        score: getJokerLevelPoints(maximumReward, 1),
         finished: false,
         chosenPositions: new Array(numbers.length).fill(null),
       });
@@ -887,9 +885,8 @@ export default function GameBoardPage() {
     closeModal();
   };
 
-  const getMaxJokerScore = () => {
-    const base = activeQuestion?.points ?? 0;
-    return base * 2;
+  const getJokerMaximumReward = () => {
+    return Math.max(0, activeQuestion?.points ?? 0);
   };
 
   const handleJokerGuess = (position: "above" | "below") => {
@@ -916,7 +913,8 @@ export default function GameBoardPage() {
       setJokerProgress({
         currentIndex: step + 1,
         results: nextResults,
-        score: getMaxJokerScore(),
+        level: JOKER_MAX_LEVEL,
+        score: getJokerLevelPoints(getJokerMaximumReward(), JOKER_MAX_LEVEL),
         finished: true,
         chosenPositions: nextChosen,
       });
@@ -930,17 +928,13 @@ export default function GameBoardPage() {
     } else {
       playDownbeat();
     }
-    const incrementVal = jokerRound.increment ?? 0;
-    const delta = correct ? incrementVal : 0;
-    const basePoints = activeQuestion.points ?? 0;
-    const updatedScore = Math.max(
-      basePoints,
-      Math.min(getMaxJokerScore(), (jokerProgress.score ?? 0) + delta),
-    );
+    const nextLevel = changeJokerLevel(jokerProgress.level, correct);
+    const updatedScore = getJokerLevelPoints(getJokerMaximumReward(), nextLevel);
     const nextIndex = step + 1;
     setJokerProgress({
       currentIndex: nextIndex,
       results: nextResults,
+      level: nextLevel,
       score: updatedScore,
       finished: nextIndex >= total,
       chosenPositions: nextChosen,
@@ -966,7 +960,7 @@ export default function GameBoardPage() {
       applyScoreChange(
         teamId,
         Math.max(0, jokerProgress.score),
-        `${activeQuestion.category} · Joker result`,
+        `${activeQuestion.category} · ${jokerProgress.results.includes("joker") ? "Joker found" : "Joker result"}`,
         activeQuestion.id,
       );
     }
@@ -1007,6 +1001,7 @@ export default function GameBoardPage() {
         setMcqResolvedInfo({
           teamName: winnerTeam?.name ?? "Team",
           points: awarded,
+          correct: true,
         });
       }
       setQuestions((prev) =>
@@ -1021,11 +1016,36 @@ export default function GameBoardPage() {
     } else {
       playDownbeat();
       setMcqEliminated((previous) => previous.includes(idx) ? previous : [...previous, idx]);
-      if (activeTurnOrder.length > 0) {
+      const rolloverEnabled = activeQuestion.mcqRotateOnMiss === true;
+      if (rolloverEnabled && activeTurnOrder.length > 0) {
         const nextTeamId = activeTurnOrder[(boardTurnIndex + 1) % activeTurnOrder.length];
         advanceBoard();
         setSelectedTeamId(nextTeamId);
         setLastGuessTeamId("");
+      } else {
+        const answeringTeam = teams.find((team) => team.id === currentTeamId);
+        setMcqResolvedInfo({
+          teamName: answeringTeam?.name ?? "Team",
+          points: 0,
+          correct: false,
+        });
+        if (currentTeamId && answeringTeam) {
+          setScoreHistory((previous) => previous.some((entry) => entry.questionId === activeQuestion.id)
+            ? previous
+            : [{
+                id: makeId("score"),
+                teamId: answeringTeam.id,
+                teamName: answeringTeam.name,
+                delta: 0,
+                reason: `${activeQuestion.category} · ${activeQuestion.points} · Multiple choice wrong · 0 pts`,
+                createdAt: new Date().toISOString(),
+                questionId: activeQuestion.id,
+              }, ...previous].slice(0, 100));
+        }
+        setQuestions((previous) => previous.map((question) =>
+          question.id === activeQuestion.id ? { ...question, answered: true } : question));
+        if (activeTurnOrder.length > 0) advanceBoard();
+        setMcqResolved(true);
       }
     }
   };
@@ -1232,19 +1252,19 @@ export default function GameBoardPage() {
       return (
         <JokerModal
           question={modalQuestion}
-          teams={teams}
           currentTeamName={currentTeam?.name}
           currentTeamColor={currentTeamColor}
+          currentTeamEmoji={currentTeamEmoji}
           answeringTeamName={answeringTeam?.name}
+          answeringTeamColor={answeringTeamColor}
           answeringTeamEmoji={answeringTeamEmoji}
           round={jokerRound}
           progress={jokerProgress}
           onGuess={handleJokerGuess}
           onFinish={finishJokerQuestion}
           disableActions={!answeringTeam}
-          maxScore={getMaxJokerScore()}
+          maximumReward={getJokerMaximumReward()}
           rotateInfo={activeQuestion.jokerRotateOnMiss ?? true}
-          incrementInfo={jokerRound.increment}
         />
       );
     }

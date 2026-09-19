@@ -37,8 +37,8 @@ import { buildYouTubeEmbedUrl, getYouTubeStartSeconds } from "@/lib/youtube";
 import { getAudioReplayValue } from "@/lib/audioScoring";
 import { extractEmbedUrl } from "@/lib/embed";
 import { DEFAULT_GEO_STAGE_BANDS_KM, getGeoExploreValue, getGeoStageBands, isGoogleMapsShortLink, parseStreetViewSource } from "@/lib/geoguesser";
-import { StreetViewPanorama } from "@/components/game/StreetViewPanorama";
 import { StreetViewPicker } from "@/components/config/StreetViewPicker";
+import { StorageBackupPanel } from "@/components/StorageBackupPanel";
 import { getQuestionIssues, isQuestionReady } from "@/lib/questionValidation";
 
 type FieldProps = {
@@ -413,64 +413,40 @@ const McqFields = React.memo(function McqFields({
   handleImageChange,
   handleAnswerImageChange,
 }: FieldProps) {
-  const [optionCount, setOptionCount] = useState<number>(
-    Math.max(2, Math.min(4, q?.mcqOptions?.length || 2)),
-  );
   const [options, setOptions] = useState<string[]>(() => {
-    const base = q?.mcqOptions && q.mcqOptions.length ? q.mcqOptions : ["", ""];
+    const base = q?.mcqOptions && q.mcqOptions.length ? q.mcqOptions : [];
     return base.slice(0, 4).concat(new Array(Math.max(0, 4 - base.length)).fill(""));
   });
   const [correctIndex, setCorrectIndex] = useState<number>(q?.mcqCorrectIndex ?? 0);
+  const [rotateOnMiss, setRotateOnMiss] = useState<boolean>(q?.mcqRotateOnMiss ?? false);
 
   useEffect(() => {
     const id = setTimeout(() => {
-      const base = q?.mcqOptions && q.mcqOptions.length ? q.mcqOptions : ["", ""];
+      const base = q?.mcqOptions && q.mcqOptions.length ? q.mcqOptions : [];
       const normalized = base.slice(0, 4).concat(new Array(Math.max(0, 4 - base.length)).fill(""));
       setOptions(normalized);
-      setOptionCount(Math.max(2, Math.min(4, q?.mcqOptions?.length || 2)));
       setCorrectIndex(q?.mcqCorrectIndex ?? 0);
+      setRotateOnMiss(q?.mcqRotateOnMiss ?? false);
     }, 0);
     return () => clearTimeout(id);
-  }, [q?.mcqOptions, q?.mcqCorrectIndex]);
+  }, [q?.mcqOptions, q?.mcqCorrectIndex, q?.mcqRotateOnMiss]);
 
   const persist = (
     opts: string[],
     correct: number,
-    countOverride?: number,
+    rotateOverride?: boolean,
   ) => {
-    const count = countOverride ?? optionCount;
-    const trimmed = opts.slice(0, count).map((o) => o.trim());
+    const trimmed = opts.slice(0, 4).map((o) => o.trim());
     const boundedCorrect = Math.min(trimmed.length - 1, Math.max(0, correct));
     upsertQuestion(category, points, {
       mcqOptions: trimmed,
       mcqCorrectIndex: boundedCorrect,
-      mcqRotateOnMiss: false,
+      mcqRotateOnMiss: rotateOverride ?? rotateOnMiss,
     });
   };
 
   return (
     <>
-      <label className="label" style={{ marginTop: "8px" }}>
-        Number of options
-      </label>
-      <select
-        className="input"
-        value={optionCount}
-        onChange={(e) => {
-          const next = Number(e.target.value);
-          setOptionCount(next);
-          const trimmed = options.slice(0, next);
-          const padded = trimmed.concat(new Array(Math.max(0, 4 - trimmed.length)).fill(""));
-          setOptions(padded);
-          const boundedCorrect = Math.min(next - 1, Math.max(0, correctIndex));
-          setCorrectIndex(boundedCorrect);
-          persist(padded, boundedCorrect, next);
-        }}
-        style={{ maxWidth: "140px", cursor: "pointer" }}
-      >
-        <option value={2}>2 options</option>
-        <option value={4}>4 options</option>
-      </select>
       <label className="label" style={{ marginTop: "8px" }}>
         Prompt
       </label>
@@ -568,7 +544,7 @@ const McqFields = React.memo(function McqFields({
         </div>
       )}
       <div style={{ display: "grid", gap: "8px", marginTop: "8px" }}>
-        {options.slice(0, optionCount).map((opt, idx) => (
+        {options.map((opt, idx) => (
           <div key={idx} style={{ display: "grid", gap: "6px" }}>
             <label className="label" style={{ display: "flex", alignItems: "center", gap: "8px" }}>
               <input
@@ -597,8 +573,24 @@ const McqFields = React.memo(function McqFields({
           </div>
         ))}
       </div>
-      <div style={{ color: "var(--muted)", fontSize: "0.9rem", marginTop: "6px" }}>
-        A wrong choice is removed and play passes to the next team without deducting points.
+      <div className="mcq-config-rule">
+        <label>
+          <input
+            type="checkbox"
+            checked={rotateOnMiss}
+            onChange={(event) => {
+              const next = event.target.checked;
+              setRotateOnMiss(next);
+              persist(options, correctIndex, next);
+            }}
+          />
+          <span>
+            <strong>Rollover after a wrong answer</strong>
+            <small>{rotateOnMiss
+              ? "The wrong option disappears and the next team may answer."
+              : "A wrong answer ends the question for 0 points."}</small>
+          </span>
+        </label>
       </div>
       <label className="label" style={{ marginTop: "10px" }}>
         Answer image (optional)
@@ -692,6 +684,10 @@ export default function QuestionConfigPage() {
   const [dragOver, setDragOver] = useState<PointValue | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const dragOrigin = React.useRef<{ x: number; y: number } | null>(null);
+  const [draggingCategory, setDraggingCategory] = useState<string | null>(null);
+  const [categoryDragOver, setCategoryDragOver] = useState<string | null>(null);
+  const [categoryDragOffset, setCategoryDragOffset] = useState(0);
+  const categoryDragOrigin = React.useRef<number | null>(null);
   const [isMobile, setIsMobile] = useState(false);
   const [showFinaleMusicPreview, setShowFinaleMusicPreview] = useState(false);
   const [hostMessagesExpanded, setHostMessagesExpanded] = useState(false);
@@ -901,7 +897,6 @@ export default function QuestionConfigPage() {
           jokerCount: 5,
           jokerMin: 1,
           jokerMax: 9,
-          jokerIncrement: 100,
           timelineCenterYear: 2000,
           timelineCenterLabel: "Center year",
           timelineTitle: "Timeline",
@@ -995,16 +990,18 @@ export default function QuestionConfigPage() {
     });
   };
 
-  const moveCategory = (category: string, direction: -1 | 1) => {
+  const moveCategoryTo = (category: string, targetCategory: string) => {
+    if (category === targetCategory) return;
     setQuestions((previous) => {
       const order = Array.from(new Set(previous.map((question) => question.category)));
       const fromIndex = order.indexOf(category);
-      const toIndex = fromIndex + direction;
-      if (fromIndex < 0 || toIndex < 0 || toIndex >= order.length) return previous;
+      const toIndex = order.indexOf(targetCategory);
+      if (fromIndex < 0 || toIndex < 0) return previous;
       const bonusCategory = Object.keys(settings.boardRevealRules?.categories ?? {})[0];
       if (bonusCategory && (order[fromIndex] === bonusCategory || order[toIndex] === bonusCategory)) return previous;
 
-      [order[fromIndex], order[toIndex]] = [order[toIndex], order[fromIndex]];
+      const [moved] = order.splice(fromIndex, 1);
+      order.splice(toIndex, 0, moved);
       const questionsByCategory = new Map<string, Question[]>();
       previous.forEach((question) => {
         const group = questionsByCategory.get(question.category) ?? [];
@@ -1061,7 +1058,6 @@ export default function QuestionConfigPage() {
           jokerCount: 5,
           jokerMin: 1,
           jokerMax: 9,
-          jokerIncrement: 100,
           timelineCenterYear: 2000,
           timelineCenterLabel: "Center year",
           timelineTitle: "Timeline",
@@ -1833,7 +1829,6 @@ const GeoguesserFields = React.memo(function GeoguesserFields({
   const [stageBandsUnit, setStageBandsUnit] = useState<"km" | "m">(q?.geoStageDistanceUnit === "m" ? "m" : "km");
   const [stageBandsText, setStageBandsText] = useState(getGeoStageBands(q?.geoStageDistanceBandsKm).map((band) => q?.geoStageDistanceUnit === "m" ? band * 1000 : band).join(", "));
   const [stageBandsError, setStageBandsError] = useState("");
-  const [showMapPreview, setShowMapPreview] = useState(false);
   const [showMapPicker, setShowMapPicker] = useState(false);
   const [linkLoading, setLinkLoading] = useState(false);
   const [linkError, setLinkError] = useState("");
@@ -1858,10 +1853,6 @@ const GeoguesserFields = React.memo(function GeoguesserFields({
   const exploredValue = getGeoExploreValue(points, unlockLevels, boardValues);
 
   const openMapPicker = async () => {
-    if (showMapPicker) {
-      setShowMapPicker(false);
-      return;
-    }
     setLinkError("");
     let resolvedUrl = normalizedMapUrl;
     if (shortMapUrl) {
@@ -1887,7 +1878,6 @@ const GeoguesserFields = React.memo(function GeoguesserFields({
       return;
     }
     setMapUrl(resolvedUrl);
-    setShowMapPreview(false);
     setShowMapPicker(true);
   };
 
@@ -1913,76 +1903,65 @@ const GeoguesserFields = React.memo(function GeoguesserFields({
         }}
         placeholder="Optional hint or instructions"
       />
-      <label className="label" style={{ marginTop: "8px", display: "flex", alignItems: "center", gap: "8px" }}>
-        <span>Street View location</span>
-        <span
-          title="Paste a Google Maps or Street View link. Adjust the opening frame before play. The player view hides Google's road names and address overlay; signs photographed in the scene remain visible."
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            width: "18px",
-            height: "18px",
-            borderRadius: "50%",
-            border: "1px solid rgba(255,255,255,0.3)",
-            fontSize: "12px",
-            cursor: "help",
-            color: "var(--muted)",
-            background: "rgba(255,255,255,0.05)",
-          }}
-        >
-          i
-        </span>
-      </label>
-      <p style={{ color: "var(--muted)", fontSize: "0.88rem", margin: "8px 0 4px" }}>Find the place in Google Maps, then paste its link here.</p>
-      <input
-        className="input"
-        value={mapUrl}
-        onChange={(e) => { setMapUrl(e.target.value); setLinkError(""); }}
-        onBlur={(event) => {
-          if (showMapPicker || (event.relatedTarget instanceof Element && event.relatedTarget.closest(".geo-view-picker-actions"))) return;
-          const normalized = extractEmbedUrl(mapUrl);
-          setMapUrl(normalized);
-          if (!normalized || parseStreetViewSource(normalized)) upsertQuestion(category, points, { mapEmbedUrl: normalized || null });
-        }}
-        placeholder="Paste a Google Maps URL, share link, or Street View iframe"
-      />
-      {mapUrl && !validMapUrl && !shortMapUrl && (
-        <div style={{ color: "#fca5a5", fontSize: "0.9rem", marginTop: "6px" }}>
-          Use a Google Maps link with coordinates, or the complete Street View iframe code.
+      <section className="geo-panorama-setup" aria-labelledby={`geo-panorama-${q?.id ?? `${category}-${points}`}`}>
+        <div className="geo-panorama-setup-heading">
+          <div>
+            <strong id={`geo-panorama-${q?.id ?? `${category}-${points}`}`}>Player starting panorama</strong>
+            <small>Paste, load, adjust, and confirm one exact opening frame.</small>
+          </div>
+          <span className={q?.mapEmbedUrl ? "saved" : "empty"}>{q?.mapEmbedUrl ? "View saved" : "Not set"}</span>
         </div>
-      )}
-      {shortMapUrl && <p style={{ color: "var(--muted)", fontSize: "0.85rem", margin: "6px 0" }}>Short share link detected. Adjust starting view to load it.</p>}
-      {linkError && <p role="alert" style={{ color: "#fca5a5", fontSize: "0.9rem", margin: "6px 0" }}>{linkError}</p>}
-      <button className="button compact" type="button" disabled={linkLoading || !mapUrl.trim()} onPointerDown={(event) => event.preventDefault()} onClick={() => void openMapPicker()} style={{ marginTop: "8px" }}>
-        {linkLoading ? "Opening Google Maps link…" : showMapPicker ? "Close frame editor" : "Adjust starting view"}
-      </button>
-      {showMapPicker && (
-        <StreetViewPicker
-          sourceUrl={normalizedMapUrl}
-          onClose={() => {
-            setShowMapPicker(false);
-            if (validMapUrl) upsertQuestion(category, points, { mapEmbedUrl: normalizedMapUrl });
-          }}
-          onSave={(url) => {
-            setMapUrl(url);
-            upsertQuestion(category, points, { mapEmbedUrl: url });
-            setShowMapPicker(false);
-          }}
-        />
-      )}
-      {validMapUrl && (
-        <div style={{ marginTop: "8px" }}>
-          <button className="button ghost compact" type="button" onPointerDown={(event) => event.preventDefault()} onClick={() => setShowMapPreview((value) => !value)}>
-            {showMapPreview ? "Hide player preview" : "Preview what players see"}
+        <div className="geo-panorama-source-row">
+          <input
+            className="input"
+            value={mapUrl}
+            onChange={(event) => { setMapUrl(event.target.value); setLinkError(""); }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && mapUrl.trim()) {
+                event.preventDefault();
+                void openMapPicker();
+              }
+            }}
+            placeholder="Paste a Google Maps URL, share link, or Street View iframe"
+            aria-label="Google Maps or Street View link"
+          />
+          <button className="button compact" type="button" disabled={linkLoading || !mapUrl.trim()} onClick={() => void openMapPicker()}>
+            {linkLoading ? "Loading…" : showMapPicker ? "Reload link" : q?.mapEmbedUrl ? "Edit panorama" : "Load panorama"}
           </button>
-          {showMapPreview && (
-            <div style={{ marginTop: "8px", height: "300px" }}>
-              <StreetViewPanorama key={normalizedMapUrl} sourceUrl={normalizedMapUrl} interaction={explorationMode === "look" ? "look" : explorationMode === "free" ? "explore" : "fixed"} allowZoom={explorationMode === "free"} />
-            </div>
-          )}
         </div>
-      )}
+        {mapUrl && !validMapUrl && !shortMapUrl && (
+          <p className="geo-panorama-error">Use a Google Maps link with coordinates, or the complete Street View iframe code.</p>
+        )}
+        {shortMapUrl && <p className="geo-panorama-note">Short share link detected. Load it to resolve the Street View location.</p>}
+        {linkError && <p className="geo-panorama-error" role="alert">{linkError}</p>}
+        {showMapPicker ? (
+          <StreetViewPicker
+            key={normalizedMapUrl}
+            sourceUrl={normalizedMapUrl}
+            onClose={() => {
+              setShowMapPicker(false);
+              setMapUrl(q?.mapEmbedUrl ?? "");
+              setLinkError("");
+            }}
+            onSave={(url) => {
+              setMapUrl(url);
+              upsertQuestion(category, points, { mapEmbedUrl: url });
+              setShowMapPicker(false);
+            }}
+          />
+        ) : q?.mapEmbedUrl ? (
+          <div className="geo-panorama-confirmed">
+            <span aria-hidden>✓</span>
+            <p>The saved frame is exactly where players begin. Load it above to make another adjustment.</p>
+            <button className="button ghost compact" type="button" onClick={() => {
+              setMapUrl("");
+              upsertQuestion(category, points, { mapEmbedUrl: null });
+            }}>Remove view</button>
+          </div>
+        ) : (
+          <p className="geo-panorama-note">Find the place in Google Maps, copy its link, then load it here. Road-label overlays are hidden; photographed signs remain visible.</p>
+        )}
+      </section>
       <label className="label" style={{ marginTop: "8px" }}>Player exploration</label>
       <select
         className="input"
@@ -2135,19 +2114,16 @@ const JokerFields = React.memo(function JokerFields({
   const [count, setCount] = useState<number>(q?.jokerCount ?? 5);
   const [minVal, setMinVal] = useState<number>(q?.jokerMin ?? 1);
   const [maxVal, setMaxVal] = useState<number>(q?.jokerMax ?? 9);
+  const [jokerPrompt, setJokerPrompt] = useState<string>(q?.prompt ?? "");
   const [rotateOnMiss, setRotateOnMiss] = useState<boolean>(q?.jokerRotateOnMiss ?? true);
 
   React.useEffect(() => {
     setCount(q?.jokerCount ?? 5);
     setMinVal(q?.jokerMin ?? 1);
     setMaxVal(q?.jokerMax ?? 9);
+    setJokerPrompt(q?.prompt ?? "");
     setRotateOnMiss(q?.jokerRotateOnMiss ?? true);
-  }, [q?.jokerCount, q?.jokerMin, q?.jokerMax, q?.jokerRotateOnMiss]);
-
-  const persist = (next: Partial<Question>) =>
-    upsertQuestion(category, points, {
-      ...next,
-    });
+  }, [q?.jokerCount, q?.jokerMin, q?.jokerMax, q?.jokerRotateOnMiss, q?.prompt]);
 
   const clampInt = (value: number, min: number, max: number) =>
     Math.min(max, Math.max(min, Math.round(value)));
@@ -2184,13 +2160,24 @@ const JokerFields = React.memo(function JokerFields({
           border: "1px solid rgba(255,255,255,0.12)",
           background: "rgba(255,255,255,0.04)",
           color: "var(--muted)",
-          marginBottom: "8px",
+          marginBottom: "20px",
           fontSize: "0.95rem",
           lineHeight: 1.4,
         }}
       >
-        Set the circles and number range. The hidden 🎩 Joker awards the maximum score.
+        The player starts at level 1 (20%). Correct moves up one level, wrong moves down one level, and the hidden 🎩 Joker jumps directly to level 6 (100%).
       </div>
+      <label className="label">Title or question (optional)</label>
+      <textarea
+        className="input joker-config-prompt"
+        value={jokerPrompt}
+        onChange={(event) => setJokerPrompt(event.target.value)}
+        onBlur={() => persistSettings({ prompt: jokerPrompt })}
+        placeholder="For example: Can you survive the Christmas Joker?"
+      />
+      <small className="joker-config-prompt-help">
+        Shown above the higher-or-lower board. Leave blank to use the standard game instruction.
+      </small>
       <label className="label">Circles per row</label>
       <input
         className="input"
@@ -2230,7 +2217,7 @@ const JokerFields = React.memo(function JokerFields({
           fontSize: "0.9rem",
         }}
       >
-        Points per correct guess are auto-calculated from the question score and circle count.
+        Prize ladder: 20% · 25% · 33% · 44% · 72% · 100% of this question&apos;s {points} points. Results are rounded to whole points.
       </div>
       <div style={{ display: "grid", gap: "8px", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", marginTop: "10px" }}>
         <label
@@ -2724,14 +2711,68 @@ const TimelineFields = React.memo(function TimelineFields({
           {categories.map((cat) => {
             const isActive = activeCategory === cat;
             const label = categoryNames[cat] ?? cat;
+            const isDraggingCategory = draggingCategory === cat;
+            const isCategoryDropTarget = categoryDragOver === cat && draggingCategory !== cat;
+            const isFinalCategory = Boolean(settings.boardRevealRules?.categories?.[cat]);
             return (
-              <button
+              <div
                 key={cat}
-                className={`question-category-tab${isActive ? " active" : ""}`}
-                onClick={() => setActiveCategory(cat)}
+                className={`question-category-tab${isActive ? " active" : ""}${isDraggingCategory ? " dragging" : ""}${isCategoryDropTarget ? " drag-over" : ""}`}
+                data-category-tab={cat}
+                style={{ transform: isDraggingCategory ? `translate3d(${categoryDragOffset}px,0,0)` : undefined }}
               >
-                {label || cat}
-              </button>
+                <button
+                  className="question-category-tab-select"
+                  type="button"
+                  onClick={() => setActiveCategory(cat)}
+                >
+                  {label || cat}
+                </button>
+                <button
+                  className={`question-category-drag-handle${isFinalCategory ? " disabled" : ""}`}
+                  type="button"
+                  disabled={isFinalCategory}
+                  aria-label={isFinalCategory ? `${label || cat} is fixed as the final category` : `Drag ${label || cat} to reorder categories`}
+                  title={isFinalCategory ? "The final category stays on the right" : "Drag to reorder categories"}
+                  onPointerDown={(event) => {
+                    if (isFinalCategory || event.button !== 0) return;
+                    event.preventDefault();
+                    event.stopPropagation();
+                    event.currentTarget.setPointerCapture(event.pointerId);
+                    categoryDragOrigin.current = event.clientX;
+                    setCategoryDragOffset(0);
+                    setDraggingCategory(cat);
+                    setCategoryDragOver(null);
+                  }}
+                  onPointerMove={(event) => {
+                    if (categoryDragOrigin.current === null || draggingCategory !== cat) return;
+                    setCategoryDragOffset(event.clientX - categoryDragOrigin.current);
+                    const target = document.elementsFromPoint(event.clientX, event.clientY)
+                      .map((element) => element.closest<HTMLElement>(".question-category-tab[data-category-tab]"))
+                      .find((tab) => tab?.dataset.categoryTab !== cat && !settings.boardRevealRules?.categories?.[tab?.dataset.categoryTab ?? ""]);
+                    setCategoryDragOver(target?.dataset.categoryTab ?? null);
+                  }}
+                  onPointerUp={(event) => {
+                    if (categoryDragOrigin.current === null) return;
+                    const target = document.elementsFromPoint(event.clientX, event.clientY)
+                      .map((element) => element.closest<HTMLElement>(".question-category-tab[data-category-tab]"))
+                      .find((tab) => tab?.dataset.categoryTab !== cat && !settings.boardRevealRules?.categories?.[tab?.dataset.categoryTab ?? ""]);
+                    if (target?.dataset.categoryTab) moveCategoryTo(cat, target.dataset.categoryTab);
+                    categoryDragOrigin.current = null;
+                    setCategoryDragOver(null);
+                    setDraggingCategory(null);
+                    setCategoryDragOffset(0);
+                  }}
+                  onPointerCancel={() => {
+                    categoryDragOrigin.current = null;
+                    setCategoryDragOver(null);
+                    setDraggingCategory(null);
+                    setCategoryDragOffset(0);
+                  }}
+                >
+                  <span aria-hidden>⠿</span>
+                </button>
+              </div>
             );
           })}
         </nav>
@@ -2749,7 +2790,6 @@ const TimelineFields = React.memo(function TimelineFields({
           >
             <div className="question-category-heading">
               <div className="question-category-name">
-                <span aria-hidden>▦</span>
                 <input
                   aria-label={`Rename ${category}`}
                   value={categoryNames[category] ?? category}
@@ -2767,24 +2807,6 @@ const TimelineFields = React.memo(function TimelineFields({
               <div className="question-category-actions">
                 <button type="button" onClick={() => addQuestion(category)} title="Add the next available 100-point level">
                   + Add question
-                </button>
-                <button
-                  type="button"
-                  onClick={() => moveCategory(category, -1)}
-                  disabled={categories.indexOf(category) === 0 || Boolean(settings.boardRevealRules?.categories?.[category])}
-                  aria-label={`Move ${category} left`}
-                  title="Move category left on the board"
-                >
-                  ← Move
-                </button>
-                <button
-                  type="button"
-                  onClick={() => moveCategory(category, 1)}
-                  disabled={categories.indexOf(category) === categories.length - 1 || Boolean(settings.boardRevealRules?.categories?.[categories[categories.length - 1]])}
-                  aria-label={`Move ${category} right`}
-                  title="Move category right on the board"
-                >
-                  Move →
                 </button>
                 <button type="button" onClick={() => setCategoryCollapsed(category, false)}>
                   Open all
@@ -2978,14 +3000,16 @@ const TimelineFields = React.memo(function TimelineFields({
                         <span className="question-card-toggle-meta">
                           <span className="question-points">{points}</span>
                           <span className="question-points-unit">points</span>
+                          {!isExpanded && <span className="question-card-identity compact">
+                            <span className="question-type-icon" aria-hidden>{typeMeta.icon}</span>
+                            <strong>{typeMeta.label}</strong>
+                          </span>}
+                          {!isExpanded && <span className="question-card-summary" title={summary}>{summary}</span>}
                           <span className="question-card-status" title={questionIssues.join(" · ")}>
                             <span aria-hidden>{questionIssues.length ? "○" : "●"}</span>
                             {questionIssues.length ? `${questionIssues.length} left` : "Ready"}
                           </span>
                           {q?.answered && <span className="question-played-status">Played</span>}
-                        </span>
-                        <span className="question-card-toggle-hint" aria-hidden>
-                          {isExpanded ? "Hide details" : "Show details"}
                         </span>
                       </button>
                     </div>
@@ -2999,26 +3023,10 @@ const TimelineFields = React.memo(function TimelineFields({
                     >
                       ×
                     </button>
-                    <div className="question-card-identity">
+                    {isExpanded && <div className="question-card-identity">
                       <span className="question-type-icon" aria-hidden>{typeMeta.icon}</span>
                       <strong>{typeMeta.label}</strong>
-                    </div>
-                    {!isExpanded && (
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.currentTarget.parentElement?.focus({ preventScroll: true });
-                          setExpandedQuestions((previous) => {
-                            const next = new Set(previous);
-                            next.add(questionKey);
-                            return next;
-                          });
-                        }}
-                        className="question-card-summary"
-                      >
-                        {summary}
-                      </button>
-                    )}
+                    </div>}
                     {isExpanded && (
                       <>
                         {q && points === categoryPoints[categoryPoints.length - 1] && <RevealRuleEditor
@@ -3143,6 +3151,9 @@ const TimelineFields = React.memo(function TimelineFields({
           </div>
         )}
       </div>
+      <section className="backup-drawer question-backup-drawer" aria-label="Quiz backup and local data">
+        <StorageBackupPanel />
+      </section>
     </main>
   );
 }

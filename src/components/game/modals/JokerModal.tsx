@@ -1,7 +1,9 @@
 'use client';
 
-import type { Question, Team } from "@/lib/types";
-import { TeamPill } from "@/components/game/TeamPill";
+import type { CSSProperties } from "react";
+import type { Question } from "@/lib/types";
+import { JOKER_LEVEL_PERCENTAGES, JOKER_MAX_LEVEL } from "@/lib/jokerScoring";
+import { QuestionModalHeader } from "./QuestionModalHeader";
 
 export type JokerRound = {
   numbers: number[];
@@ -9,7 +11,6 @@ export type JokerRound = {
   correctDirs: ("above" | "below")[];
   jokerIndex: number;
   jokerPosition: "above" | "below";
-  increment: number;
 };
 
 export type JokerResult = "pending" | "correct" | "wrong" | "joker";
@@ -17,6 +18,7 @@ export type JokerResult = "pending" | "correct" | "wrong" | "joker";
 export type JokerProgress = {
   currentIndex: number;
   results: JokerResult[];
+  level: number;
   score: number;
   finished: boolean;
   chosenPositions: ("above" | "below" | null)[];
@@ -24,340 +26,151 @@ export type JokerProgress = {
 
 type Props = {
   question: Question;
-  teams: Team[];
   currentTeamName?: string;
   currentTeamColor?: string;
+  currentTeamEmoji?: string | null;
   answeringTeamName?: string;
+  answeringTeamColor?: string;
   answeringTeamEmoji?: string | null;
   round: JokerRound;
   progress: JokerProgress;
   onGuess: (position: "above" | "below") => void;
   onFinish: () => void;
   disableActions?: boolean;
-  maxScore: number;
+  maximumReward: number;
   rotateInfo?: boolean;
-  incrementInfo?: number;
-};
-
-const statusColors: Record<JokerResult, string> = {
-  pending: "rgba(255,255,255,0.1)",
-  correct: "linear-gradient(135deg, #1c6f4d, #0f5a3c)",
-  wrong: "linear-gradient(135deg, #b91c1c, #7f1d1d)",
-  joker: "linear-gradient(135deg, #f59e0b, #f97316)",
-};
-
-const statusBorder: Record<JokerResult, string> = {
-  pending: "rgba(255,255,255,0.16)",
-  correct: "rgba(28,111,77,0.9)",
-  wrong: "rgba(185,28,28,0.8)",
-  joker: "rgba(249,115,22,0.9)",
 };
 
 export function JokerModal({
   question,
-  teams,
   currentTeamName,
   currentTeamColor,
+  currentTeamEmoji,
   answeringTeamName,
+  answeringTeamColor,
   answeringTeamEmoji,
   round,
   progress,
   onGuess,
   onFinish,
   disableActions,
-  maxScore,
+  maximumReward,
   rotateInfo,
-  incrementInfo,
 }: Props) {
   const total = round.numbers.length;
-  const activeIndex = total - 1 - progress.currentIndex; // start from rightmost
+  const activeIndex = total - 1 - progress.currentIndex;
   const canGuess = !progress.finished && !disableActions;
   const guessesLeft = progress.finished ? 0 : Math.max(total - progress.currentIndex, 0);
   const foundJoker = progress.results.includes("joker");
+  const teamName = answeringTeamName || currentTeamName;
+  const teamColor = answeringTeamName ? answeringTeamColor : currentTeamColor;
+  const teamEmoji = answeringTeamName ? answeringTeamEmoji : currentTeamEmoji;
+  const levelPercentage = JOKER_LEVEL_PERCENTAGES[
+    Math.max(0, Math.min(JOKER_MAX_LEVEL - 1, progress.level - 1))
+  ];
 
-  const renderGuessCircle = (position: "above" | "below", idx: number) => {
-    const isActive = idx === activeIndex && canGuess;
-    const status = progress.results[idx] ?? "pending";
-    const isJokerSpot = status === "joker";
-    const chosen = progress.chosenPositions[idx] === position;
-    const displayStatus = chosen ? (isJokerSpot ? "joker" : status) : "pending";
-    const revealNumber = chosen && status !== "pending";
-
-    const canHover = isActive && !chosen && !progress.finished;
+  const renderChoice = (position: "above" | "below", index: number) => {
+    const active = index === activeIndex && canGuess;
+    const result = progress.results[index] ?? "pending";
+    const selected = progress.chosenPositions[index] === position;
+    const visibleResult = selected ? result : "pending";
+    const revealedValue = selected && result !== "pending"
+      ? result === "joker" ? "🎩" : round.targets[index]
+      : "";
 
     return (
       <button
-        key={`${idx}-${position}`}
-        className={`joker-guess ${canHover ? "joker-hoverable" : ""}`}
+        key={`${index}-${position}`}
+        className={`joker-choice is-${position} is-${visibleResult}${active ? " is-active" : ""}${selected ? " is-selected" : ""}`}
+        type="button"
         onClick={() => onGuess(position)}
-        disabled={!isActive}
-        style={{
-          width: "64px",
-          height: "64px",
-          borderRadius: "50%",
-          border: `2px solid ${statusBorder[displayStatus]}`,
-          background: statusColors[displayStatus],
-          color: "#f8fafc",
-          cursor: isActive ? "pointer" : "not-allowed",
-          transform: isActive ? "scale(1.02)" : "scale(1)",
-          transition: "transform 140ms ease, border-color 140ms ease, background 140ms ease",
-          boxShadow: isActive
-            ? "0 0 0 6px rgba(255,255,255,0.06)"
-            : "none",
-          display: "grid",
-          placeItems: "center",
-          fontWeight: 800,
-          letterSpacing: "0.02em",
-          position: "relative",
-        }}
+        disabled={!active}
+        aria-label={`${position === "above" ? "Higher" : "Lower"} than ${round.numbers[index]}`}
       >
-        {revealNumber ? (isJokerSpot ? "🎩" : round.targets[idx]) : ""}
+        <strong>{revealedValue}</strong>
       </button>
     );
   };
 
   return (
-    <div
-      className="card round-stage round-joker"
-      style={{
-        padding: "20px",
-        background: "rgba(10, 12, 18, 0.96)",
-        borderColor: "rgba(255,255,255,0.18)",
-        position: "relative",
-        overflow: "hidden",
-      }}
-    >
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr auto 1fr",
-          alignItems: "center",
-          marginBottom: "12px",
-          gap: "10px",
-        }}
-      >
-        <div style={{ flex: 1, display: "grid", gap: "4px" }}>
-          <div
-            style={{
-              fontWeight: 800,
-              textTransform: "uppercase",
-              letterSpacing: "0.05em",
-              color: "var(--muted)",
-            }}
-          >
-            {question.category ? `${question.category} · Joker` : "Joker"}
-          </div>
-          <div style={{ fontSize: "2rem", fontWeight: 800 }}>
-            {question.points} pts
-          </div>
-          {answeringTeamName && (
-            <TeamPill label="Guessing" name={answeringTeamName} color={currentTeamColor} emoji={answeringTeamEmoji} />
-          )}
-        </div>
-        <div style={{ textAlign: "center", justifySelf: "center" }}>
-          <div
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "8px",
-              padding: "6px 10px",
-              borderRadius: "999px",
-              background:
-                "linear-gradient(135deg, rgba(255,255,255,0.12), rgba(255,255,255,0.06))",
-              border: "1px solid rgba(255,255,255,0.2)",
-              boxShadow: "0 0 20px rgba(255,215,0,0.18), 0 0 0 4px rgba(255,255,255,0.06)",
-              animation: "joker-glow 2.2s ease-in-out infinite",
-              textTransform: "uppercase",
-              letterSpacing: "0.08em",
-              fontWeight: 900,
-              margin: "0 auto",
-            }}
-          >
-            <span role="img" aria-label="sparkles">
-              ✨
-            </span>
-            Joker Round
-            <span role="img" aria-label="sparkles">
-              ✨
-            </span>
-          </div>
-        </div>
-          <div
-            style={{
-              borderRadius: "12px",
-              padding: "10px 12px",
-              border: "1px solid rgba(255,255,255,0.12)",
-              background: "rgba(255,255,255,0.04)",
-              display: "grid",
-              gap: "4px",
-              minWidth: "180px",
-              justifySelf: "end",
-            }}
-          >
-            <div style={{ color: "var(--muted)", fontSize: "0.9rem" }}>
-              Current potential
+    <article className={`card round-stage round-joker question-modal-card joker-question-modal${progress.finished ? " answer-visible" : ""}`}>
+      <QuestionModalHeader
+        category={question.category}
+        typeLabel="Joker · Higher or lower"
+        points={question.points}
+        teamName={teamName}
+        teamColor={teamColor}
+        teamEmoji={teamEmoji}
+        teamLabel={progress.finished ? "Points go to" : answeringTeamName ? "Guessing" : "Current team"}
+      />
+
+      <div className="question-modal-scroll joker-modal-scroll">
+        <section className="joker-stage">
+          <header className="joker-stage-intro">
+            <div>
+              <span className="question-modal-eyebrow">{progress.finished ? "Run complete" : "Choose from right to left"}</span>
+              <h1>{progress.finished
+                ? foundJoker ? "Joker found!" : "That’s the run."
+                : question.prompt || "Will the hidden number be higher or lower?"}</h1>
+              {progress.finished && question.answer && <p>{question.answer}</p>}
             </div>
-            <div style={{ fontSize: "1.4rem", fontWeight: 800 }}>
-              {progress.score} / {maxScore}
-            </div>
-            <div style={{ color: "var(--muted)", fontSize: "0.9rem" }}>
-              Guesses left: {guessesLeft}
-            </div>
-            {incrementInfo !== undefined && (
-              <div style={{ color: "var(--muted)", fontSize: "0.9rem" }}>
-                +{incrementInfo} per correct guess
+            <div className={`joker-score-card${foundJoker ? " has-joker" : ""}`}>
+              <small>{foundJoker ? "Level 6 · Joker" : `Level ${progress.level} of ${JOKER_MAX_LEVEL}`}</small>
+              <strong>{progress.score}<span> pts</span></strong>
+              <div className="joker-score-track" aria-hidden>
+                <i style={{ "--joker-progress": `${levelPercentage * 100}%` } as CSSProperties} />
               </div>
-            )}
-            <div style={{ color: "var(--muted)", fontSize: "0.85rem" }}>
-              {rotateInfo ? "Wrong guesses: next team, no penalty" : "Wrong guesses: same team, no penalty"}
+              <p>{Math.round(levelPercentage * 100)}% of {maximumReward} points</p>
             </div>
+          </header>
+
+          <div className="joker-board" style={{ "--joker-columns": total } as CSSProperties} aria-label="Higher or lower board">
+            {round.numbers.map((number, index) => {
+              const result = progress.results[index] ?? "pending";
+              const active = index === activeIndex && canGuess;
+              return (
+                <div className={`joker-lane is-${result}${active ? " is-active" : ""}`} key={index}>
+                  {renderChoice("above", index)}
+                  <div className="joker-number">
+                    <strong>{number}</strong>
+                  </div>
+                  {renderChoice("below", index)}
+                </div>
+              );
+            })}
           </div>
+        </section>
       </div>
 
-      {question.prompt && (
-        <div
-          style={{
-            marginBottom: "14px",
-            color: "#e2e8f0",
-            fontSize: "1.05rem",
-            lineHeight: 1.4,
-          }}
-        >
-          {question.prompt}
-        </div>
-      )}
-
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: `repeat(${total}, minmax(72px, 1fr))`,
-          gap: "10px",
-        }}
-      >
-        {round.numbers.map((num, idx) => (
-          <div
-            key={idx}
-            style={{
-              display: "grid",
-              gridTemplateRows: "auto auto auto",
-              justifyItems: "center",
-              gap: "8px",
-            }}
-          >
-            {renderGuessCircle("above", idx)}
-            <div
-              style={{
-                width: "68px",
-                height: "68px",
-                borderRadius: "50%",
-                border: "2px solid rgba(255,255,255,0.2)",
-                background: "radial-gradient(circle, rgba(255,255,255,0.12), rgba(255,255,255,0.06))",
-                display: "grid",
-                placeItems: "center",
-                fontSize: "1.6rem",
-                fontWeight: 800,
-                color: "#f8fafc",
-                boxShadow:
-                  progress.results[idx] !== "pending"
-                    ? "0 0 0 6px rgba(255,255,255,0.05)"
-                    : "none",
-              }}
-            >
-              {num}
+      <footer className={`question-modal-actions joker-actions${progress.finished ? " resolved" : ""}`}>
+        {!progress.finished ? (
+          <>
+            <div className="joker-rule">
+              <span aria-hidden>🎩</span>
+              <p>
+                <strong>Correct moves up one level; a miss moves down one.</strong> The Joker jumps directly to level 6 and 100% of {maximumReward} points. {rotateInfo ? "A miss also passes play to the next team." : "The same team stays in control after a miss."}
+              </p>
             </div>
-            {renderGuessCircle("below", idx)}
-          </div>
-        ))}
-      </div>
-
-      <div
-        style={{
-          marginTop: "14px",
-          color: "var(--muted)",
-          fontSize: "0.95rem",
-        }}
-      >
-        Pick higher (top) or lower (bottom) for each number. A hidden 🎩 Joker awards the max score instantly.
-      </div>
-
-      <div
-        style={{
-          marginTop: "16px",
-          display: "flex",
-          gap: "10px",
-          flexWrap: "wrap",
-          alignItems: "center",
-        }}
-      >
-        <button
-          className="button secondary"
-          onClick={onFinish}
-          disabled={!progress.finished || disableActions}
-          style={{ opacity: !progress.finished || disableActions ? 0.6 : 1 }}
-        >
-          Apply score{answeringTeamName ? ` to ${answeringTeamName}` : ""}
-        </button>
-        {foundJoker && (
-          <span style={{ color: "#f2c14f", fontWeight: 700 }}>
-            Joker found! Max score locked in.
-          </span>
+            <div className="joker-remaining">
+              <strong>{guessesLeft}</strong>
+              <small>{guessesLeft === 1 ? "guess left" : "guesses left"}</small>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className={`joker-result${foundJoker ? " has-joker" : ""}`}>
+              <span aria-hidden>{foundJoker ? "🎩" : "✓"}</span>
+              <div>
+                <small>{foundJoker ? "Joker payout locked" : "Run completed"}</small>
+                <strong>{progress.score} points</strong>
+              </div>
+            </div>
+            <button className="button question-reveal-answer joker-continue" type="button" onClick={onFinish} disabled={disableActions}>
+              Award {progress.score} pts &amp; continue
+            </button>
+          </>
         )}
-      </div>
-
-      {progress.finished && question.answer && (
-        <div
-          style={{
-            marginTop: "12px",
-            padding: "12px",
-            borderRadius: "10px",
-            border: "1px solid rgba(255,255,255,0.12)",
-            background: "rgba(255,255,255,0.05)",
-            color: "#e2e8f0",
-            fontWeight: 700,
-          }}
-        >
-          {question.answer}
-        </div>
-      )}
-      <style jsx global>{`
-        @keyframes joker-glow {
-          0% {
-            box-shadow: 0 0 20px rgba(255, 215, 0, 0.18), 0 0 0 4px rgba(255, 255, 255, 0.06);
-            transform: translateY(0);
-          }
-          50% {
-            box-shadow: 0 0 28px rgba(255, 215, 0, 0.32), 0 0 0 6px rgba(255, 255, 255, 0.08);
-            transform: translateY(-1px);
-          }
-          100% {
-            box-shadow: 0 0 20px rgba(255, 215, 0, 0.18), 0 0 0 4px rgba(255, 255, 255, 0.06);
-            transform: translateY(0);
-          }
-        }
-        @keyframes joker-hover-wiggle {
-          0% {
-            transform: translateY(0) rotate(0deg);
-          }
-          20% {
-            transform: translateY(-1px) rotate(-0.8deg);
-          }
-          40% {
-            transform: translateY(1px) rotate(0.8deg);
-          }
-          60% {
-            transform: translateY(-2px) rotate(-1deg);
-          }
-          80% {
-            transform: translateY(1px) rotate(0.6deg);
-          }
-          100% {
-            transform: translateY(0) rotate(0deg);
-          }
-        }
-        .joker-hoverable:not(:disabled):hover {
-          animation: joker-hover-wiggle 1.2s ease-in-out infinite;
-        }
-      `}</style>
-    </div>
+      </footer>
+    </article>
   );
 }

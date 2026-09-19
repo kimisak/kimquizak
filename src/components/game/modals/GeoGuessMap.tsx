@@ -8,6 +8,7 @@ export type GeoPoint = { lat: number; lng: number };
 type MapInstance = {
   addListener: (name: string, callback: (event: { latLng?: { lat: () => number; lng: () => number } }) => void) => { remove: () => void };
   fitBounds: (bounds: unknown, padding?: number) => void;
+  setMapTypeId: (mapTypeId: "satellite" | "hybrid") => void;
 };
 type MarkerInstance = { setMap: (map: MapInstance | null) => void };
 type PolylineInstance = { setMap: (map: MapInstance | null) => void };
@@ -23,11 +24,12 @@ type Props = {
   guess: GeoPoint | null;
   locked: boolean;
   revealed: boolean;
+  labelsVisible: boolean;
   onGuess: (point: GeoPoint) => void;
   onReady: () => void;
 };
 
-export function GeoGuessMap({ answer, guess, locked, revealed, onGuess, onReady }: Props) {
+export function GeoGuessMap({ answer, guess, locked, revealed, labelsVisible, onGuess, onReady }: Props) {
   const canvasRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapInstance | null>(null);
   const constructorsRef = useRef<MapConstructors | null>(null);
@@ -97,6 +99,11 @@ export function GeoGuessMap({ answer, guess, locked, revealed, onGuess, onReady 
       constructorsRef.current = null;
     };
   }, []);
+
+  useEffect(() => {
+    if (!mapReady || !mapRef.current) return;
+    mapRef.current.setMapTypeId(revealed && labelsVisible ? "hybrid" : "satellite");
+  }, [labelsVisible, mapReady, revealed]);
 
   useEffect(() => {
     const map = mapRef.current;

@@ -58,8 +58,8 @@ export function StreetViewPicker({ sourceUrl, onSave, onClose }: Props) {
           setReady(true);
           setCanFindNearby(false);
           setMessage(nearbySelectedRef.current
-            ? "Nearby imagery selected. Check its location, then drag to aim or move along the street."
-            : "Showing the same starting location as the player preview. Drag to aim, move, or zoom.");
+            ? "Nearby imagery selected. Move, turn, and zoom until this is the exact opening frame."
+            : "This live panorama becomes the player’s opening frame. Move, turn, and zoom, then confirm it.");
         } else if (status === "ZERO_RESULTS") {
           setReady(false);
           setCanFindNearby(true);
@@ -126,8 +126,8 @@ export function StreetViewPicker({ sourceUrl, onSave, onClose }: Props) {
       <p className="geo-view-picker-message" role="status">{message}</p>
       <div className="geo-view-picker-actions">
         {canFindNearby && <button className="button compact" type="button" disabled={findingNearby} onClick={findNearby}>Find nearby Street View</button>}
-        <button className="button compact" type="button" disabled={!ready} onClick={saveView}>Use this starting view</button>
-        <button className="button ghost compact" type="button" onClick={onClose}>Cancel</button>
+        <button className="button compact" type="button" disabled={!ready} onClick={saveView}>Confirm player starting view</button>
+        <button className="button ghost compact" type="button" onClick={onClose}>Cancel changes</button>
       </div>
     </div>
   );

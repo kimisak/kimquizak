@@ -1,5 +1,5 @@
 import type { Team } from "@/lib/types";
-import { getThemeOptions, teamThemes } from "@/lib/defaultData";
+import { getThemeOptions, legacyTeamThemes, teamThemes } from "@/lib/defaultData";
 
 const FALLBACK_ACCENTS = [
   { base: "#b9001f", glow: "#f7c948" },
@@ -24,7 +24,11 @@ const LEGACY_ACCENT_UPDATES: Record<string, { from: string | string[]; base: str
   "☃️": { from: ["#4ba3c7", "#58a9c4", "#55b8d1"], base: "#d97706", glow: "#fff7ed" },
 };
 
-const DARK_EMOJI_SURFACE = new Set(["🧠", "🐚", "⚡️", "💿", "❄️", "⭐️", "🕯️"]);
+const DARK_EMOJI_SURFACE = new Set([
+  "🧠", "🐚", "⚡️", "💿", "❄️", "⭐️", "🕯️",
+  "🎂", "🧁", "🍰", "🎟️", "🥃", "🍷", "🎲", "🥂", "👻", "🌕", "🐰", "🥚", "🌼", "🏔️",
+  "🎭", "⚜️", "🎺", "👑",
+]);
 
 function hexToRgb(hex: string) {
   const normalized = hex.replace("#", "");
@@ -55,7 +59,7 @@ function contrast(colorA: string, colorB: string) {
   return (lighter + 0.05) / (darker + 0.05);
 }
 
-function ensureContrast(color: string, surface: string, toward: string, minimum = 3) {
+function ensureContrast(color: string, surface: string, toward: string, minimum = 4.5) {
   if (contrast(color, surface) >= minimum) return color;
   for (let step = 1; step <= 20; step += 1) {
     const candidate = mixColors(color, toward, step / 20);
@@ -106,14 +110,18 @@ export function getTeamMarker(team: Team) {
  */
 export function reconcileTeamTheme(team: Team, themeId?: string): Team {
   const marker = getTeamMarker(team);
-  const source = teamThemes
+  const presented = getTeamAccent(team);
+  const recognizedThemes = [...teamThemes, ...legacyTeamThemes];
+  const candidates = recognizedThemes
     .map((theme) => ({ theme, optionIndex: theme.options.findIndex((option) => option.emoji === marker) }))
-    .find(({ optionIndex }) => optionIndex >= 0);
+    .filter(({ optionIndex }) => optionIndex >= 0);
+  const source = candidates.find(({ theme, optionIndex }) => (
+    theme.options[optionIndex].base.toLowerCase() === presented.base.toLowerCase()
+  )) ?? candidates[0];
 
   if (!source) return team;
 
   const sourceOption = source.theme.options[source.optionIndex];
-  const presented = getTeamAccent(team);
   const usesBuiltInPreset = presented.base.toLowerCase() === sourceOption.base.toLowerCase();
   if (!usesBuiltInPreset) return team;
 

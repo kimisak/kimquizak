@@ -32,6 +32,8 @@ export function BoardGrid({
   const tileWidthFactor = Math.max(5.5, Math.min(10, 40 / Math.max(1, categories.length)));
   const highestPoints = Math.max(POINT_STEP, ...questions.map((question) => question.points));
   const rowCount = Math.ceil(highestPoints / POINT_STEP);
+  const pointSizeFactor = Math.max(1.2, Math.min(4.4, (tileWidthFactor * 2.6) / rowCount));
+  const setupSizeFactor = Math.max(0.62, Math.min(0.9, pointSizeFactor * 0.32));
   const pointValues = Array.from({ length: rowCount }, (_, index) => (index + 1) * POINT_STEP);
   return (
     <div className="quiz-board-scroll" role="region" aria-label="Quiz board">
@@ -41,6 +43,8 @@ export function BoardGrid({
         "--board-columns": categories.length,
         "--board-rows": rowCount,
         "--board-tile-height": `clamp(58px, ${tileWidthFactor * 5 / rowCount}cqw, 150px)`,
+        "--board-point-size": `clamp(1.15rem, ${pointSizeFactor}cqw, 3.8rem)`,
+        "--board-setup-size": `clamp(.58rem, ${setupSizeFactor}cqw, .78rem)`,
         "--board-header-height": `clamp(54px, ${tileWidthFactor * 0.48}cqw, 84px)`,
         display: "grid",
         gridTemplateColumns: `repeat(${categories.length}, minmax(140px, 1fr))`,
@@ -141,16 +145,9 @@ export function BoardGrid({
                     Played
                   </span>
                 )
-              ) : points}
+              ) : <span className="tile-points">{points}</span>}
               {!ready && (
-                <span
-                  style={{
-                    display: "block",
-                    fontSize: "0.8rem",
-                    fontWeight: 500,
-                    opacity: 0.8,
-                  }}
-                >
+                <span className="tile-setup-label">
                   needs setup
                 </span>
               )}

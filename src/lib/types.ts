@@ -2,16 +2,19 @@ export const POINT_VALUES = [100, 200, 300, 400, 500] as const;
 export const POINT_STEP = 100;
 export type PointValue = number;
 
-export type PlayerBondKind = "besties" | "sweethearts" | "rivals";
+export type PlayerBondKind = "sweethearts" | "engaged" | "married" | "parents" | "drinking-buddies";
 
 export type PlayerBond = {
   playerId: string;
   kind: PlayerBondKind;
 };
 
+export type PlayerGender = "M" | "F";
+
 export type Player = {
   id: string;
   name: string;
+  gender?: PlayerGender;
   placeholder?: string;
   bonds?: PlayerBond[];
   /** Legacy singular connection, migrated by the team configuration page. */
@@ -66,7 +69,6 @@ export type Question = {
   jokerCount?: number | null;
   jokerMin?: number | null;
   jokerMax?: number | null;
-  jokerIncrement?: number | null;
   timelineCenterYear?: number | null;
   timelineCenterLabel?: string | null;
   timelineTitle?: string | null;

@@ -1,3 +1,5 @@
+import { DEFAULT_THEME_ID } from "@/lib/defaultData";
+
 export type HostMessageRevealStyle = "spin-wheel" | "direct";
 
 export type HostMessage = {
@@ -35,7 +37,7 @@ export const SETTINGS_STORAGE_KEY = "kimquizak_settings_v1";
 
 export const DEFAULT_SETTINGS: AppSettings = {
   quizTitle: "Quiz Night",
-  themeId: "studio",
+  themeId: DEFAULT_THEME_ID,
   hideCategoryHeadersAtStart: true,
   finaleMusicEnabled: true,
   finaleMusicUrl: "https://youtu.be/9QS0q3mGPGg?t=84",

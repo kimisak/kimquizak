@@ -1,7 +1,6 @@
 'use client';
 
 import Link from "next/link";
-import { StorageBackupPanel } from "@/components/StorageBackupPanel";
 import { TeamPill } from "@/components/game/TeamPill";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { usePersistentQuestions } from "@/hooks/usePersistentQuestions";
@@ -89,7 +88,7 @@ export default function Home() {
           </div>
           <div className="field-block">
             <label className="label" htmlFor="team-theme">Team palette</label>
-            <select id="team-theme" className="input" value={settings.themeId} onChange={(event) => {
+            <select id="team-theme" className="input" value={activeTheme.id} onChange={(event) => {
               const nextTheme = event.target.value;
               setSettings((previous) => ({ ...previous, themeId: nextTheme }));
               applyThemeToTeams(nextTheme);
@@ -126,8 +125,6 @@ export default function Home() {
         <Link href="/config/questions" className="route-card route-card-acid"><span>02 / WRITE</span><strong>Categories & clues</strong><p>Compose every format from audio to your timeline.</p><b>Build the board →</b></Link>
         <Link href="/game" className="route-card route-card-orange"><span>03 / LIVE</span><strong>Game board</strong><p>Spin the order, open clues and keep the score.</p><b>Start the show →</b></Link>
       </section>
-
-      <section className="backup-drawer"><StorageBackupPanel /></section>
     </main>
   );
 }

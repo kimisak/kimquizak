@@ -19,13 +19,13 @@ Prod: https://kimquizak.com/
 
 ## Question types (cheat sheet)
 - **Standard**: prompt + answer; optional question/answer images.
-- **MCQ**: 2 or 4 options. No rotation; the picking team gets one shot (win or lose the points).
+- **MCQ**: exactly 4 options. A wrong answer can optionally disappear and roll play to the next team; otherwise it ends the question for 0 points. Use a Standard question for True/False.
 - **Text grid (lyrics)**: one word/segment per line. Answer video must be a YouTube *embed* URL (not a share link). Red tiles rotate to the next team and shave the pot; “Next team” button available for hosts on wrong guesses.
 - **Geoguesser**: find a place in Google Maps, paste its link, adjust the nearby Street View scene, and save the opening frame. Google Maps share links, Street View URLs, and iframe code are supported. The question starts on a fixed view. A timed choice to look around and move drops the correct-answer payout by one or two board-value levels; the host can freely explore on the answer side. Google's road/address overlays are hidden without cropping.
 - **Timeline**: events with years. Center year/label configurable. Rotation on miss optional.
 - **Audio**: paste any regular YouTube URL, configure start time and clip length, and preview the source. Optionally allow one replay that lowers a correct answer to the next lower board-value tier.
 - **Challenge**: write a task with an optional picture and optional host-started countdown or count-up clock. The clock can show exact time or only an animated progress bar. The tile keeps its normal point value; after the reveal, the host marks the challenge completed for full points or not completed for 0 points. Reaching the time limit never scores automatically. Existing saved booby-trap tiles use this new behavior.
-- **Joker high/low**: configurable count, min/max, increment, and rotation on miss.
+- **Joker high/low**: configurable count, min/max, rotation on miss, and a six-level prize ladder worth 20%, 25%, 33%, 44%, 72%, or 100% of the question's total points. Players start at level 1, move exactly one level up or down after each guess, and jump directly to level 6 when the hidden Joker is found.
 
 ## Google Street View setup
 

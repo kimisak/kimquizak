@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 import type { PlayerBondKind, ScoreTransaction, Team } from "@/lib/types";
 import { getTeamAccent, getTeamMarker } from "@/lib/teamPresentation";
+import { normalizePlayerBondKind } from "@/lib/playerBonds";
 
 type Props = {
   teams: Team[];
@@ -40,6 +41,7 @@ type ActiveDrag = {
 };
 
 type TeamEffectKind = "beer" | "snow" | "confetti";
+type PlayerEncounterKind = PlayerBondKind | "high-five";
 
 const playgroundProps: Array<{ kind: TeamEffectKind; emoji: string; label: string }> = [
   { kind: "beer", emoji: "🍺", label: "Beer shower" },
@@ -49,6 +51,16 @@ const playgroundProps: Array<{ kind: TeamEffectKind; emoji: string; label: strin
 
 const playerTemperaments = ["bouncy", "cool", "shy", "dramatic"] as const;
 const neutralMoods = ["🙂", "😌", "😐", "🤔", "🤓", "🧐", "😶", "😙", "🙃", "😴", "😊", "😗"] as const;
+const scoreSuspenseMoods = ["😰", "😬", "🫣", "🤯", "😵‍💫", "😱", "🤞", "😶‍🌫️", "🫨", "😳", "🥶", "😈"] as const;
+
+const bondVisuals: Record<PlayerEncounterKind, { moods: readonly [string, string]; particles: readonly string[] }> = {
+  sweethearts: { moods: ["😚", "🥰"], particles: ["💕", "❤️", "💖", "💗", "🫶", "💘", "❤️"] },
+  engaged: { moods: ["😇", "😍"], particles: ["🍾", "🥂", "✨", "💍", "🥂", "🍾", "✨"] },
+  married: { moods: ["🤗", "🥰"], particles: ["🥂", "💍", "💐", "🤍", "💝", "🥂", "💐"] },
+  parents: { moods: ["🥹", "😴"], particles: ["👶", "🍼", "🧸", "💩", "👶", "🍼", "💛"] },
+  "drinking-buddies": { moods: ["🥴", "🤪"], particles: ["🍻", "🍺", "🥂", "🍾", "🍻", "🍺", "🥂"] },
+  "high-five": { moods: ["🙌", "🙌"], particles: ["✨", "✋", "💫", "🙌", "✨", "✋", "💥"] },
+};
 
 const getNeutralMood = (playerId: string) => {
   let hash = 2166136261;
@@ -59,6 +71,15 @@ const getNeutralMood = (playerId: string) => {
   hash = Math.imul(hash, 2246822507);
   hash ^= hash >>> 13;
   return neutralMoods[(hash >>> 0) % neutralMoods.length];
+};
+
+const getScoreSuspenseMood = (playerId: string) => {
+  let hash = 5381;
+  for (let index = 0; index < playerId.length; index += 1) {
+    hash = Math.imul(hash, 33) ^ playerId.charCodeAt(index);
+  }
+  hash ^= hash >>> 15;
+  return scoreSuspenseMoods[(hash >>> 0) % scoreSuspenseMoods.length];
 };
 
 const getPlayerTemperament = (playerId: string) => {
@@ -87,7 +108,7 @@ export function Leaderboard({ teams, onAdjust, onSet, history = [], onUndo, comp
   const [teamVisits, setTeamVisits] = useState<Record<string, { visitorId: string; epoch: number }>>({});
   const visitTimers = useRef(new Map<string, number>());
   const teamElements = useRef(new Map<string, HTMLDivElement>());
-  const [bondReactions, setBondReactions] = useState<Record<string, { kind: PlayerBondKind; epoch: number }>>({});
+  const [bondReactions, setBondReactions] = useState<Record<string, { kind: PlayerEncounterKind; epoch: number; role: "dragged" | "target" }>>({});
   const bondTimers = useRef(new Map<string, number>());
   const [spectatorReactions, setSpectatorReactions] = useState<Record<string, number>>({});
   const spectatorTimers = useRef(new Map<string, number>());
@@ -194,13 +215,13 @@ export function Leaderboard({ teams, onAdjust, onSet, history = [], onUndo, comp
     setToyDrag({ kind, emoji, x: event.clientX, y: event.clientY, targetTeamId: findTarget(event.clientX, event.clientY) });
   };
 
-  const triggerBondEncounter = (firstPlayerId: string, secondPlayerId: string, kind: PlayerBondKind) => {
+  const triggerBondEncounter = (firstPlayerId: string, secondPlayerId: string, kind: PlayerEncounterKind) => {
     effectEpoch.current += 1;
     const epoch = effectEpoch.current;
     setBondReactions((current) => ({
       ...current,
-      [firstPlayerId]: { kind, epoch },
-      [secondPlayerId]: { kind, epoch },
+      [firstPlayerId]: { kind, epoch, role: "dragged" },
+      [secondPlayerId]: { kind, epoch, role: "target" },
     }));
     setTravelMoods((current) => {
       const next = { ...current };
@@ -227,10 +248,11 @@ export function Leaderboard({ teams, onAdjust, onSet, history = [], onUndo, comp
     const players = teams.flatMap((team) => team.players);
     const firstPlayer = players.find((player) => player.id === firstPlayerId);
     const secondPlayer = players.find((player) => player.id === secondPlayerId);
-    return firstPlayer?.bonds?.find((bond) => bond.playerId === secondPlayerId)?.kind
+    const storedKind = firstPlayer?.bonds?.find((bond) => bond.playerId === secondPlayerId)?.kind
       ?? (firstPlayer?.bond?.playerId === secondPlayerId ? firstPlayer.bond.kind : undefined)
       ?? secondPlayer?.bonds?.find((bond) => bond.playerId === firstPlayerId)?.kind
       ?? (secondPlayer?.bond?.playerId === firstPlayerId ? secondPlayer.bond.kind : undefined);
+    return normalizePlayerBondKind(storedKind);
   };
 
   const angerTeammate = (playerId: string, draggedRect: DOMRect, targetIndex: number, showAnger = true) => {
@@ -399,6 +421,9 @@ export function Leaderboard({ teams, onAdjust, onSet, history = [], onUndo, comp
         wakeSpectators(targetTeamId, [drag.playerId, teammateId]);
         if (bondKind) {
           triggerBondEncounter(drag.playerId, teammateId, bondKind);
+          angerTeammate(teammateId, draggedRect, targetIndex, false);
+        } else if (targetTeamId === drag.homeTeamId) {
+          triggerBondEncounter(drag.playerId, teammateId, "high-five");
           angerTeammate(teammateId, draggedRect, targetIndex, false);
         } else {
           angerTeammate(teammateId, draggedRect, targetIndex);
@@ -780,19 +805,18 @@ export function Leaderboard({ teams, onAdjust, onSet, history = [], onUndo, comp
                                     ? "watching"
                                   : teamEffect?.kind === "beer"
                                     ? "tipsy"
-                                    : teamEffect?.kind === "snow"
-                                      ? "cold"
-                                      : teamEffect?.kind === "confetti" ? "partying" : moodState);
+                                  : teamEffect?.kind === "snow"
+                                    ? "cold"
+                                    : teamEffect?.kind === "confetti"
+                                      ? "partying"
+                                      : scoresHidden ? "score-suspense" : moodState);
+                          const bondVisual = bondReaction ? bondVisuals[bondReaction.kind] : null;
                           const moodEmoji = travelMood === "nervous"
                             ? "😬"
                             : travelMood === "dizzy"
                               ? "😵‍💫"
-                              : bondReaction?.kind === "sweethearts"
-                                ? "🥰"
-                                : bondReaction?.kind === "besties"
-                                  ? "🙌"
-                                  : bondReaction?.kind === "rivals"
-                                    ? playerIndex % 2 ? "😏" : "😤"
+                              : bondVisual
+                                ? bondVisual.moods[bondReaction?.role === "dragged" ? 0 : 1]
                                     : travelMood === "visiting"
                                       ? "👋"
                                       : travelMood === "exhausted"
@@ -807,8 +831,10 @@ export function Leaderboard({ teams, onAdjust, onSet, history = [], onUndo, comp
                                               ? ["🥴", "😄", "😁", "🥳"][playerIndex % 4]
                                               : teamEffect?.kind === "snow"
                                                 ? ["🥶", "🫨", "😬", "😮"][playerIndex % 4]
-                                                : teamEffect?.kind === "confetti"
+                                              : teamEffect?.kind === "confetti"
                                                   ? ["🥳", "🤩", "😁", "😄"][playerIndex % 4]
+                                              : scoresHidden
+                                                ? getScoreSuspenseMood(player.id)
                                               : allScoresNeutral
                                                 ? getNeutralMood(player.id)
                                                 : moodSet[playerIndex % moodSet.length];
@@ -855,9 +881,19 @@ export function Leaderboard({ teams, onAdjust, onSet, history = [], onUndo, comp
                                 )}
                               {bondReaction && (
                                 <span className={`scoreboard-player-bond-effects is-${bondReaction.kind}`} aria-hidden>
-                                  <i>{bondReaction.kind === "sweethearts" ? "💕" : bondReaction.kind === "besties" ? "✨" : "⚡"}</i>
-                                  <i>{bondReaction.kind === "sweethearts" ? "❤️" : bondReaction.kind === "besties" ? "🙌" : "💥"}</i>
-                                  <i>{bondReaction.kind === "sweethearts" ? "😘" : bondReaction.kind === "besties" ? "✨" : "⚡"}</i>
+                                  {bondVisuals[bondReaction.kind].particles.map((particle, index) => (
+                                    <i
+                                      key={`${particle}-${index}`}
+                                      style={{
+                                        "--bond-left": `${12 + ((index * 19) % 78)}%`,
+                                        "--bond-delay": `${index * -0.31}s`,
+                                        "--bond-drift": `${[-13, 9, -6, 14, -10, 7, 12][index % 7]}px`,
+                                        "--bond-rotate": `${[-18, 14, -9, 20, -14, 8, 17][index % 7]}deg`,
+                                      } as CSSProperties}
+                                    >
+                                      {particle}
+                                    </i>
+                                  ))}
                                 </span>
                               )}
                             </li>

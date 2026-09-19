@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState } from "react";
-import { clearQuestions } from "@/lib/questionStorage";
+import { clearQuestions, writeQuestions } from "@/lib/questionStorage";
 import {
   buildBackupPayload,
   parseBackupPayload,
@@ -75,23 +75,73 @@ export function StorageBackupPanel() {
     reader.readAsText(file);
   };
 
+  const clearGameProgressStorage = () => {
+    window.localStorage.removeItem(TURN_STATE_STORAGE_KEY);
+    window.localStorage.removeItem(SCORE_HISTORY_STORAGE_KEY);
+    window.localStorage.removeItem(LEGACY_TURN_STATE_STORAGE_KEY);
+  };
+
+  const reloadAfterClear = (message: string) => {
+    updateStatus(`${message} Reloading...`, "success");
+    setTimeout(() => window.location.reload(), 350);
+  };
+
+  const handleClearBoard = async () => {
+    if (typeof window === "undefined") return;
+    const confirmed = window.confirm(
+      "Delete every category and question? Teams and show settings will be kept. Scores and game progress will be reset.",
+    );
+    if (!confirmed) return;
+    try {
+      const payload = await buildBackupPayload();
+      await clearQuestions();
+      window.localStorage.setItem(
+        TEAM_STORAGE_KEY,
+        JSON.stringify(payload.teams.map((team) => ({ ...team, score: 0 }))),
+      );
+      window.localStorage.removeItem(LEGACY_TEAM_STORAGE_KEY);
+      window.localStorage.removeItem(LEGACY_QUESTION_STORAGE_KEY);
+      clearGameProgressStorage();
+      reloadAfterClear("Categories and questions cleared. Teams were kept.");
+    } catch (err) {
+      console.error("Failed to clear board content", err);
+      updateStatus("Could not clear categories and questions.", "error");
+    }
+  };
+
+  const handleClearTeams = async () => {
+    if (typeof window === "undefined") return;
+    const confirmed = window.confirm(
+      "Delete every team and player? Categories and questions will be kept. Played tiles and game progress will be reset.",
+    );
+    if (!confirmed) return;
+    try {
+      const payload = await buildBackupPayload();
+      await writeQuestions(payload.questions.map((question) => ({ ...question, answered: false })));
+      window.localStorage.removeItem(TEAM_STORAGE_KEY);
+      window.localStorage.removeItem(LEGACY_TEAM_STORAGE_KEY);
+      clearGameProgressStorage();
+      reloadAfterClear("Teams and players cleared. The board was kept.");
+    } catch (err) {
+      console.error("Failed to clear teams", err);
+      updateStatus("Could not clear teams and players.", "error");
+    }
+  };
+
   const handleClearAll = async () => {
     if (typeof window === "undefined") return;
     const confirmed = window.confirm(
-      "This will erase all local data (teams, questions, progress) stored in your browser. Continue?",
+      "This will erase all local data (teams, questions, show settings, and progress) stored in your browser. Continue?",
     );
     if (!confirmed) return;
     try {
       await clearQuestions();
       window.localStorage.removeItem(TEAM_STORAGE_KEY);
-      window.localStorage.removeItem(TURN_STATE_STORAGE_KEY);
       window.localStorage.removeItem(SETTINGS_STORAGE_KEY);
-      window.localStorage.removeItem(SCORE_HISTORY_STORAGE_KEY);
       window.localStorage.removeItem(LEGACY_TEAM_STORAGE_KEY);
       window.localStorage.removeItem(LEGACY_QUESTION_STORAGE_KEY);
-      window.localStorage.removeItem(LEGACY_TURN_STATE_STORAGE_KEY);
-      updateStatus("Local data cleared. Reloading...", "success");
-      setTimeout(() => window.location.reload(), 350);
+      clearGameProgressStorage();
+      reloadAfterClear("All local data cleared.");
     } catch (err) {
       console.error("Failed to clear storage", err);
       updateStatus("Could not clear local data.", "error");
@@ -141,35 +191,24 @@ export function StorageBackupPanel() {
             onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)}
           />
         </label>
-        <button
-          className="button archive-danger"
-          type="button"
-          onClick={handleClearAll}
-          style={{
-            borderColor: "#d6a85a",
-            background: "#7b2936",
-            color: "#fff7e5",
-          }}
-        >
-          <svg
-            className="archive-trash-icon"
-            viewBox="0 0 24 24"
-            aria-hidden="true"
-            style={{
-              width: "19px",
-              height: "19px",
-              flex: "0 0 19px",
-              fill: "none",
-              stroke: "#fff7e5",
-            }}
-          >
-            <path d="M4 7h16M9 7V4h6v3m3 0-1 13H7L6 7m4 4v5m4-5v5" />
-          </svg>
-          Clear local data
-        </button>
         <button className="button secondary" type="button" onClick={handleLoadExample}>
           ✨ Add example data
         </button>
+        <div className="archive-clear-actions" role="group" aria-label="Clear local data">
+          <span>Clear local data</span>
+          <button className="button archive-clear-partial" type="button" onClick={handleClearBoard}>
+            Clear questions &amp; categories
+          </button>
+          <button className="button archive-clear-partial" type="button" onClick={handleClearTeams}>
+            Clear teams
+          </button>
+          <button className="button archive-danger" type="button" onClick={handleClearAll}>
+            <svg className="archive-trash-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 7h16M9 7V4h6v3m3 0-1 13H7L6 7m4 4v5m4-5v5" />
+            </svg>
+            Clear everything
+          </button>
+        </div>
       </div>
       {status ? (
         <div

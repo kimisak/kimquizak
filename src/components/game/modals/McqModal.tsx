@@ -16,7 +16,7 @@ type Props = {
   eliminated: number[];
   resolved?: boolean;
   correctIndex?: number;
-  resolvedInfo?: { teamName: string; points: number } | null;
+  resolvedInfo?: { teamName: string; points: number; correct: boolean } | null;
   onSelect: (idx: number) => void;
   onContinue: () => void;
 };
@@ -52,9 +52,7 @@ export function McqModal({
   onContinue,
 }: Props) {
   const rawOptions = question.mcqOptions?.slice(0, 4) ?? [];
-  const hasFour = rawOptions.length >= 4 && rawOptions.slice(2).some((option) => option.trim());
-  const optionCount = hasFour ? 4 : 2;
-  const options = Array.from({ length: optionCount }, (_, index) => rawOptions[index] ?? "");
+  const options = Array.from({ length: 4 }, (_, index) => rawOptions[index] ?? "");
   const teamName = answeringTeamName || currentTeamName;
   const teamColor = answeringTeamName ? answeringTeamColor : currentTeamColor;
   const teamEmoji = answeringTeamName ? answeringTeamEmoji : currentTeamEmoji;
@@ -69,6 +67,7 @@ export function McqModal({
       : null;
   const remainingOptions = options.length - eliminated.length;
   const correctAnswer = options[correctIndex] || "Correct option";
+  const rolloverEnabled = question.mcqRotateOnMiss === true;
 
   return (
     <article className={`card round-stage round-mcq question-modal-card mcq-question-modal${resolved ? " answer-visible" : ""}`}>
@@ -145,7 +144,9 @@ export function McqModal({
             <div className="mcq-rule" aria-live="polite">
               <span aria-hidden>✦</span>
               <p>
-                <strong>Choose carefully.</strong> A wrong option disappears and play passes to the next team without deducting points.
+                <strong>Choose carefully.</strong> {rolloverEnabled
+                  ? "A wrong option disappears and play passes to the next team without changing the score."
+                  : "There is one attempt. A wrong answer ends the question for 0 points."}
               </p>
             </div>
             <div className="mcq-remaining">
@@ -155,10 +156,10 @@ export function McqModal({
           </>
         ) : (
           <>
-            <div className="mcq-result">
-              <span aria-hidden>✓</span>
+            <div className={`mcq-result${resolvedInfo?.correct === false ? " is-wrong" : ""}`}>
+              <span aria-hidden>{resolvedInfo?.correct === false ? "×" : "✓"}</span>
               <div>
-                <small>Answer locked{resolvedInfo ? ` · +${resolvedInfo.points} pts` : ""}</small>
+                <small>{resolvedInfo?.correct === false ? "No points awarded" : "Answer locked"}{resolvedInfo?.correct ? ` · +${resolvedInfo.points} pts` : ""}</small>
                 <strong>{String.fromCharCode(65 + correctIndex)} · {correctAnswer}</strong>
               </div>
             </div>

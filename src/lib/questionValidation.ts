@@ -51,8 +51,8 @@ export function getQuestionIssues(question: Question): string[] {
   if (type === "mcq") {
     if (!hasText(question.prompt) && !question.imageData) issues.push("Add a question or image");
     const options = question.mcqOptions ?? [];
-    if (options.length < 2 || options.some((option) => !hasText(option))) {
-      issues.push("Complete every answer option");
+    if (options.length !== 4 || options.some((option) => !hasText(option))) {
+      issues.push("Complete all four answer options");
     }
     const correct = question.mcqCorrectIndex ?? -1;
     if (correct < 0 || correct >= options.length) issues.push("Choose the correct option");
