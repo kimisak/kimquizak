@@ -7,6 +7,16 @@ export type HostMessage = {
   revealStyle?: HostMessageRevealStyle;
 };
 
+export type BoardRevealRule =
+  | { when: "category-complete"; category: string }
+  | { when: "board-complete" };
+
+export type BoardRevealRules = {
+  categories?: Record<string, BoardRevealRule>;
+  rows?: Record<string, BoardRevealRule>;
+  questions?: Record<string, BoardRevealRule>;
+};
+
 export type AppSettings = {
   quizTitle: string;
   themeId: string;
@@ -18,6 +28,7 @@ export type AppSettings = {
   finaleMusicDurationSeconds?: number;
   finaleMusicVolume: number;
   hostMessages: HostMessage[];
+  boardRevealRules?: BoardRevealRules;
 };
 
 export const SETTINGS_STORAGE_KEY = "kimquizak_settings_v1";
@@ -32,4 +43,5 @@ export const DEFAULT_SETTINGS: AppSettings = {
   finaleMusicEndSeconds: 108,
   finaleMusicVolume: 35,
   hostMessages: [],
+  boardRevealRules: {},
 };

@@ -2,7 +2,6 @@ import {
   LEGACY_QUESTION_STORAGE_KEY,
   LEGACY_TEAM_STORAGE_KEY,
   LEGACY_TURN_STATE_STORAGE_KEY,
-  QUESTION_STORAGE_KEY,
   SCORE_HISTORY_STORAGE_KEY,
   TEAM_STORAGE_KEY,
   TURN_STATE_STORAGE_KEY,
@@ -13,6 +12,7 @@ import {
   type AppSettings,
 } from "@/lib/settings";
 import type { Question, ScoreTransaction, Team, TurnState } from "@/lib/types";
+import { readQuestions, writeQuestions } from "@/lib/questionStorage";
 
 export type BackupPayload = {
   version: 2;
@@ -33,6 +33,8 @@ const fallbackTurnState: TurnState = {
   resolvedHostMessages: {},
   audioPlaybackCounts: {},
   audioReplayValues: {},
+  scoresHidden: false,
+  hiddenScoreOrder: [],
 };
 
 function readLocalStorage<T>(key: string, fallback: T): T {
@@ -63,15 +65,12 @@ function withSettingsDefaults(settings: Partial<AppSettings>): AppSettings {
   };
 }
 
-export function buildBackupPayload(): BackupPayload {
+export async function buildBackupPayload(): Promise<BackupPayload> {
   const teams =
     readLocalStorage<Team[]>(TEAM_STORAGE_KEY, []).length > 0
       ? readLocalStorage<Team[]>(TEAM_STORAGE_KEY, [])
       : readLocalStorage<Team[]>(LEGACY_TEAM_STORAGE_KEY, []);
-  const questions =
-    readLocalStorage<Question[]>(QUESTION_STORAGE_KEY, []).length > 0
-      ? readLocalStorage<Question[]>(QUESTION_STORAGE_KEY, [])
-      : readLocalStorage<Question[]>(LEGACY_QUESTION_STORAGE_KEY, []);
+  const questions = await readQuestions();
   const turnState = readLocalStorage<TurnState>(TURN_STATE_STORAGE_KEY, fallbackTurnState);
   const legacyTurnState = readLocalStorage<TurnState>(
     LEGACY_TURN_STATE_STORAGE_KEY,
@@ -87,6 +86,7 @@ export function buildBackupPayload(): BackupPayload {
       turnState.order.length > 0 || turnState.boardIndex > 0 || turnState.lyricsIndex > 0
       || Object.keys(turnState.audioPlaybackCounts ?? {}).length > 0
       || Object.keys(turnState.audioReplayValues ?? {}).length > 0
+      || turnState.scoresHidden === true
         ? turnState
         : legacyTurnState,
     settings: withSettingsDefaults(
@@ -136,13 +136,10 @@ export function parseBackupPayload(raw: string): BackupPayload {
   };
 }
 
-export function persistBackupToLocalStorage(payload: BackupPayload) {
+export async function persistBackupToLocalStorage(payload: BackupPayload) {
   if (typeof window === "undefined") return;
+  await writeQuestions(payload.questions ?? []);
   window.localStorage.setItem(TEAM_STORAGE_KEY, JSON.stringify(payload.teams ?? []));
-  window.localStorage.setItem(
-    QUESTION_STORAGE_KEY,
-    JSON.stringify(payload.questions ?? []),
-  );
   window.localStorage.setItem(
     TURN_STATE_STORAGE_KEY,
     JSON.stringify(payload.turnState ?? fallbackTurnState),

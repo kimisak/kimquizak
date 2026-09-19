@@ -12,6 +12,8 @@ type Props = {
   onUndo?: (transactionId: string) => void;
   compact?: boolean;
   currentTeamId?: string;
+  scoresHidden?: boolean;
+  onToggleScores?: () => void;
 };
 
 type ActiveDrag = {
@@ -67,7 +69,7 @@ const getPlayerTemperament = (playerId: string) => {
   return playerTemperaments[Math.abs(hash) % playerTemperaments.length];
 };
 
-export function Leaderboard({ teams, onAdjust, onSet, history = [], onUndo, compact = false, currentTeamId }: Props) {
+export function Leaderboard({ teams, onAdjust, onSet, history = [], onUndo, compact = false, currentTeamId, scoresHidden = false, onToggleScores }: Props) {
   const [showHistory, setShowHistory] = useState(false);
   const [toyDrag, setToyDrag] = useState<{ kind: TeamEffectKind; emoji: string; x: number; y: number; targetTeamId?: string } | null>(null);
   const [draggedPlayerId, setDraggedPlayerId] = useState<string | null>(null);
@@ -585,7 +587,7 @@ export function Leaderboard({ teams, onAdjust, onSet, history = [], onUndo, comp
   const chasingMoods = ["🫡", "🤨", "😤", "😅"];
   const winningMoods = ["🥳", "😁", "🤩", "😎"];
   const setbackMoods = ["😮", "🫣", "😤", "😅"];
-  const allScoresNeutral = teams.every((team) => team.score === 0);
+  const allScoresNeutral = scoresHidden || teams.every((team) => team.score === 0);
 
   return (
     <section className={`card scoreboard${compact ? " compact" : ""}`} style={{ padding: compact ? "12px" : "18px" }}>
@@ -617,11 +619,25 @@ export function Leaderboard({ teams, onAdjust, onSet, history = [], onUndo, comp
             </div>
           )}
           <button
+            className={`button ghost compact scoreboard-visibility-toggle${scoresHidden ? " active" : ""}`}
+            type="button"
+            aria-pressed={scoresHidden}
+            onClick={() => {
+              if (!scoresHidden) setShowHistory(false);
+              onToggleScores?.();
+            }}
+            title={scoresHidden ? "Reveal the podium, score controls, and played-tile results" : "Hide standings and played-tile results"}
+          >
+            <span aria-hidden>{scoresHidden ? "👁" : "◉"}</span>
+            {scoresHidden ? "Reveal scores" : "Hide scores"}
+          </button>
+          <button
             className="button ghost compact"
             type="button"
             onClick={() => {
               setShowHistory((value) => !value);
             }}
+            disabled={scoresHidden}
           >
             {showHistory ? "Hide history" : `History${history.length ? ` (${history.length})` : ""}`}
           </button>
@@ -703,8 +719,8 @@ export function Leaderboard({ teams, onAdjust, onSet, history = [], onUndo, comp
       <div
         className="scoreboard-rank"
         role="img"
-        aria-label={rank === 0 ? "No ranking yet" : `Place ${rank}`}
-        title={rank === 0 ? "Scores are level at zero" : rank >= 4 ? `Place ${rank} · Better luck next round` : `Place ${rank}`}
+        aria-label={scoresHidden ? "Standing hidden" : rank === 0 ? "No ranking yet" : `Place ${rank}`}
+        title={scoresHidden ? "Standing hidden" : rank === 0 ? "Scores are level at zero" : rank >= 4 ? `Place ${rank} · Better luck next round` : `Place ${rank}`}
         style={{
                     width: compact && rank === 1 ? "42px" : compact ? "36px" : "42px",
                     height: compact && rank === 1 ? "42px" : compact ? "36px" : "42px",
@@ -718,7 +734,7 @@ export function Leaderboard({ teams, onAdjust, onSet, history = [], onUndo, comp
                     boxShadow: `0 3px 10px ${accent.base}45`,
                   }}
       >
-        <span aria-hidden="true">{rank === 0 ? "•" : podiumMarkers[rank - 1] ?? "🧻"}</span>
+        <span aria-hidden="true">{scoresHidden ? "?" : rank === 0 ? "•" : podiumMarkers[rank - 1] ?? "🧻"}</span>
       </div>
               <div className="scoreboard-profile">
                 <div className="scoreboard-identity">
@@ -856,7 +872,13 @@ export function Leaderboard({ teams, onAdjust, onSet, history = [], onUndo, comp
                   </div>
                 )}
               </div>
-                <div className="scoreboard-controls" style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap", marginLeft: "auto", justifyContent: "flex-end" }}>
+                {scoresHidden ? (
+                  <div className="scoreboard-controls scoreboard-controls-concealed" aria-label={`${team.name} score hidden; correction controls remain available`}>
+                    <button className="button ghost compact" type="button" onClick={() => onAdjust(team.id, -100)} aria-label={`Subtract 100 hidden points from ${team.name}`}>−100</button>
+                    <span className="scoreboard-controls-hidden"><span aria-hidden>✦</span> Score hidden</span>
+                    <button className="button ghost compact" type="button" onClick={() => onAdjust(team.id, 100)} aria-label={`Add 100 hidden points to ${team.name}`}>+100</button>
+                  </div>
+                ) : <div className="scoreboard-controls" style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap", marginLeft: "auto", justifyContent: "flex-end" }}>
                   <button className="button ghost compact" type="button" onClick={() => onAdjust(team.id, -100)}>−100</button>
                   <div style={{ position: "relative" }}>
                     <input
@@ -883,13 +905,13 @@ export function Leaderboard({ teams, onAdjust, onSet, history = [], onUndo, comp
                     <span style={{ position: "absolute", right: "7px", top: "50%", transform: "translateY(-50%)", color: "var(--muted)", fontSize: "0.62rem", fontWeight: 800, pointerEvents: "none" }}>PTS</span>
                   </div>
                   <button className="button ghost compact" type="button" onClick={() => onAdjust(team.id, 100)}>+100</button>
-                </div>
+                </div>}
               </div>
             );
           })}
         </div>
       )}
-      {showHistory && (
+      {showHistory && !scoresHidden && (
         <div
           className="scoreboard-history"
           style={{

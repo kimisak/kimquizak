@@ -1,5 +1,6 @@
 export const POINT_VALUES = [100, 200, 300, 400, 500] as const;
-export type PointValue = (typeof POINT_VALUES)[number];
+export const POINT_STEP = 100;
+export type PointValue = number;
 
 export type PlayerBondKind = "besties" | "sweethearts" | "rivals";
 
@@ -128,6 +129,8 @@ export type TurnState = {
   resolvedHostMessages?: Record<string, ResolvedHostMessage>;
   audioPlaybackCounts?: Record<string, number>;
   audioReplayValues?: Record<string, number>;
+  scoresHidden?: boolean;
+  hiddenScoreOrder?: string[];
 };
 
 export type TimelineEvent = {

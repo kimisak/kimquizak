@@ -1,7 +1,7 @@
 'use client';
 
 import type { CSSProperties } from "react";
-import { POINT_VALUES, type Question, type ScoreTransaction, type Team } from "@/lib/types";
+import { POINT_STEP, type Question, type ScoreTransaction, type Team } from "@/lib/types";
 import { isQuestionReady } from "@/lib/questionValidation";
 import { getTeamAccent, getTeamMarker } from "@/lib/teamPresentation";
 import { TeamPill } from "./TeamPill";
@@ -14,6 +14,7 @@ type Props = {
   concealCategoryHeaders?: boolean;
   revealedCategories?: Set<string>;
   onRevealCategory?: (category: string) => void;
+  scoresHidden?: boolean;
   onOpen: (q: Question) => void;
 };
 
@@ -26,15 +27,20 @@ export function BoardGrid({
   revealedCategories = new Set<string>(),
   onRevealCategory,
   onOpen,
+  scoresHidden = false,
 }: Props) {
   const tileWidthFactor = Math.max(5.5, Math.min(10, 40 / Math.max(1, categories.length)));
+  const highestPoints = Math.max(POINT_STEP, ...questions.map((question) => question.points));
+  const rowCount = Math.ceil(highestPoints / POINT_STEP);
+  const pointValues = Array.from({ length: rowCount }, (_, index) => (index + 1) * POINT_STEP);
   return (
     <div className="quiz-board-scroll" role="region" aria-label="Quiz board">
     <div
       className="quiz-board"
       style={{
         "--board-columns": categories.length,
-        "--board-tile-height": `clamp(78px, ${tileWidthFactor}cqw, 150px)`,
+        "--board-rows": rowCount,
+        "--board-tile-height": `clamp(58px, ${tileWidthFactor * 5 / rowCount}cqw, 150px)`,
         "--board-header-height": `clamp(54px, ${tileWidthFactor * 0.48}cqw, 84px)`,
         display: "grid",
         gridTemplateColumns: `repeat(${categories.length}, minmax(140px, 1fr))`,
@@ -62,12 +68,15 @@ export function BoardGrid({
         );
       })}
 
-      {POINT_VALUES.map((points) =>
+      {pointValues.map((points) =>
         categories.map((category) => {
           const q = questions.find(
             (question) =>
               question.category === category && question.points === points,
           );
+          if (!q) {
+            return <span key={`${category}-${points}`} className="quiz-board-empty" aria-hidden="true" />;
+          }
           const ready = isQuestionReady(q);
           const disabled = q?.answered || !ready;
           const matchingResults = q?.answered
@@ -87,18 +96,19 @@ export function BoardGrid({
           const results = Array.from(resultByTeam.values())
             .filter((entry) => entry.delta !== 0 || q?.type === "booby" || q?.geoExplorationMode === "stage")
             .sort((first, second) => second.delta - first.delta);
+          const visibleResults = scoresHidden ? [] : results;
           return (
             <button
               key={`${category}-${points}`}
-              className={`quiz-board-tile${q?.answered ? " played" : ""}${results.length ? " scored" : ""}${results.length > 1 ? " multi-score" : ""}${!ready ? " needs-setup" : ""}`}
+              className={`quiz-board-tile${q?.answered ? " played" : ""}${visibleResults.length ? " scored" : ""}${visibleResults.length > 1 ? " multi-score" : ""}${!ready ? " needs-setup" : ""}`}
               disabled={disabled}
-              aria-label={`${category}, ${points} points${q?.answered ? results.length ? `, played, ${results.map((result) => `${result.teamName} ${result.delta === 0 ? "received 0" : `${result.delta > 0 ? "gained" : "lost"} ${Math.abs(result.delta)}`} points`).join(", ")}` : ", played" : !ready ? ", needs setup" : ""}`}
+              aria-label={`${category}, ${points} points${q?.answered ? visibleResults.length ? `, played, ${visibleResults.map((result) => `${result.teamName} ${result.delta === 0 ? "received 0" : `${result.delta > 0 ? "gained" : "lost"} ${Math.abs(result.delta)}`} points`).join(", ")}` : scoresHidden ? ", played, score hidden" : ", played" : !ready ? ", needs setup" : ""}`}
               onClick={() => ready && onOpen(q)}
             >
               {q?.answered ? (
-                results.length ? (
-                  <span className={`tile-result${results.length > 1 ? " tile-result-list" : ""}`}>
-                    {results.map((result) => {
+                visibleResults.length ? (
+                  <span className={`tile-result${visibleResults.length > 1 ? " tile-result-list" : ""}`}>
+                    {visibleResults.map((result) => {
                       const resultTeam = teams.find((team) => team.id === result.teamId);
                       const resultAccent = resultTeam ? getTeamAccent(resultTeam) : undefined;
                       return (

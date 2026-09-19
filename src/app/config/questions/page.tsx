@@ -3,16 +3,16 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { YouTubeClipPreview } from "@/components/config/YouTubeClipPreview";
 import { usePersistentState } from "@/hooks/usePersistentState";
+import { usePersistentQuestions } from "@/hooks/usePersistentQuestions";
 import { useSettings } from "@/hooks/useSettings";
 import { useTurnState } from "@/hooks/useTurnState";
 import {
-  LEGACY_QUESTION_STORAGE_KEY,
   LEGACY_TEAM_STORAGE_KEY,
-  QUESTION_STORAGE_KEY,
   SCORE_HISTORY_STORAGE_KEY,
   TEAM_STORAGE_KEY,
 } from "@/lib/storage";
 import {
+  POINT_STEP,
   POINT_VALUES,
   type PointValue,
   type Question,
@@ -20,7 +20,8 @@ import {
   type Team,
 } from "@/lib/types";
 import { makeId } from "@/lib/defaultData";
-import { DEFAULT_SETTINGS, type HostMessage, type HostMessageRevealStyle } from "@/lib/settings";
+import { DEFAULT_SETTINGS, type BoardRevealRule, type BoardRevealRules, type HostMessage, type HostMessageRevealStyle } from "@/lib/settings";
+import { OWN_CATEGORY } from "@/lib/boardReveal";
 import {
   createHostMessagePreviewRandom,
   getHostMessageRandomPoolIssues,
@@ -62,6 +63,50 @@ type FieldProps = {
 };
 
 type QuestionType = NonNullable<Question["type"]>;
+
+function RevealRuleEditor({ label, rule, categories, ownCategory, ownLabel, onChange }: {
+  label: string;
+  rule?: BoardRevealRule;
+  categories: string[];
+  ownCategory?: string;
+  ownLabel?: string;
+  onChange: (rule: BoardRevealRule | null) => void;
+}) {
+  const sourceOptions = categories.filter((category) => category !== ownCategory);
+  const canUseCategory = Boolean(ownLabel || sourceOptions.length);
+  return (
+    <div className="question-reveal-rule">
+      <span>{label}</span>
+      <select
+        className="input"
+        aria-label={`${label} visibility`}
+        value={rule?.when ?? "visible"}
+        onChange={(event) => {
+          if (event.target.value === "visible") onChange(null);
+          else if (event.target.value === "board-complete") onChange({ when: "board-complete" });
+          else onChange({ when: "category-complete", category: ownLabel ? OWN_CATEGORY : sourceOptions[0] });
+        }}
+      >
+        <option value="visible">Visible from start</option>
+        <option value="category-complete" disabled={!canUseCategory}>{ownLabel ? "After this category is complete" : "After a category is complete"}</option>
+        <option value="board-complete">After the opening board is complete</option>
+      </select>
+      {rule?.when === "category-complete" && !ownLabel && (
+        <select
+          className="input"
+          aria-label={`${label} source category`}
+          value={rule.category}
+          onChange={(event) => onChange({ when: "category-complete", category: event.target.value })}
+        >
+          {sourceOptions.map((category) => <option key={category} value={category}>{category}</option>)}
+        </select>
+      )}
+      {ownLabel && rule?.when === "category-complete" && (
+        <small className="question-reveal-rule-note">Only this final question stays hidden. It appears when the other questions in {ownCategory} have all been played.</small>
+      )}
+    </div>
+  );
+}
 
 type HostMessageEditorProps = {
   message: HostMessage;
@@ -639,16 +684,14 @@ const McqFields = React.memo(function McqFields({
 });
 export default function QuestionConfigPage() {
   const [settings, setSettings] = useSettings();
-  const [questions, setQuestions, questionsHydrated] = usePersistentState<Question[]>(
-    QUESTION_STORAGE_KEY,
-    [],
-    [LEGACY_QUESTION_STORAGE_KEY],
-  );
+  const [questions, setQuestions, questionsHydrated] = usePersistentQuestions();
   const [newCategory, setNewCategory] = useState("");
   const [categoryNames, setCategoryNames] = useState<Record<string, string>>({});
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [dragging, setDragging] = useState<{ category: string; points: PointValue } | null>(null);
   const [dragOver, setDragOver] = useState<PointValue | null>(null);
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const dragOrigin = React.useRef<{ x: number; y: number } | null>(null);
   const [isMobile, setIsMobile] = useState(false);
   const [showFinaleMusicPreview, setShowFinaleMusicPreview] = useState(false);
   const [hostMessagesExpanded, setHostMessagesExpanded] = useState(false);
@@ -731,6 +774,59 @@ export default function QuestionConfigPage() {
     const list = questionsHydrated && Array.isArray(questions) ? questions : [];
     return Array.from(new Set(list.map((q) => q.category)));
   }, [questions, questionsHydrated]);
+  const finalRowPoints = Math.max(0, ...questions.map((question) => question.points));
+  const finalRowMissingCategories = categories.filter((category) =>
+    !questions.some((question) => question.category === category && question.points === finalRowPoints),
+  );
+  const finalCategory = Object.keys(settings.boardRevealRules?.categories ?? {})[0] ?? "";
+  const finalMode = Object.keys(settings.boardRevealRules?.rows ?? {}).length ? "row" : finalCategory ? "category" : "none";
+  const setRevealRule = (scope: keyof BoardRevealRules, key: string, rule: BoardRevealRule | null) => {
+    setSettings((previous) => {
+      const scoped = scope === "categories" || scope === "rows"
+        ? {} as Record<string, BoardRevealRule>
+        : { ...(previous.boardRevealRules?.[scope] ?? {}) };
+      if (rule) scoped[key] = rule;
+      else delete scoped[key];
+      return {
+        ...previous,
+        boardRevealRules: { ...previous.boardRevealRules, [scope]: scoped },
+      };
+    });
+  };
+  const setFinalReveal = (mode: "none" | "row" | "category", category = finalCategory || categories[categories.length - 1]) => {
+    setSettings((previous) => ({
+      ...previous,
+      boardRevealRules: {
+        ...previous.boardRevealRules,
+        rows: mode === "row" && finalRowPoints ? { [String(finalRowPoints)]: { when: "board-complete" } } : {},
+        categories: mode === "category" && category ? { [category]: { when: "board-complete" } } : {},
+      },
+    }));
+    if (mode === "category" && category) {
+      setQuestions((previous) => [
+        ...previous.filter((question) => question.category !== category),
+        ...previous.filter((question) => question.category === category),
+      ]);
+    }
+  };
+
+  useEffect(() => {
+    const finalQuestionIds = new Set(categories.map((category) =>
+      questions.filter((question) => question.category === category)
+        .sort((first, second) => second.points - first.points)[0]?.id,
+    ).filter(Boolean));
+    const current = settings.boardRevealRules?.questions ?? {};
+    const cleaned: Record<string, BoardRevealRule> = Object.fromEntries(Object.entries(current)
+      .filter(([id]) => finalQuestionIds.has(id))
+      .map(([id, rule]) => [id, rule.when === "category-complete"
+        ? { when: "category-complete" as const, category: OWN_CATEGORY }
+        : rule]));
+    if (JSON.stringify(cleaned) === JSON.stringify(current)) return;
+    setSettings((previous) => ({
+      ...previous,
+      boardRevealRules: { ...previous.boardRevealRules, questions: cleaned },
+    }));
+  }, [categories, questions, setSettings, settings.boardRevealRules?.questions]);
 
   useEffect(() => {
     setCategoryNames((prev) => {
@@ -840,10 +936,63 @@ export default function QuestionConfigPage() {
   };
 
   const bumpQuestion = (category: string, points: PointValue, direction: -1 | 1) => {
-    const idx = POINT_VALUES.indexOf(points);
-    const target = POINT_VALUES[idx + direction];
+    const values = questions.filter((question) => question.category === category)
+      .map((question) => question.points).sort((first, second) => first - second);
+    const idx = values.indexOf(points);
+    const target = values[idx + direction];
     if (idx === -1 || target === undefined) return;
     moveQuestionTo(category, points, target);
+  };
+
+  const addQuestion = (category: string) => {
+    const categoryQuestions = questions.filter((question) => question.category === category);
+    const occupied = new Set(categoryQuestions.map((question) => question.points));
+    let points = POINT_STEP;
+    while (occupied.has(points)) points += POINT_STEP;
+    const previousFinal = Math.max(0, ...questions.map((question) => question.points));
+    if (points > previousFinal) {
+      const oldRule = settings.boardRevealRules?.rows?.[String(previousFinal)];
+      if (oldRule) setRevealRule("rows", String(points), oldRule);
+    }
+    const previousFinalQuestion = [...categoryQuestions].sort((a, b) => b.points - a.points)[0];
+    const previousQuestionRule = previousFinalQuestion
+      ? settings.boardRevealRules?.questions?.[previousFinalQuestion.id]
+      : undefined;
+    const id = makeId("q");
+    upsertQuestion(category, points, { id });
+    if (previousQuestionRule) {
+      setRevealRule("questions", previousFinalQuestion.id, null);
+      setRevealRule("questions", id, previousQuestionRule);
+    }
+    setExpandedQuestions((previous) => new Set(previous).add(`${category}-${points}`));
+  };
+
+  const removeQuestion = (question: Question) => {
+    const inCategory = questions.filter((candidate) => candidate.category === question.category);
+    if (inCategory.length <= 1) return;
+    if (finalMode === "row" && question.points === finalRowPoints) return;
+    if (!window.confirm(
+      `Remove the ${question.points}-point question from ${question.category}? Any points already awarded will stay on the scoreboard.`,
+    )) return;
+    const finalPoints = Math.max(0, ...questions.map((candidate) => candidate.points));
+    const remaining = questions.filter((candidate) => candidate.id !== question.id);
+    const nextFinal = Math.max(0, ...remaining.map((candidate) => candidate.points));
+    if (question.points === finalPoints && nextFinal < finalPoints) {
+      const oldRule = settings.boardRevealRules?.rows?.[String(finalPoints)];
+      if (oldRule) setRevealRule("rows", String(nextFinal), oldRule);
+    }
+    const questionRule = settings.boardRevealRules?.questions?.[question.id];
+    const nextCategoryFinal = remaining
+      .filter((candidate) => candidate.category === question.category)
+      .sort((a, b) => b.points - a.points)[0];
+    if (questionRule && nextCategoryFinal) setRevealRule("questions", nextCategoryFinal.id, questionRule);
+    setQuestions((previous) => previous.filter((candidate) => candidate.id !== question.id));
+    setRevealRule("questions", question.id, null);
+    setExpandedQuestions((previous) => {
+      const next = new Set(previous);
+      next.delete(`${question.category}-${question.points}`);
+      return next;
+    });
   };
 
   const moveCategory = (category: string, direction: -1 | 1) => {
@@ -852,6 +1001,8 @@ export default function QuestionConfigPage() {
       const fromIndex = order.indexOf(category);
       const toIndex = fromIndex + direction;
       if (fromIndex < 0 || toIndex < 0 || toIndex >= order.length) return previous;
+      const bonusCategory = Object.keys(settings.boardRevealRules?.categories ?? {})[0];
+      if (bonusCategory && (order[fromIndex] === bonusCategory || order[toIndex] === bonusCategory)) return previous;
 
       [order[fromIndex], order[toIndex]] = [order[toIndex], order[fromIndex]];
       const questionsByCategory = new Map<string, Question[]>();
@@ -868,7 +1019,7 @@ export default function QuestionConfigPage() {
   const setCategoryCollapsed = (category: string, collapsed: boolean) => {
     setExpandedQuestions((previous) => {
       const next = new Set(previous);
-      POINT_VALUES.forEach((points) => {
+      questions.filter((question) => question.category === category).forEach(({ points }) => {
         const key = `${category}-${points}`;
         if (collapsed) next.delete(key);
         else next.add(key);
@@ -883,7 +1034,10 @@ export default function QuestionConfigPage() {
     setQuestions((prev) => {
       const hasCategory = prev.some((q) => q.category === name);
       if (hasCategory) return prev;
-      const additions = POINT_VALUES.map<Question>((points) => ({
+      const categoryPointValues = finalMode === "row"
+        ? Array.from({ length: finalRowPoints / POINT_STEP }, (_, index) => (index + 1) * POINT_STEP)
+        : POINT_VALUES;
+      const additions = categoryPointValues.map<Question>((points) => ({
         id: makeId("q"),
         category: name,
         points,
@@ -921,13 +1075,28 @@ export default function QuestionConfigPage() {
           audioStartSeconds: null,
           audioReplayEnabled: false,
       }));
-      return [...prev, ...additions];
+      const bonusCategory = Object.keys(settings.boardRevealRules?.categories ?? {})[0];
+      const firstBonusIndex = bonusCategory ? prev.findIndex((question) => question.category === bonusCategory) : -1;
+      return firstBonusIndex < 0
+        ? [...prev, ...additions]
+        : [...prev.slice(0, firstBonusIndex), ...additions, ...prev.slice(firstBonusIndex)];
     });
     setNewCategory("");
     setActiveCategory(name);
   };
 
   const deleteCategory = (category: string) => {
+    setSettings((previous) => {
+      const rules = previous.boardRevealRules ?? {};
+      const categories = { ...rules.categories };
+      delete categories[category];
+      const remap = (items?: Record<string, BoardRevealRule>) => Object.fromEntries(
+        Object.entries(items ?? {}).filter(([, rule]) => rule.when !== "category-complete" || rule.category !== category),
+      );
+      return { ...previous, boardRevealRules: {
+        categories: remap(categories), rows: remap(rules.rows), questions: remap(rules.questions),
+      } };
+    });
     setQuestions((prev) => prev.filter((q) => q.category !== category));
     setActiveCategory((prevActive) => {
       if (!prevActive) return null;
@@ -948,6 +1117,21 @@ export default function QuestionConfigPage() {
       alert("A category with that name already exists.");
       return;
     }
+    setSettings((previous) => {
+      const rules = previous.boardRevealRules ?? {};
+      const renamed = (items?: Record<string, BoardRevealRule>) => Object.fromEntries(
+        Object.entries(items ?? {}).map(([key, rule]) => [key, rule.when === "category-complete" && rule.category === oldName
+          ? { ...rule, category: newName } : rule]),
+      );
+      const categoryRules = renamed(rules.categories);
+      if (categoryRules[oldName]) {
+        categoryRules[newName] = categoryRules[oldName];
+        delete categoryRules[oldName];
+      }
+      return { ...previous, boardRevealRules: {
+        categories: categoryRules, rows: renamed(rules.rows), questions: renamed(rules.questions),
+      } };
+    });
     setQuestions((prev) =>
       prev.map((q) =>
         q.category === oldName
@@ -962,7 +1146,7 @@ export default function QuestionConfigPage() {
 
   const resetGameProgress = () => {
     if (!window.confirm(
-      "Reset all scores, played tiles, audio replay usage, turn order, revealed categories, dismissed host messages, and score history? Team and question content will be kept.",
+      "Reset all scores, played tiles, score visibility, audio replay usage, turn order, revealed categories, dismissed host messages, and score history? Team and question content will be kept.",
     )) return;
 
     setQuestions((prev) => prev.map((q) => ({ ...q, answered: false })));
@@ -2276,6 +2460,55 @@ const TimelineFields = React.memo(function TimelineFields({
             </span>
           </label>
 
+          <div className="question-reveal-settings">
+            <strong>Final board reveal</strong>
+            <small>Choose one expansion for the endgame. It appears when every opening-board question has been played.</small>
+            <div className="question-final-mode" role="radiogroup" aria-label="Final board reveal">
+              {([
+                ["none", "No expansion"],
+                ["row", `Final ${finalRowPoints || "—"}-point row`],
+                ["category", "Final category"],
+              ] as const).map(([mode, label]) => (
+                <label key={mode} className={finalMode === mode ? "selected" : ""}>
+                  <input
+                    type="radio"
+                    name="final-board-reveal"
+                    value={mode}
+                    checked={finalMode === mode}
+                    disabled={mode !== "none" && (mode === "row" ? !finalRowPoints || finalRowMissingCategories.length > 0 : !categories.length)}
+                    onChange={() => setFinalReveal(mode)}
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
+            {finalRowMissingCategories.length > 0 && (
+              <aside className="question-final-row-hint" role="status">
+                <span className="question-final-row-hint-icon" aria-hidden>!</span>
+                <span className="question-final-row-hint-copy">
+                  <strong>Final row is incomplete</strong>
+                  <small>Add a {finalRowPoints}-point question to: {finalRowMissingCategories.join(", ")}.</small>
+                </span>
+                <button type="button" onClick={() => finalRowMissingCategories.forEach((category) => upsertQuestion(category, finalRowPoints, {}))}>
+                  + Add missing slots
+                </button>
+              </aside>
+            )}
+            {finalMode === "category" && (
+              <label className="question-final-category-picker">
+                <span>Category to reveal</span>
+                <select className="input" value={finalCategory} onChange={(event) => setFinalReveal("category", event.target.value)}>
+                  {categories.map((category) => <option key={category} value={category}>{category}</option>)}
+                </select>
+                <small>We move it to the far right of the board automatically.</small>
+              </label>
+            )}
+            <aside className="question-reveal-info">
+              <strong>Want just one bonus question?</strong>
+              <span>Open that category’s final question and choose “After this category is complete,” or reveal it after the entire opening board. This hides one question—not a whole row.</span>
+            </aside>
+          </div>
+
           <div className="question-finale-music-setting">
             <label className="question-finale-music-toggle" htmlFor="question-finale-music-enabled">
               <input
@@ -2505,7 +2738,11 @@ const TimelineFields = React.memo(function TimelineFields({
       )}
 
       <div className="question-category-list">
-        {(activeCategory ? categories.filter((c) => c === activeCategory) : categories).map((category) => (
+        {(activeCategory ? categories.filter((c) => c === activeCategory) : categories).map((category) => {
+          const categoryQuestions = questions.filter((question) => question.category === category)
+            .sort((first, second) => first.points - second.points);
+          const categoryPoints = categoryQuestions.map((question) => question.points);
+          return (
           <div
             key={category}
             className="question-category-panel"
@@ -2528,10 +2765,13 @@ const TimelineFields = React.memo(function TimelineFields({
                 />
               </div>
               <div className="question-category-actions">
+                <button type="button" onClick={() => addQuestion(category)} title="Add the next available 100-point level">
+                  + Add question
+                </button>
                 <button
                   type="button"
                   onClick={() => moveCategory(category, -1)}
-                  disabled={categories.indexOf(category) === 0}
+                  disabled={categories.indexOf(category) === 0 || Boolean(settings.boardRevealRules?.categories?.[category])}
                   aria-label={`Move ${category} left`}
                   title="Move category left on the board"
                 >
@@ -2540,7 +2780,7 @@ const TimelineFields = React.memo(function TimelineFields({
                 <button
                   type="button"
                   onClick={() => moveCategory(category, 1)}
-                  disabled={categories.indexOf(category) === categories.length - 1}
+                  disabled={categories.indexOf(category) === categories.length - 1 || Boolean(settings.boardRevealRules?.categories?.[categories[categories.length - 1]])}
                   aria-label={`Move ${category} right`}
                   title="Move category right on the board"
                 >
@@ -2563,7 +2803,7 @@ const TimelineFields = React.memo(function TimelineFields({
               </div>
             </div>
             <div className="question-card-grid">
-              {POINT_VALUES.map((points) => {
+              {categoryQuestions.map(({ points }) => {
                 const q = getQuestion(category, points);
                 const isDragging = dragging?.category === category && dragging.points === points;
                 const isDragOver = dragOver === points && dragging?.category === category;
@@ -2588,6 +2828,8 @@ const TimelineFields = React.memo(function TimelineFields({
                   <div
                     key={`${category}-${points}`}
                     className={`question-card${isExpanded ? " expanded" : ""}${questionIssues.length ? " incomplete" : " ready"}`}
+                    data-question-category={category}
+                    data-question-points={points}
                     tabIndex={-1}
                     onKeyDown={(event) => {
                       if (event.key !== "Escape" || !isExpanded || event.defaultPrevented) return;
@@ -2649,7 +2891,10 @@ const TimelineFields = React.memo(function TimelineFields({
                       "--question-accent": typeMeta.accent,
                       "--question-soft": typeMeta.soft,
                       outline: isDragOver ? `2px dashed ${typeMeta.accent}` : "none",
-                      opacity: isDragging ? 0.6 : 1,
+                      transform: isDragging ? `translate3d(${dragOffset.x}px, ${dragOffset.y}px, 0)` : undefined,
+                      position: isDragging ? "relative" : undefined,
+                      zIndex: isDragging ? 30 : undefined,
+                      boxShadow: isDragging ? "0 24px 52px rgba(7, 20, 16, .36)" : undefined,
                     } as React.CSSProperties}
                   >
                     <div className="question-card-topbar">
@@ -2657,33 +2902,42 @@ const TimelineFields = React.memo(function TimelineFields({
                         {canDrag ? (
                           <div
                             className="question-drag-handle"
-                            title="Drag to reorder"
+                            title="Drag the card to reorder"
                             aria-label={`Drag ${points} point question to reorder`}
-                            draggable
-                            onDragStart={(e) => {
+                            style={{ touchAction: "none", cursor: dragging ? "grabbing" : "grab" }}
+                            onPointerDown={(e) => {
+                              if (e.button !== 0) return;
+                              e.preventDefault();
+                              e.currentTarget.setPointerCapture(e.pointerId);
+                              dragOrigin.current = { x: e.clientX, y: e.clientY };
+                              setDragOffset({ x: 0, y: 0 });
                               setDragging({ category, points });
-                              setDragOver(points);
-                              e.dataTransfer?.setData("text/plain", `${category}-${points}`);
+                              setDragOver(null);
                             }}
-                            onDragEnter={(e) => {
-                              e.preventDefault();
-                              if (dragging?.category === category) setDragOver(points);
+                            onPointerMove={(e) => {
+                              if (!dragOrigin.current || dragging?.category !== category || dragging.points !== points) return;
+                              setDragOffset({ x: e.clientX - dragOrigin.current.x, y: e.clientY - dragOrigin.current.y });
+                              const target = document.elementsFromPoint(e.clientX, e.clientY)
+                                .map((element) => element.closest<HTMLElement>(".question-card[data-question-category]"))
+                                .find((card) => card?.dataset.questionCategory === category && Number(card.dataset.questionPoints) !== points);
+                              setDragOver(target ? Number(target.dataset.questionPoints) : null);
                             }}
-                            onDragOver={(e) => {
-                              e.preventDefault();
-                              if (dragging?.category === category) setDragOver(points);
-                            }}
-                            onDrop={(e) => {
-                              e.preventDefault();
-                              if (dragging?.category === category) {
-                                moveQuestionTo(category, dragging.points, points);
-                              }
+                            onPointerUp={(e) => {
+                              if (!dragOrigin.current) return;
+                              const target = document.elementsFromPoint(e.clientX, e.clientY)
+                                .map((element) => element.closest<HTMLElement>(".question-card[data-question-category]"))
+                                .find((card) => card?.dataset.questionCategory === category && Number(card.dataset.questionPoints) !== points);
+                              if (target) moveQuestionTo(category, points, Number(target.dataset.questionPoints));
+                              dragOrigin.current = null;
                               setDragOver(null);
                               setDragging(null);
+                              setDragOffset({ x: 0, y: 0 });
                             }}
-                            onDragEnd={() => {
+                            onPointerCancel={() => {
+                              dragOrigin.current = null;
                               setDragOver(null);
                               setDragging(null);
+                              setDragOffset({ x: 0, y: 0 });
                             }}
                           >
                             <span aria-hidden>⠿</span>
@@ -2693,7 +2947,7 @@ const TimelineFields = React.memo(function TimelineFields({
                             <button
                               type="button"
                               onClick={() => bumpQuestion(category, points, -1)}
-                              disabled={POINT_VALUES.indexOf(points) === 0}
+                              disabled={categoryPoints.indexOf(points) === 0}
                               aria-label="Move question up"
                             >
                               ↑
@@ -2701,7 +2955,7 @@ const TimelineFields = React.memo(function TimelineFields({
                             <button
                               type="button"
                               onClick={() => bumpQuestion(category, points, 1)}
-                              disabled={POINT_VALUES.indexOf(points) === POINT_VALUES.length - 1}
+                              disabled={categoryPoints.indexOf(points) === categoryPoints.length - 1}
                               aria-label="Move question down"
                             >
                               ↓
@@ -2735,6 +2989,16 @@ const TimelineFields = React.memo(function TimelineFields({
                         </span>
                       </button>
                     </div>
+                    <button
+                      type="button"
+                      className="question-card-remove"
+                      onClick={() => q && removeQuestion(q)}
+                      disabled={categoryQuestions.length <= 1 || (finalMode === "row" && points === finalRowPoints)}
+                      aria-label={`Remove ${points}-point question from ${category}`}
+                      title={categoryQuestions.length <= 1 ? "Use Delete category to remove the last question" : finalMode === "row" && points === finalRowPoints ? "Turn off final-row reveal before removing this slot" : `Remove ${points}-point question`}
+                    >
+                      ×
+                    </button>
                     <div className="question-card-identity">
                       <span className="question-type-icon" aria-hidden>{typeMeta.icon}</span>
                       <strong>{typeMeta.label}</strong>
@@ -2757,6 +3021,14 @@ const TimelineFields = React.memo(function TimelineFields({
                     )}
                     {isExpanded && (
                       <>
+                        {q && points === categoryPoints[categoryPoints.length - 1] && <RevealRuleEditor
+                          label="This question"
+                          rule={settings.boardRevealRules?.questions?.[q.id]}
+                          categories={categories}
+                          ownCategory={category}
+                          ownLabel="This category"
+                          onChange={(rule) => setRevealRule("questions", q.id, rule)}
+                        />}
                         <div className="question-type-picker" aria-label="Question type">
                           {QUESTION_TYPES.map((type) => {
                             const option = QUESTION_TYPE_META[type];
@@ -2863,7 +3135,8 @@ const TimelineFields = React.memo(function TimelineFields({
               })}
             </div>
           </div>
-        ))}
+          );
+        })}
         {categories.length === 0 && (
           <div className="card" style={{ padding: "16px", color: "var(--muted)" }}>
             Add a category to start entering questions.

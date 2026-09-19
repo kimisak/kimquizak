@@ -19,6 +19,8 @@ export function useTurnState() {
       resolvedHostMessages: {},
       audioPlaybackCounts: {},
       audioReplayValues: {},
+      scoresHidden: false,
+      hiddenScoreOrder: [],
     },
     [LEGACY_TURN_STATE_STORAGE_KEY],
   );
@@ -55,6 +57,8 @@ export function useTurnState() {
       resolvedHostMessages: {},
       audioPlaybackCounts: {},
       audioReplayValues: {},
+      scoresHidden: false,
+      hiddenScoreOrder: [],
     });
 
   return { turnState, setTurnState, setOrder, advanceBoard, advanceLyrics, reset };

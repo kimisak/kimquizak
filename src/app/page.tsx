@@ -4,6 +4,7 @@ import Link from "next/link";
 import { StorageBackupPanel } from "@/components/StorageBackupPanel";
 import { TeamPill } from "@/components/game/TeamPill";
 import { usePersistentState } from "@/hooks/usePersistentState";
+import { usePersistentQuestions } from "@/hooks/usePersistentQuestions";
 import { useSettings } from "@/hooks/useSettings";
 import {
   getThemeById,
@@ -12,24 +13,27 @@ import {
 } from "@/lib/defaultData";
 import { reconcileTeamTheme } from "@/lib/teamPresentation";
 import { isQuestionReady } from "@/lib/questionValidation";
+import { getVisibleBoardQuestions } from "@/lib/boardReveal";
 import { DEFAULT_SETTINGS } from "@/lib/settings";
 import {
-  LEGACY_QUESTION_STORAGE_KEY,
   LEGACY_TEAM_STORAGE_KEY,
-  QUESTION_STORAGE_KEY,
   TEAM_STORAGE_KEY,
 } from "@/lib/storage";
-import { POINT_VALUES, type Question, type Team } from "@/lib/types";
+import { POINT_STEP, type Team } from "@/lib/types";
 
 export default function Home() {
   const [settings, setSettings] = useSettings();
   const [teams, setTeams] = usePersistentState<Team[]>(TEAM_STORAGE_KEY, [], [LEGACY_TEAM_STORAGE_KEY]);
-  const [questions] = usePersistentState<Question[]>(QUESTION_STORAGE_KEY, [], [LEGACY_QUESTION_STORAGE_KEY]);
+  const [questions] = usePersistentQuestions();
   const activeTheme = getThemeById(settings.themeId);
   const emojiOptions = activeTheme.options;
   const concealCategoryHeaders = settings.hideCategoryHeadersAtStart !== false;
-  const previewCategories = Array.from(new Set(questions.map((question) => question.category))).slice(0, 4);
+  const visibleQuestions = getVisibleBoardQuestions(questions, settings.boardRevealRules);
+  const previewCategories = Array.from(new Set(
+    visibleQuestions.map((question) => question.category),
+  )).slice(0, 4);
   const monitorCategories = previewCategories.length ? previewCategories : ["Your board"];
+  const previewRowCount = Math.min(4, Math.ceil(Math.max(POINT_STEP, ...visibleQuestions.map((question) => question.points)) / POINT_STEP));
 
   const applyThemeToTeams = (themeId: string) => {
     setTeams((previous) => previous.map((team) => reconcileTeamTheme(team, themeId)));
@@ -48,7 +52,7 @@ export default function Home() {
           </div>
         </div>
         <div className="home-monitor" aria-label="Preview of your quiz board opening state">
-          <div className="home-monitor-header"><span>BOARD PREVIEW</span><small>{questions.filter(isQuestionReady).length} clues ready</small></div>
+          <div className="home-monitor-header"><span>BOARD PREVIEW</span><small>{visibleQuestions.filter(isQuestionReady).length} clues ready</small></div>
           <div className="mini-board" style={{ gridTemplateColumns: `repeat(${monitorCategories.length}, 1fr)` }}>
             {monitorCategories.map((category, index) => (
               <div
@@ -58,9 +62,9 @@ export default function Home() {
                 {concealCategoryHeaders ? `Reveal ${index + 1}` : category}
               </div>
             ))}
-            {POINT_VALUES.slice(0, 4).flatMap((points) => monitorCategories.map((category) => {
-              const question = questions.find((candidate) => candidate.category === category && candidate.points === points);
-              return <div className={`mini-board-cell${isQuestionReady(question) ? " ready" : ""}`} key={`${category}-${points}`}>{points}</div>;
+            {Array.from({ length: previewRowCount }, (_, index) => (index + 1) * POINT_STEP).flatMap((points) => monitorCategories.map((category) => {
+              const question = visibleQuestions.find((candidate) => candidate.category === category && candidate.points === points);
+              return <div className={`mini-board-cell${!question ? " empty" : isQuestionReady(question) ? " ready" : ""}`} key={`${category}-${points}`}>{question ? points : null}</div>;
             }))}
           </div>
           <small className="home-monitor-caption">
@@ -71,7 +75,7 @@ export default function Home() {
 
       <ol className="workflow-strip">
         <li><span>01</span><strong>Cast</strong><small>{teams.length} teams ready</small></li>
-        <li><span>02</span><strong>Write</strong><small>Build 100–500 clues</small></li>
+        <li><span>02</span><strong>Write</strong><small>Build your clues</small></li>
         <li><span>03</span><strong>Play</strong><small>Run the show live</small></li>
       </ol>
 

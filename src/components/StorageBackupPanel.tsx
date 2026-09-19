@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useState } from "react";
+import { clearQuestions } from "@/lib/questionStorage";
 import {
   buildBackupPayload,
   parseBackupPayload,
@@ -10,7 +11,6 @@ import {
   LEGACY_QUESTION_STORAGE_KEY,
   LEGACY_TEAM_STORAGE_KEY,
   LEGACY_TURN_STATE_STORAGE_KEY,
-  QUESTION_STORAGE_KEY,
   SCORE_HISTORY_STORAGE_KEY,
   TEAM_STORAGE_KEY,
   TURN_STATE_STORAGE_KEY,
@@ -29,9 +29,9 @@ export function StorageBackupPanel() {
     setTone(nextTone);
   };
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     try {
-      const payload = buildBackupPayload();
+      const payload = await buildBackupPayload();
       const blob = new Blob([JSON.stringify(payload, null, 2)], {
         type: "application/json",
       });
@@ -54,11 +54,11 @@ export function StorageBackupPanel() {
   const handleFileChange = (file: File | null) => {
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = () => {
+    reader.onload = async () => {
       try {
         const text = typeof reader.result === "string" ? reader.result : "";
         const payload = parseBackupPayload(text);
-        persistBackupToLocalStorage(payload);
+        await persistBackupToLocalStorage(payload);
         updateStatus("Backup loaded. Refreshing data...", "success");
         setTimeout(() => window.location.reload(), 350);
       } catch (err) {
@@ -75,15 +75,15 @@ export function StorageBackupPanel() {
     reader.readAsText(file);
   };
 
-  const handleClearAll = () => {
+  const handleClearAll = async () => {
     if (typeof window === "undefined") return;
     const confirmed = window.confirm(
       "This will erase all local data (teams, questions, progress) stored in your browser. Continue?",
     );
     if (!confirmed) return;
     try {
+      await clearQuestions();
       window.localStorage.removeItem(TEAM_STORAGE_KEY);
-      window.localStorage.removeItem(QUESTION_STORAGE_KEY);
       window.localStorage.removeItem(TURN_STATE_STORAGE_KEY);
       window.localStorage.removeItem(SETTINGS_STORAGE_KEY);
       window.localStorage.removeItem(SCORE_HISTORY_STORAGE_KEY);
@@ -103,7 +103,7 @@ export function StorageBackupPanel() {
       const mod = await import("../../default_questions.json");
       const payloadRaw = (mod as { default?: unknown }).default ?? mod;
       const payload = parseBackupPayload(JSON.stringify(payloadRaw));
-      persistBackupToLocalStorage(payload);
+      await persistBackupToLocalStorage(payload);
       updateStatus("Example data loaded. Reloading...", "success");
       setTimeout(() => window.location.reload(), 350);
     } catch (err) {
@@ -123,7 +123,7 @@ export function StorageBackupPanel() {
           Local archive
         </div>
         <p>
-          Save everything in localStorage to a JSON file, or load from one to seed
+          Save your local quiz to a JSON file, or load from one to seed
           a new browser.
         </p>
       </div>

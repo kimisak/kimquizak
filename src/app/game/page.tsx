@@ -27,13 +27,12 @@ import { TurnOrderRail } from "@/components/game/TurnOrderRail";
 import { useAudioCue } from "@/hooks/useAudioCue";
 import { useFinaleSoundtrack } from "@/hooks/useFinaleSoundtrack";
 import { usePersistentState } from "@/hooks/usePersistentState";
+import { usePersistentQuestions } from "@/hooks/usePersistentQuestions";
 import { useSettings } from "@/hooks/useSettings";
 import { useTurnState } from "@/hooks/useTurnState";
 import { generateRedPattern, shuffle } from "@/lib/redPattern";
 import {
-  LEGACY_QUESTION_STORAGE_KEY,
   LEGACY_TEAM_STORAGE_KEY,
-  QUESTION_STORAGE_KEY,
   SCORE_HISTORY_STORAGE_KEY,
   TEAM_STORAGE_KEY,
 } from "@/lib/storage";
@@ -46,6 +45,7 @@ import { getTeamAccent, reconcileTeamTheme } from "@/lib/teamPresentation";
 import { allocateTimelinePoints, type TimelinePlacementOutcome } from "@/lib/timelineScoring";
 import { getAudioAvailablePoints } from "@/lib/audioScoring";
 import { getGeoExploreValue } from "@/lib/geoguesser";
+import { getVisibleBoardQuestions } from "@/lib/boardReveal";
 
 type ActiveQuestion = Question & { category: string };
 type PlacedTimelineEvent = TimelineEvent & {
@@ -82,11 +82,7 @@ export default function GameBoardPage() {
     [],
     [LEGACY_TEAM_STORAGE_KEY],
   );
-  const [questions, setQuestions] = usePersistentState<Question[]>(
-    QUESTION_STORAGE_KEY,
-    [],
-    [LEGACY_QUESTION_STORAGE_KEY],
-  );
+  const [questions, setQuestions] = usePersistentQuestions();
   const [scoreHistory, setScoreHistory] = usePersistentState<ScoreTransaction[]>(
     SCORE_HISTORY_STORAGE_KEY,
     [],
@@ -160,6 +156,15 @@ export default function GameBoardPage() {
   const turnOrder = turnState.order;
   const boardTurnIndex = turnState.boardIndex;
   const lyricsTurnIndex = turnState.lyricsIndex;
+  const scoresHidden = turnState.scoresHidden === true;
+  const hiddenScoreTeams = useMemo(() => {
+    const byId = new Map(teams.map((team) => [team.id, team]));
+    const ordered = (turnState.hiddenScoreOrder ?? [])
+      .map((id) => byId.get(id))
+      .filter((team): team is Team => Boolean(team));
+    const included = new Set(ordered.map((team) => team.id));
+    return [...ordered, ...teams.filter((team) => !included.has(team.id))];
+  }, [teams, turnState.hiddenScoreOrder]);
   const revealedCategories = useMemo(
     () => new Set(turnState.revealedCategories ?? []),
     [turnState.revealedCategories],
@@ -173,17 +178,21 @@ export default function GameBoardPage() {
     !revealedCategories.has(activeQuestion.category),
   );
 
+  const visibleQuestions = useMemo(
+    () => getVisibleBoardQuestions(questions, settings.boardRevealRules),
+    [questions, settings.boardRevealRules],
+  );
   const categories = useMemo(() => {
     const seen = new Set<string>();
     const ordered: string[] = [];
-    questions.forEach((q) => {
+    visibleQuestions.forEach((q) => {
       if (!seen.has(q.category)) {
         seen.add(q.category);
         ordered.push(q.category);
       }
     });
     return ordered;
-  }, [questions]);
+  }, [visibleQuestions]);
 
   const sortedTeams = useMemo(
     () => [...teams].sort((a, b) => b.score - a.score),
@@ -191,18 +200,18 @@ export default function GameBoardPage() {
   );
   const boardComplete = useMemo(
     () => {
-      const playable = questions.filter(isQuestionReady);
+      const playable = visibleQuestions.filter(isQuestionReady);
       return playable.length > 0 && playable.every((question) => question.answered);
     },
-    [questions],
+    [visibleQuestions],
   );
   const playableQuestionCount = useMemo(
-    () => questions.filter(isQuestionReady).length,
-    [questions],
+    () => visibleQuestions.filter(isQuestionReady).length,
+    [visibleQuestions],
   );
   const answeredQuestionCount = useMemo(
-    () => questions.filter((question) => isQuestionReady(question) && question.answered).length,
-    [questions],
+    () => visibleQuestions.filter((question) => isQuestionReady(question) && question.answered).length,
+    [visibleQuestions],
   );
   const remainingQuestionCount = Math.max(0, playableQuestionCount - answeredQuestionCount);
   const activeHostMessage = useMemo(() => {
@@ -1204,7 +1213,6 @@ export default function GameBoardPage() {
       return (
         <McqModal
           question={modalQuestion}
-          teams={teams}
           currentTeamName={currentTeam?.name}
           currentTeamColor={currentTeamColor}
           currentTeamEmoji={currentTeamEmoji}
@@ -1216,6 +1224,7 @@ export default function GameBoardPage() {
           resolved={mcqResolved}
           correctIndex={activeQuestion.mcqCorrectIndex ?? 0}
           resolvedInfo={mcqResolvedInfo}
+          onContinue={closeModal}
         />
       );
     }
@@ -1473,7 +1482,7 @@ export default function GameBoardPage() {
             <div className="board-viewport-grid" inert={!activeTurnOrder.length ? true : undefined} aria-hidden={!activeTurnOrder.length || undefined}>
               <BoardGrid
                 categories={categories}
-                questions={questions}
+                questions={visibleQuestions}
                 teams={teams}
                 scoreHistory={scoreHistory}
                 concealCategoryHeaders={settings.hideCategoryHeadersAtStart !== false}
@@ -1488,6 +1497,7 @@ export default function GameBoardPage() {
                   }))
                 }
                 onOpen={openQuestion}
+                scoresHidden={scoresHidden}
               />
             </div>
             {!activeTurnOrder.length && (
@@ -1507,13 +1517,27 @@ export default function GameBoardPage() {
 
       <div className="game-leaderboard-panel" id="game-podium">
         <Leaderboard
-          teams={sortedTeams}
+          teams={scoresHidden ? hiddenScoreTeams : sortedTeams}
           onAdjust={adjustScore}
           onSet={setScore}
           history={scoreHistory}
           onUndo={undoScoreChange}
           compact
           currentTeamId={currentTeam?.id}
+          scoresHidden={scoresHidden}
+          onToggleScores={() => setTurnState((previous) => previous.scoresHidden
+            ? { ...previous, scoresHidden: false, hiddenScoreOrder: [] }
+            : {
+                ...previous,
+                scoresHidden: true,
+                hiddenScoreOrder: (() => {
+                  const rankedIds = sortedTeams.map((team) => team.id);
+                  const randomized = shuffle(teams.map((team) => team.id));
+                  return randomized.length > 1 && randomized.every((id, index) => id === rankedIds[index])
+                    ? [...randomized.slice(1), randomized[0]]
+                    : randomized;
+                })(),
+              })}
         />
       </div>
       </div>

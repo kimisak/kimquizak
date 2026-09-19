@@ -1,6 +1,6 @@
 # kimquizak
 
-Lightweight quiz game board built with Next.js 16 (App Router + TypeScript). Configure teams and categories, then run the game with a slot-machine turn order picker, question modals, timelines, audio clips, text grids, and more. State (teams, questions, turn order, settings) is stored in the browser via `localStorage`.
+Lightweight quiz game board built with Next.js 16 (App Router + TypeScript). Configure teams and categories, then run the game with a slot-machine turn order picker, question modals, timelines, audio clips, text grids, and more. State is stored locally in the browser.
 
 ## Quick start
 
@@ -14,7 +14,7 @@ Prod: https://kimquizak.com/
 
 ## Main flows
 - `Config / Teams`: set team names, colors/emojis and players; shuffle players; reset the turn order.
-- `Config / Questions`: add and reorder categories, configure whether category titles start concealed, and build question types (standard, text grid, geoguesser, joker, timeline, MCQ, audio). Question editors start collapsed to protect answers during live hosting, and can be opened independently or as a category. Drag questions within a category to reorder point slots.
+- `Config / Questions`: add and reorder categories, add or remove questions within each category in 100-point steps, configure whether category titles start concealed, and build question types (standard, text grid, geoguesser, joker, timeline, MCQ, audio). Question editors start collapsed to protect answers during live hosting, and can be opened independently or as a category. Drag questions within a category to reorder point slots. Categories can have different lengths; missing board positions remain empty.
 - `Game`: draw the complete board-turn order with sleigh bells, reveal concealed category titles, play tiles, and track scores/answers. A glockenspiel confirms the selected opening team. Board turn advances after each resolved question.
 
 ## Question types (cheat sheet)
@@ -34,10 +34,10 @@ Set `GOOGLE_MAPS_API_KEY` in `.env` and enable the Maps JavaScript API with bill
 The API view disables Google's address and road-label overlays, while preserving required Google attribution. Signs and street names physically photographed in the panorama remain part of the clue.
 
 ## Persistence
-- Local-only: teams (`kimquizak_teams_v1`), questions (`kimquizak_questions_v1`), turn state (`kimquizak_turn_state_v1`), score history (`kimquizak_score_history_v1`), and settings (`kimquizak_settings_v1`) are saved in `localStorage`.
+- Local-only: question content and images are saved in IndexedDB; teams (`kimquizak_teams_v1`), turn state (`kimquizak_turn_state_v1`), score history (`kimquizak_score_history_v1`), and settings (`kimquizak_settings_v1`) are saved in `localStorage`. Existing localStorage questions migrate automatically.
 - Automatic scores, direct score edits, and host bonuses are recorded in the leaderboard history and can be undone individually.
 - Reset turn order from the Teams config if you need a fresh spin.
-- Example data: click “Add example data” in the Backup & restore panel on the home page to load `default_questions.json` (bundled) into localStorage.
+- Example data: click “Add example data” in the Backup & restore panel on the home page to load `default_questions.json` (bundled) into local browser storage.
 
 ## Scripts
 - `npm run dev` – start dev server
@@ -46,6 +46,6 @@ The API view disables Google's address and road-label overlays, while preserving
 
 ## Notes
 - No secrets or API keys are required; everything runs client-side.
-- Images are kept in `localStorage`; large images may bloat storage limits—prefer smaller uploads.
+- Images are kept with questions in IndexedDB, avoiding the small `localStorage` quota. Backups include the images.
 - Built by Codex as the developer, with a human acting as product owner and QA lead.
 - Tested in Microsoft Edge; iframes may behave differently in other browsers (e.g., embed autoplay quirks).

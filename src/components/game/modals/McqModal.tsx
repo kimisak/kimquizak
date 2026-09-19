@@ -1,14 +1,12 @@
 'use client';
 
 import type { CSSProperties } from "react";
-import type { Question, Team } from "@/lib/types";
-import { TeamPill } from "@/components/game/TeamPill";
+import type { Question } from "@/lib/types";
 import { ExpandableImage } from "./ExpandableImage";
 import { QuestionModalHeader } from "./QuestionModalHeader";
 
 type Props = {
   question: Question;
-  teams: Team[];
   currentTeamName?: string;
   answeringTeamName?: string;
   currentTeamColor?: string;
@@ -20,6 +18,7 @@ type Props = {
   correctIndex?: number;
   resolvedInfo?: { teamName: string; points: number } | null;
   onSelect: (idx: number) => void;
+  onContinue: () => void;
 };
 
 const OPTION_PALETTE = [
@@ -50,6 +49,7 @@ export function McqModal({
   correctIndex = 0,
   resolvedInfo = null,
   onSelect,
+  onContinue,
 }: Props) {
   const rawOptions = question.mcqOptions?.slice(0, 4) ?? [];
   const hasFour = rawOptions.length >= 4 && rawOptions.slice(2).some((option) => option.trim());
@@ -128,6 +128,7 @@ export function McqModal({
 
           {displayedImage && (
             <ExpandableImage
+              key={resolved && question.answerImageData ? "answer-image" : "question-image"}
               src={displayedImage.src}
               alt={displayedImage.alt}
               label={displayedImage.label}
@@ -157,16 +158,13 @@ export function McqModal({
             <div className="mcq-result">
               <span aria-hidden>✓</span>
               <div>
-                <small>Answer locked</small>
+                <small>Answer locked{resolvedInfo ? ` · +${resolvedInfo.points} pts` : ""}</small>
                 <strong>{String.fromCharCode(65 + correctIndex)} · {correctAnswer}</strong>
               </div>
             </div>
-            {resolvedInfo && (
-              <div className="mcq-result-team">
-                <TeamPill name={resolvedInfo.teamName} color={answeringTeamColor} emoji={answeringTeamEmoji} />
-                <strong>+{resolvedInfo.points} pts</strong>
-              </div>
-            )}
+            <button className="button question-reveal-answer mcq-continue" type="button" onClick={onContinue}>
+              Continue
+            </button>
           </>
         )}
       </footer>
