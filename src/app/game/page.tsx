@@ -77,6 +77,7 @@ export default function GameBoardPage() {
     stopSlotSpinLoop,
     startFinaleDrumroll,
     stopFinaleDrumroll,
+    playPodiumReveal,
   } = useAudioCue();
   const [teams, setTeams] = usePersistentState<Team[]>(
     TEAM_STORAGE_KEY,
@@ -117,7 +118,9 @@ export default function GameBoardPage() {
   const [finalLeaderboardShown, setFinalLeaderboardShown] = useState(false);
   const [isFinalePreview, setIsFinalePreview] = useState(false);
   const [finaleRevealed, setFinaleRevealed] = useState(false);
+  const [finaleDrumrollStarted, setFinaleDrumrollStarted] = useState(false);
   const [finaleDrumrollFinished, setFinaleDrumrollFinished] = useState(false);
+  const [finalePodiumRevealCount, setFinalePodiumRevealCount] = useState(0);
   const [mcqEliminated, setMcqEliminated] = useState<number[]>([]);
   const [mcqResolved, setMcqResolved] = useState(false);
   const [mcqResolvedInfo, setMcqResolvedInfo] = useState<{
@@ -258,6 +261,7 @@ export default function GameBoardPage() {
       settings.finaleMusicDurationSeconds
       ?? (DEFAULT_SETTINGS.finaleMusicEndSeconds - DEFAULT_SETTINGS.finaleMusicStartSeconds)
     ));
+  const stagedPodiumReveal = settings.stagedPodiumReveal !== false;
   const finaleSoundtrack = useFinaleSoundtrack({
     enabled: settings.finaleMusicEnabled ?? DEFAULT_SETTINGS.finaleMusicEnabled,
     url: settings.finaleMusicUrl ?? DEFAULT_SETTINGS.finaleMusicUrl,
@@ -266,21 +270,25 @@ export default function GameBoardPage() {
     volume: settings.finaleMusicVolume ?? DEFAULT_SETTINGS.finaleMusicVolume,
     prepare: (playableQuestionCount > 0 && remainingQuestionCount <= 1) || showFinalLeaderboard,
   });
-  const finaleSoundtrackReady = !finaleSoundtrack.configured
-    || ["ready", "blocked", "ended", "error"].includes(finaleSoundtrack.status);
-
   useEffect(() => {
-    if (!showFinalLeaderboard || finaleRevealed || !finaleDrumrollFinished || !finaleSoundtrackReady) return;
+    if (!showFinalLeaderboard || finaleRevealed || !finaleDrumrollFinished) return;
     stopFinaleDrumroll();
+    if (stagedPodiumReveal) {
+      setFinalePodiumRevealCount(0);
+      setFinaleRevealed(true);
+      return;
+    }
+    setFinalePodiumRevealCount(Math.min(3, teams.length));
     if (finaleSoundtrack.status !== "error") finaleSoundtrack.requestPlay();
     setFinaleRevealed(true);
   }, [
     finaleDrumrollFinished,
     finaleRevealed,
     finaleSoundtrack,
-    finaleSoundtrackReady,
     showFinalLeaderboard,
+    stagedPodiumReveal,
     stopFinaleDrumroll,
+    teams.length,
   ]);
   const activeTurnOrder = useMemo(
     () => turnOrder.filter((id) => teams.some((t) => t.id === id)),
@@ -812,16 +820,9 @@ export default function GameBoardPage() {
     if (!activeQuestion) return;
     if (remainingQuestionCount === 1 && isQuestionReady(activeQuestion) && !activeQuestion.answered) {
       setFinaleRevealed(false);
+      setFinaleDrumrollStarted(false);
       setFinaleDrumrollFinished(false);
-      const dismissed = new Set(turnState.dismissedHostMessageIds ?? []);
-      const messageComesFirst = (settings.hostMessages ?? []).some((message) =>
-        message.text.trim()
-        && message.afterQuestionCount <= answeredQuestionCount + 1
-        && !dismissed.has(message.id),
-      );
-      if (!messageComesFirst) {
-        startFinaleDrumroll(() => setFinaleDrumrollFinished(true));
-      }
+      setFinalePodiumRevealCount(0);
     }
     const basePoints = activeQuestion.points ?? 0;
     const teamIdToScore =
@@ -1404,9 +1405,10 @@ export default function GameBoardPage() {
                     onClick={() => {
                       setIsFinalePreview(true);
                       setFinaleRevealed(false);
+                      setFinaleDrumrollStarted(false);
                       setFinaleDrumrollFinished(false);
+                      setFinalePodiumRevealCount(0);
                       setShowFinalLeaderboard(true);
-                      startFinaleDrumroll(() => setFinaleDrumrollFinished(true));
                     }}
                   >
                     Preview finale
@@ -1566,6 +1568,7 @@ export default function GameBoardPage() {
           <button
             className="button primary"
             onClick={() => {
+              setFinalePodiumRevealCount(Math.min(3, sortedTeams.length));
               setFinaleRevealed(true);
               setShowFinalLeaderboard(true);
             }}
@@ -1660,12 +1663,43 @@ export default function GameBoardPage() {
           teams={sortedTeams}
           preview={isFinalePreview}
           revealed={finaleRevealed}
+          drumrollStarted={finaleDrumrollStarted}
+          drumrollSeconds={4}
+          stagedReveal={stagedPodiumReveal}
+          revealedPlaceCount={finalePodiumRevealCount}
+          onStartDrumroll={() => {
+            if (finaleDrumrollStarted) return;
+            setFinaleDrumrollStarted(true);
+            setFinaleDrumrollFinished(false);
+            startFinaleDrumroll(() => setFinaleDrumrollFinished(true));
+          }}
           onReveal={() => {
             stopFinaleDrumroll();
+            setFinaleDrumrollStarted(false);
             setFinaleDrumrollFinished(true);
-            if (finaleSoundtrack.status !== "error") finaleSoundtrack.requestPlay();
+            if (stagedPodiumReveal) {
+              setFinalePodiumRevealCount(0);
+            } else {
+              setFinalePodiumRevealCount(Math.min(3, sortedTeams.length));
+              if (finaleSoundtrack.status !== "error") finaleSoundtrack.requestPlay();
+            }
             setFinaleRevealed(true);
           }}
+          onRevealNextPlace={() => {
+            stopFinaleDrumroll();
+            const podiumSize = Math.min(3, sortedTeams.length);
+            const nextRevealCount = Math.min(podiumSize, finalePodiumRevealCount + 1);
+            if (nextRevealCount >= podiumSize) {
+              setFinalePodiumRevealCount(nextRevealCount);
+              if (finaleSoundtrack.status !== "error") finaleSoundtrack.requestPlay();
+              return;
+            }
+            const revealedPlace = podiumSize - nextRevealCount + 1;
+            if (revealedPlace === 2 || revealedPlace === 3) playPodiumReveal(revealedPlace);
+            setFinalePodiumRevealCount(nextRevealCount);
+          }}
+          onRevealCueStart={() => startFinaleDrumroll()}
+          onRevealCueStop={stopFinaleDrumroll}
           music={{
             configured: finaleSoundtrack.configured,
             status: finaleSoundtrack.status,
@@ -1694,18 +1728,6 @@ export default function GameBoardPage() {
             }));
           }}
           onDismiss={() => {
-            const dismissed = new Set(turnState.dismissedHostMessageIds ?? []);
-            dismissed.add(activeHostMessage.id);
-            const anotherMessageIsDue = (settings.hostMessages ?? []).some((message) =>
-              message.id !== activeHostMessage.id
-              && message.text.trim()
-              && message.afterQuestionCount <= answeredQuestionCount
-              && !dismissed.has(message.id),
-            );
-            if (boardComplete && !anotherMessageIsDue) {
-              setFinaleDrumrollFinished(false);
-              startFinaleDrumroll(() => setFinaleDrumrollFinished(true));
-            }
             setTurnState((previous) => ({
               ...previous,
               dismissedHostMessageIds: Array.from(new Set([
@@ -1807,7 +1829,9 @@ export default function GameBoardPage() {
     stopFinaleDrumroll();
     finaleSoundtrack.stop();
     setFinaleRevealed(false);
+    setFinaleDrumrollStarted(false);
     setFinaleDrumrollFinished(false);
+    setFinalePodiumRevealCount(0);
     setShowFinalLeaderboard(false);
     if (isFinalePreview) {
       setIsFinalePreview(false);

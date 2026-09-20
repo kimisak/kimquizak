@@ -9,8 +9,16 @@ import { getTeamAccent, getTeamMarker } from "@/lib/teamPresentation";
 type Props = {
   teams: Team[];
   onClose: () => void;
+  onStartDrumroll: () => void;
   onReveal: () => void;
   revealed: boolean;
+  drumrollStarted: boolean;
+  drumrollSeconds?: number;
+  stagedReveal?: boolean;
+  revealedPlaceCount?: number;
+  onRevealNextPlace?: () => void;
+  onRevealCueStart?: () => void;
+  onRevealCueStop?: () => void;
   preview?: boolean;
   music?: {
     configured: boolean;
@@ -37,18 +45,50 @@ const fireworkOrigins = [
 export function FinalCelebration({
   teams,
   onClose,
+  onStartDrumroll,
   onReveal,
   revealed,
+  drumrollStarted,
+  drumrollSeconds = 4,
+  stagedReveal = false,
+  revealedPlaceCount = 3,
+  onRevealNextPlace,
+  onRevealCueStart,
+  onRevealCueStop,
   preview = false,
   music,
 }: Props) {
   const podium = teams.slice(0, 3);
   const winner = podium[0];
+  const visiblePlaceCount = stagedReveal
+    ? Math.max(0, Math.min(podium.length, revealedPlaceCount))
+    : podium.length;
+  const celebrationActive = !stagedReveal || visiblePlaceCount >= podium.length;
+  const latestRevealedIndex = podium.length - visiblePlaceCount;
+  const nextPlaceIndex = latestRevealedIndex - 1;
+  const intermediateRevealEmoji = latestRevealedIndex === 0
+    ? ["🥇", "🏆", "✨", "🍾", "🥂", "🎉", "👑"]
+    : latestRevealedIndex === 1
+      ? ["🥈", "✨", "🎉", "🥂", "👏"]
+      : ["🥉", "✨", "🎊", "👏", "🌟"];
+  const placeLabel = (index: number) => index === 0 ? "1st" : index === 1 ? "2nd" : "3rd";
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
-  const [forceMotion, setForceMotion] = useState(preview);
+  const [forceMotion, setForceMotion] = useState(true);
   const [cheerBeat, setCheerBeat] = useState(0);
   const [flushVisible, setFlushVisible] = useState(false);
   const [flushBeat, setFlushBeat] = useState(0);
+  const [drumrollCountdown, setDrumrollCountdown] = useState(drumrollSeconds);
+
+  useEffect(() => {
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousDocumentOverflow = document.documentElement.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+      document.documentElement.style.overflow = previousDocumentOverflow;
+    };
+  }, []);
 
   useEffect(() => {
     const media = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -67,10 +107,22 @@ export function FinalCelebration({
   }, [onClose]);
 
   useEffect(() => {
-    if (!revealed || (prefersReducedMotion && !forceMotion)) return;
+    if (!revealed || !celebrationActive || (prefersReducedMotion && !forceMotion)) return;
     const interval = window.setInterval(() => setCheerBeat((beat) => beat + 1), 2600);
     return () => window.clearInterval(interval);
-  }, [revealed, prefersReducedMotion, forceMotion]);
+  }, [celebrationActive, revealed, prefersReducedMotion, forceMotion]);
+
+  useEffect(() => {
+    if (!drumrollStarted) return;
+    const deadline = performance.now() + drumrollSeconds * 1000;
+    const updateCountdown = () => {
+      const secondsLeft = Math.max(1, Math.ceil((deadline - performance.now()) / 1000));
+      setDrumrollCountdown(secondsLeft);
+    };
+    updateCountdown();
+    const interval = window.setInterval(updateCountdown, 50);
+    return () => window.clearInterval(interval);
+  }, [drumrollSeconds, drumrollStarted]);
 
   useEffect(() => {
     if (!flushVisible) return;
@@ -79,7 +131,7 @@ export function FinalCelebration({
   }, [flushVisible]);
 
   useEffect(() => {
-    if (!revealed || teams.length < 4 || (prefersReducedMotion && !forceMotion)) return;
+    if (!revealed || !celebrationActive || teams.length < 4 || (prefersReducedMotion && !forceMotion)) return;
     // A single multi-wave gag; preview brings it forward for testing.
     const delay = preview ? 4000 : 10000;
     let hideTimer: number | undefined;
@@ -92,7 +144,7 @@ export function FinalCelebration({
       window.clearTimeout(showTimer);
       if (hideTimer !== undefined) window.clearTimeout(hideTimer);
     };
-  }, [revealed, preview, teams.length, prefersReducedMotion, forceMotion]);
+  }, [celebrationActive, revealed, preview, teams.length, prefersReducedMotion, forceMotion]);
 
   const renderPlayers = (team: Team, teamIndex: number) => {
     const accent = getTeamAccent(team);
@@ -139,35 +191,64 @@ export function FinalCelebration({
         aria-modal="true"
         aria-labelledby="finale-suspense-title"
       >
-        <section className="finale-suspense-stage">
-          <span className="finale-suspense-kicker">
-            {preview ? "Finale preview" : "The board is complete"}
-          </span>
-          <div className="finale-suspense-mark" aria-hidden>✦</div>
-          <h1 id="finale-suspense-title">Final scores are locked.</h1>
-          <p>Hold the room. The podium is ready when you are.</p>
-          <div className={`finale-suspense-status${soundtrackReady ? " ready" : ""}`} role="status">
-            <span aria-hidden>{soundtrackReady ? "✓" : "…"}</span>
-            {soundtrackReady
-              ? !music?.configured
-                ? "The podium will reveal when the drumroll ends"
-                : music.status === "error"
-                  ? "The podium will reveal without music"
-                  : "Soundtrack cued · reveal follows the drumroll"
-              : "Preparing finale soundtrack · reveal follows automatically"}
-          </div>
-          <button
-            className="finale-suspense-skip"
-            type="button"
-            disabled={!soundtrackReady}
-            onClick={onReveal}
-            autoFocus
-          >
-            Skip drumroll and reveal now
-          </button>
-          <button className="finale-suspense-cancel" type="button" onClick={onClose}>
-            Back to the board
-          </button>
+        <section className={`finale-suspense-stage${drumrollStarted ? " is-counting" : ""}`}>
+          {drumrollStarted ? (
+            <>
+              <h1 className="finale-countdown-heading" id="finale-suspense-title">Final scores locked</h1>
+            <div
+              className="finale-suspense-countdown"
+              role="timer"
+              aria-live="assertive"
+              aria-atomic="true"
+              style={{ "--countdown-progress": `${((drumrollSeconds - drumrollCountdown) / drumrollSeconds) * 100}%` } as CSSProperties}
+            >
+              <div className="finale-countdown-number">
+                <i aria-hidden />
+                <span key={drumrollCountdown}>{drumrollCountdown}</span>
+                <i aria-hidden />
+              </div>
+              <div className="finale-countdown-track" aria-hidden><span /></div>
+              <div className="finale-countdown-beats" aria-hidden>
+                {Array.from({ length: drumrollSeconds }, (_, index) => (
+                  <i className={index < drumrollSeconds - drumrollCountdown ? "elapsed" : ""} key={index} />
+                ))}
+              </div>
+            </div>
+              <button className="finale-suspense-skip" type="button" onClick={onReveal}>
+                Reveal now
+              </button>
+            </>
+          ) : (
+            <>
+              <span className="finale-suspense-kicker">
+                {preview ? "Finale preview" : "The board is complete"}
+              </span>
+              <div className="finale-suspense-mark" aria-hidden>✦</div>
+              <h1 id="finale-suspense-title">Final scores are locked.</h1>
+              <p>Hold the room. Start the reveal when everyone is ready.</p>
+              <div className={`finale-suspense-status${soundtrackReady ? " ready" : ""}`} role="status">
+                <span aria-hidden>{soundtrackReady ? "✓" : "…"}</span>
+                {soundtrackReady
+                  ? !music?.configured
+                    ? "Podium ready · waiting for the host"
+                    : music.status === "error"
+                      ? "Podium ready · soundtrack unavailable"
+                      : "Soundtrack cued · waiting for the host"
+                  : "Preparing finale soundtrack · you can start when the room is ready"}
+              </div>
+              <button
+                className="button primary finale-suspense-start"
+                type="button"
+                onClick={stagedReveal ? onReveal : onStartDrumroll}
+                autoFocus
+              >
+                {stagedReveal ? "Continue to the podium" : <><span aria-hidden>🥁</span> Start drum roll</>}
+              </button>
+              <button className="finale-suspense-cancel" type="button" onClick={onClose}>
+                Back to the board
+              </button>
+            </>
+          )}
         </section>
       </div>
     );
@@ -175,12 +256,12 @@ export function FinalCelebration({
 
   return (
     <div
-      className={`final-score-overlay finale-overlay${forceMotion ? " motion-enabled" : ""}`}
+      className={`final-score-overlay finale-overlay${celebrationActive ? " celebration-active" : " is-staged"}${forceMotion ? " motion-enabled" : ""}`}
       role="dialog"
       aria-modal="true"
       aria-labelledby="finale-title"
     >
-      <div className="finale-fireworks" aria-hidden="true">
+      {celebrationActive && <div className="finale-fireworks" aria-hidden="true">
         <div className="finale-confetti-stream">
           {Array.from({ length: 28 }, (_, index) => (
             <span
@@ -228,52 +309,118 @@ export function FinalCelebration({
             })}
           </div>
         ))}
-      </div>
+      </div>}
 
       <section className="finale-stage">
         <header className="finale-header">
           <span className="finale-kicker">
-            {preview ? "Finale preview" : "The final scores are in"}
+            {celebrationActive ? preview ? "Finale preview" : "The final scores are in" : "One place at a time"}
           </span>
-          <h1 id="finale-title">That&apos;s a wrap!</h1>
+          <h1 id="finale-title">{celebrationActive ? "That's a wrap!" : "Final podium"}</h1>
           <p>
-            {winner
+            {celebrationActive && winner
               ? <>Make some noise for <strong>{winner.name}</strong>!</>
-              : "Your final podium will take the stage here."}
+              : celebrationActive ? "Your final podium will take the stage here." : "The host controls every reveal."}
           </p>
         </header>
 
         <section className="finale-podium" aria-label="Final podium">
           {podium.length > 0 ? podium.map((team, index) => {
             const accent = getTeamAccent(team);
+            const isPlaceVisible = index >= latestRevealedIndex;
+            const isLatestReveal = isPlaceVisible && index === latestRevealedIndex;
             return (
               <article
                 key={team.id}
-                className={`finale-team finale-team-${index + 1}${index === 2 && flushVisible ? " is-flushing" : ""}`}
+                className={`finale-team finale-team-${index + 1}${isPlaceVisible ? " is-place-visible" : " is-place-concealed"}${isLatestReveal ? " is-latest-reveal" : ""}${index === 2 && flushVisible ? " is-flushing" : ""}`}
                 style={{
                   "--finale-team-base": accent.base,
                   "--finale-team-accent": accent.onLight,
                   "--finale-team-glow": accent.glow,
                 } as CSSProperties}
               >
-                <span className="finale-medal" aria-label={`Place ${index + 1}`} role="img">
-                  {podiumMedals[index]}
-                </span>
-                <div className="finale-team-identity">
-                  <div
-                    className="finale-team-dance"
-                    style={{ animationDelay: `${index * -0.27}s` }}
-                  >
-                    <TeamPill
-                      name={team.name}
-                      color={accent.base}
-                      emoji={getTeamMarker(team)}
-                    />
-                  </div>
-                  {renderPlayers(team, index)}
+                <div className="finale-team-content" aria-hidden={!isPlaceVisible}>
+                    <span className="finale-medal" aria-label={`Place ${index + 1}`} role="img">
+                      {podiumMedals[index]}
+                    </span>
+                    <div className="finale-team-identity">
+                      <div
+                        className="finale-team-dance"
+                        style={{ animationDelay: `${index * -0.27}s` }}
+                      >
+                        <TeamPill
+                          name={team.name}
+                          color={accent.base}
+                          emoji={getTeamMarker(team)}
+                        />
+                      </div>
+                      {renderPlayers(team, index)}
+                    </div>
+                    <strong className="finale-score">{team.score}<small> pts</small></strong>
                 </div>
-                <strong className="finale-score">{team.score}<small> pts</small></strong>
-                {index === 2 && flushVisible && teams.length > 3 && (
+                {!isPlaceVisible && (
+                  <div className="finale-place-concealed" aria-label={`${placeLabel(index)} place is hidden`}>
+                    <span className="finale-skeleton-medal" aria-hidden>✦</span>
+                    <div className="finale-skeleton-identity" aria-hidden>
+                      <span className="finale-skeleton-team">
+                        <i />
+                        <strong>{placeLabel(index)} place</strong>
+                      </span>
+                      {team.players.some((player) => player.name.trim()) && (
+                        <span className="finale-skeleton-players">
+                          {team.players.filter((player) => player.name.trim()).map((player) => (
+                            <i key={player.id} />
+                          ))}
+                        </span>
+                      )}
+                    </div>
+                    <span className="finale-skeleton-score" aria-hidden />
+                  </div>
+                )}
+                {stagedReveal && isLatestReveal && (
+                  <div
+                    className={`finale-intermediate-effects finale-intermediate-place-${index + 1}`}
+                    key={`intermediate-reveal-${visiblePlaceCount}`}
+                    aria-hidden="true"
+                  >
+                    <div className="finale-intermediate-flash" />
+                    <div className="finale-intermediate-firework">
+                      <span className="finale-intermediate-core">{intermediateRevealEmoji[0]}</span>
+                      {Array.from({ length: 16 }, (_, particleIndex) => {
+                        const angle = (Math.PI * 2 * particleIndex) / 16;
+                        const distance = 118 + (particleIndex % 4) * 24;
+                        return (
+                          <span
+                            className="finale-intermediate-particle"
+                            key={particleIndex}
+                            style={{
+                              "--intermediate-x": `${Math.round(Math.cos(angle) * distance)}px`,
+                              "--intermediate-y": `${Math.round(Math.sin(angle) * distance)}px`,
+                              "--intermediate-delay": `${particleIndex * 22}ms`,
+                            } as CSSProperties}
+                          >
+                            {intermediateRevealEmoji[particleIndex % intermediateRevealEmoji.length]}
+                          </span>
+                        );
+                      })}
+                    </div>
+                    <div className="finale-intermediate-ooze">
+                      {Array.from({ length: 18 }, (_, oozeIndex) => (
+                        <span
+                          key={oozeIndex}
+                          style={{
+                            "--intermediate-ooze-left": `${14 + ((oozeIndex * 43) % 72)}%`,
+                            "--intermediate-ooze-drift": `${((oozeIndex % 7) - 3) * 19}px`,
+                            "--intermediate-ooze-delay": `${240 + (oozeIndex % 9) * 85}ms`,
+                          } as CSSProperties}
+                        >
+                          {intermediateRevealEmoji[(oozeIndex + 1) % intermediateRevealEmoji.length]}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {isPlaceVisible && index === 2 && flushVisible && teams.length > 3 && (
                   <div className="finale-flush" aria-hidden="true">
                     <span className="finale-flush-source">🚽</span>
                     <span className="finale-flush-swirl">🌀</span>
@@ -298,7 +445,21 @@ export function FinalCelebration({
           )}
         </section>
 
-        {teams.length > 3 && (
+        {stagedReveal && !celebrationActive && nextPlaceIndex >= 0 && (
+          <button
+            className="button primary finale-place-reveal"
+            type="button"
+            onClick={onRevealNextPlace}
+            onMouseEnter={onRevealCueStart}
+            onMouseLeave={onRevealCueStop}
+            onFocus={onRevealCueStart}
+            onBlur={onRevealCueStop}
+          >
+            Reveal {placeLabel(nextPlaceIndex)} place
+          </button>
+        )}
+
+        {celebrationActive && teams.length > 3 && (
           <div className="finale-everyone">
             <span>And a huge cheer for</span>
             <div>
@@ -313,7 +474,7 @@ export function FinalCelebration({
         )}
 
         <div className="finale-actions">
-          {music?.configured && (
+          {celebrationActive && music?.configured && (
             <div className={`finale-music-status ${music.status}`} role="status">
               <span aria-hidden>{music.status === "playing" ? "♫" : "♪"}</span>
               <div>
@@ -337,7 +498,7 @@ export function FinalCelebration({
               )}
             </div>
           )}
-          {prefersReducedMotion && (
+          {celebrationActive && prefersReducedMotion && (
             <button
               className="button finale-motion-toggle"
               type="button"

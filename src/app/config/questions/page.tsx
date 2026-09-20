@@ -195,6 +195,7 @@ function HostMessageEditor({
         {teams.length > 0
           ? ` Team range: 1–${teams.length}. Member ranges: ${memberRanges}.`
           : " Add teams to make numbered variables available."}
+        {" "}{"{males}"} and {"{females}"} show every labelled player; {"{random.male}"} and {"{random.female}"} draw one individual.
         {" "}Countdowns accept minutes, seconds, or both: {"{5m}"}, {"{10s}"}, {"{1m30s}"}, or {"{100s}"}.
       </small>
       <div className={`question-host-message-reveal-setting${hasRandomVariable ? "" : " direct-preview"}`}>
@@ -2497,6 +2498,22 @@ const TimelineFields = React.memo(function TimelineFields({
           </div>
 
           <div className="question-finale-music-setting">
+            <label className="question-finale-music-toggle question-finale-reveal-toggle" htmlFor="question-staged-podium-reveal">
+              <input
+                id="question-staged-podium-reveal"
+                type="checkbox"
+                checked={settings.stagedPodiumReveal !== false}
+                onChange={(event) => setSettings((previous) => ({
+                  ...previous,
+                  stagedPodiumReveal: event.target.checked,
+                }))}
+              />
+              <span>
+                <strong>Reveal podium one place at a time</strong>
+                <small>Host reveals bronze, then silver, then gold. The WRAP song and full celebration begin with first place.</small>
+              </span>
+            </label>
+
             <label className="question-finale-music-toggle" htmlFor="question-finale-music-enabled">
               <input
                 id="question-finale-music-enabled"

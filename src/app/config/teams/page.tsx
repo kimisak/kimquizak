@@ -457,31 +457,37 @@ export default function TeamConfigPage() {
     setTeams((previous) => {
       const selectedCount = Math.max(1, Math.min(distributionTeamCount, previous.length));
       const selectedIds = new Set(previous.slice(0, selectedCount).map((team) => team.id));
-      const draftByName = new Map(parsed.players.map((player) => [normalizePersonName(player.name), player] as const));
-      const previousNames = new Set(
+      const previousPlayersByName = new Map(
         previous.flatMap((team) => team.players)
           .filter((player) => player.name.trim())
-          .map((player) => normalizePersonName(player.name)),
+          .map((player) => [normalizePersonName(player.name), player] as const),
       );
-      const playersToCreate = parsed.players.filter((player) => !previousNames.has(normalizePersonName(player.name)));
+      const importedNames = new Set(parsed.players.map((player) => normalizePersonName(player.name)));
       const next = previous.map((team) => ({
         ...team,
         players: team.players
-          .filter((player) => !selectedIds.has(team.id) || player.name.trim())
-          .map((player) => {
-            const draft = draftByName.get(normalizePersonName(player.name));
-            return draft
-              ? { ...player, name: draft.name, gender: draft.gender }
-              : player;
-          }),
+          .filter((player) => (
+            !importedNames.has(normalizePersonName(player.name))
+            && (!selectedIds.has(team.id) || player.name.trim())
+          )),
       }));
-      const playerNumbers = getAvailableDefaultPlayerNumbers(next, playersToCreate.length);
-      const importedPlayers = playersToCreate.map((player, index) => ({
-        id: makeId("p"),
-        name: player.name,
-        gender: player.gender,
-        placeholder: `Player ${playerNumbers[index]}`,
-      }));
+      const playersToCreateCount = parsed.players.filter((player) => (
+        !previousPlayersByName.has(normalizePersonName(player.name))
+      )).length;
+      const playerNumbers = getAvailableDefaultPlayerNumbers(next, playersToCreateCount);
+      let nextPlayerNumberIndex = 0;
+      const importedPlayers = parsed.players.map((player) => {
+        const existing = previousPlayersByName.get(normalizePersonName(player.name));
+        if (existing) return { ...existing, name: player.name, gender: player.gender };
+        const created = {
+          id: makeId("p"),
+          name: player.name,
+          gender: player.gender,
+          placeholder: `Player ${playerNumbers[nextPlayerNumberIndex]}`,
+        };
+        nextPlayerNumberIndex += 1;
+        return created;
+      });
 
       importedPlayers.forEach((player) => {
         const candidates = shuffleArray(next.slice(0, selectedCount).map((team, index) => ({ team, index })));
@@ -533,9 +539,7 @@ export default function TeamConfigPage() {
       updatedPlayerCount > 0 ? `${updatedPlayerCount} updated` : "",
     ].filter(Boolean);
     setPlayerImportFeedback(
-      createdPlayerCount > 0
-        ? `${feedbackParts.join(" · ")}. New players were gender-balanced across teams.`
-        : `${feedbackParts.join(" · ")}. Existing players were updated in place.`,
+      `${feedbackParts.join(" · ")}. Players were gender-balanced across ${Math.min(distributionTeamCount, teams.length)} teams.`,
     );
   };
 
@@ -695,6 +699,10 @@ export default function TeamConfigPage() {
     });
   });
   const connectionsOpen = connectionsOpenOverride ?? connections.length > 0;
+  const totalPlayerCount = teams.reduce(
+    (total, team) => total + team.players.filter((player) => player.name.trim()).length,
+    0,
+  );
 
   return (
     <main className="admin-page teams-page">
@@ -860,7 +868,11 @@ export default function TeamConfigPage() {
       <div className="team-editor-toolbar">
         <div>
           <h2>Teams</h2>
-          <span>{teams.length} {teams.length === 1 ? "team" : "teams"}</span>
+          <span>
+            {teams.length} {teams.length === 1 ? "team" : "teams"}
+            {" · "}
+            {totalPlayerCount} {totalPlayerCount === 1 ? "player" : "players"}
+          </span>
         </div>
         <div className="team-editor-toolbar-actions">
           <div className="shuffle-player-control">

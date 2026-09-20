@@ -29,6 +29,7 @@ export type AppSettings = {
   finaleMusicEndSeconds: number;
   finaleMusicDurationSeconds?: number;
   finaleMusicVolume: number;
+  stagedPodiumReveal: boolean;
   hostMessages: HostMessage[];
   boardRevealRules?: BoardRevealRules;
 };
@@ -44,6 +45,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   finaleMusicStartSeconds: 84,
   finaleMusicEndSeconds: 108,
   finaleMusicVolume: 35,
+  stagedPodiumReveal: true,
   hostMessages: [],
   boardRevealRules: {},
 };

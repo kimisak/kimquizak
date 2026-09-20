@@ -1,0 +1,10 @@
+Podium silver Anime WOW
+
+Source recording:
+"Anime WOW - Sound Effect" by ejah_music / Delon_Boomkin
+https://pixabay.com/sound-effects/film-special-effects-anime-wow-sound-effect-359837/
+
+License: Pixabay Content License
+https://pixabay.com/service/license-summary/
+
+This app removes only the silent lead-in and normalizes playback loudness. The complete active sound and its natural tail are preserved.

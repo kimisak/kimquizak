@@ -5,6 +5,10 @@ export const HOST_MESSAGE_VARIABLES = [
   { token: "{team1.member1}", label: "Team 1 · member 1" },
   { token: "{random.team}", label: "Random team" },
   { token: "{random.player}", label: "Random player" },
+  { token: "{males}", label: "All male players" },
+  { token: "{females}", label: "All female players" },
+  { token: "{random.male}", label: "One random male player" },
+  { token: "{random.female}", label: "One random female player" },
   { token: "{1-10}", label: "Random number from 1 to 10" },
   { token: "{5m}", label: "Five-minute countdown" },
 ] as const;
@@ -45,6 +49,8 @@ export function hasRandomHostMessageVariable(template: string) {
     if (
       variable === "random.team"
       || variable === "random.player"
+      || variable === "random.male"
+      || variable === "random.female"
       || parseHostMessageNumberRange(variable)
     ) return true;
   }
@@ -67,6 +73,10 @@ export function getUnknownHostMessageVariables(template: string) {
     if (
       variable === "random.team"
       || variable === "random.player"
+      || variable === "random.male"
+      || variable === "random.female"
+      || variable === "males"
+      || variable === "females"
       || parseHostMessageNumberRange(variable)
       || parseHostMessageCountdown(variable)
       || /^team\d+$/.test(variable)
@@ -92,8 +102,19 @@ export function getUnavailableHostMessageVariables(template: string, teams: Team
     } else if (variable === "random.team" && teams.length === 0) {
       unavailable.add(match[0]);
     } else if (
-      variable === "random.player"
-      && !teams.some((team) => team.players.some((player) => player.name.trim()))
+      (variable === "random.player" || variable === "random.male" || variable === "random.female")
+      && !teams.some((team) => team.players.some((player) => (
+        player.name.trim()
+        && (variable === "random.player"
+          || player.gender === (variable === "random.male" ? "M" : "F"))
+      )))
+    ) {
+      unavailable.add(match[0]);
+    } else if (
+      (variable === "males" || variable === "females")
+      && !teams.some((team) => team.players.some((player) => (
+        player.name.trim() && player.gender === (variable === "males" ? "M" : "F")
+      )))
     ) {
       unavailable.add(match[0]);
     }
@@ -104,6 +125,8 @@ export function getUnavailableHostMessageVariables(template: string, teams: Team
 export function getHostMessageRandomPoolIssues(template: string, teams: Team[]) {
   const randomTeamDraws = template.match(/\{random\.team\}/gi)?.length ?? 0;
   const randomPlayerDraws = template.match(/\{random\.player\}/gi)?.length ?? 0;
+  const randomMaleDraws = template.match(/\{random\.male\}/gi)?.length ?? 0;
+  const randomFemaleDraws = template.match(/\{random\.female\}/gi)?.length ?? 0;
   const namedPlayerCount = teams.reduce((count, team) => (
     count + team.players.filter((player) => player.name.trim()).length
   ), 0);
@@ -112,8 +135,21 @@ export function getHostMessageRandomPoolIssues(template: string, teams: Team[]) 
   if (randomTeamDraws > teams.length) {
     issues.push(`${randomTeamDraws} random team draws need ${randomTeamDraws} configured teams (currently ${teams.length}).`);
   }
-  if (randomPlayerDraws > namedPlayerCount) {
-    issues.push(`${randomPlayerDraws} random player draws need ${randomPlayerDraws} named players (currently ${namedPlayerCount}).`);
+  const totalRandomPlayerDraws = randomPlayerDraws + randomMaleDraws + randomFemaleDraws;
+  if (totalRandomPlayerDraws > namedPlayerCount) {
+    issues.push(`${totalRandomPlayerDraws} random player draws need ${totalRandomPlayerDraws} named players (currently ${namedPlayerCount}).`);
+  }
+  const malePlayerCount = teams.reduce((count, team) => (
+    count + team.players.filter((player) => player.name.trim() && player.gender === "M").length
+  ), 0);
+  const femalePlayerCount = teams.reduce((count, team) => (
+    count + team.players.filter((player) => player.name.trim() && player.gender === "F").length
+  ), 0);
+  if (randomMaleDraws > malePlayerCount) {
+    issues.push(`${randomMaleDraws} random male draws need ${randomMaleDraws} male players (currently ${malePlayerCount}).`);
+  }
+  if (randomFemaleDraws > femalePlayerCount) {
+    issues.push(`${randomFemaleDraws} random female draws need ${randomFemaleDraws} female players (currently ${femalePlayerCount}).`);
   }
   for (const match of template.matchAll(VARIABLE_PATTERN)) {
     const range = parseHostMessageNumberRange(match[1]);
@@ -153,9 +189,14 @@ export function resolveHostMessageTemplate(
       value: player.name.trim(),
       teamId: team.id,
       playerId: player.id,
+      gender: player.gender,
     })));
   const teamPool = [...availableTeams];
   const playerPool = [...availablePlayers];
+  const malePlayerPool = availablePlayers.filter((candidate) => candidate.gender === "M");
+  const femalePlayerPool = availablePlayers.filter((candidate) => candidate.gender === "F");
+  let remainingMaleDraws = template.match(/\{random\.male\}/gi)?.length ?? 0;
+  let remainingFemaleDraws = template.match(/\{random\.female\}/gi)?.length ?? 0;
   const randomSelections: Array<{
     kind: "team" | "player" | "number";
     value: string;
@@ -168,18 +209,38 @@ export function resolveHostMessageTemplate(
   }> = [];
 
   const drawWithoutReplacement = (
-    pool: Array<{ value: string; teamId: string; playerId?: string }>,
+    pool: Array<{ value: string; teamId: string; playerId?: string; gender?: "M" | "F" }>,
     kind: "team" | "player",
+    reserveGenderPools = false,
   ) => {
     if (!pool.length) return kind === "team" ? "no other team" : "no other player";
-    const candidates = pool.map((candidate) => candidate.value);
-    const index = Math.min(pool.length - 1, Math.floor(random() * pool.length));
-    const [selection] = pool.splice(index, 1);
+    const eligiblePool = reserveGenderPools
+      ? pool.filter((candidate) => (
+          candidate.gender === "M"
+            ? malePlayerPool.length > remainingMaleDraws
+            : candidate.gender === "F"
+              ? femalePlayerPool.length > remainingFemaleDraws
+              : true
+        ))
+      : pool;
+    const drawPool = eligiblePool.length > 0 ? eligiblePool : pool;
+    const candidates = drawPool.map((candidate) => candidate.value);
+    const selectedIndex = Math.min(drawPool.length - 1, Math.floor(random() * drawPool.length));
+    const selection = drawPool[selectedIndex];
+    if (kind === "player" && selection.playerId) {
+      [playerPool, malePlayerPool, femalePlayerPool].forEach((candidatePool) => {
+        const duplicateIndex = candidatePool.findIndex((candidate) => candidate.playerId === selection.playerId);
+        if (duplicateIndex >= 0) candidatePool.splice(duplicateIndex, 1);
+      });
+    } else {
+      const index = pool.findIndex((candidate) => candidate.teamId === selection.teamId);
+      if (index >= 0) pool.splice(index, 1);
+    }
     randomSelections.push({
       kind,
       value: selection.value,
       candidates,
-      selectedIndex: index,
+      selectedIndex,
       teamId: selection.teamId,
       playerId: selection.playerId,
     });
@@ -189,7 +250,15 @@ export function resolveHostMessageTemplate(
   const resolveVariable = (rawVariable: string) => {
     const variable = rawVariable.toLowerCase();
     if (variable === "random.team") return drawWithoutReplacement(teamPool, "team");
-    if (variable === "random.player") return drawWithoutReplacement(playerPool, "player");
+    if (variable === "random.player") return drawWithoutReplacement(playerPool, "player", true);
+    if (variable === "random.male") {
+      remainingMaleDraws = Math.max(0, remainingMaleDraws - 1);
+      return drawWithoutReplacement(malePlayerPool, "player");
+    }
+    if (variable === "random.female") {
+      remainingFemaleDraws = Math.max(0, remainingFemaleDraws - 1);
+      return drawWithoutReplacement(femalePlayerPool, "player");
+    }
     const numberRange = parseHostMessageNumberRange(variable);
     if (numberRange) {
       const selectedIndex = Math.min(
@@ -217,6 +286,18 @@ export function resolveHostMessageTemplate(
     if (countdownSeconds) return formatHostMessageCountdown(countdownSeconds);
     const cached = cache.get(variable);
     if (cached) return cached;
+
+    if (variable === "males" || variable === "females") {
+      const gender = variable === "males" ? "M" : "F";
+      const names = teams.flatMap((team) => team.players
+        .filter((player) => player.gender === gender && player.name.trim())
+        .map((player) => player.name.trim()));
+      const resolved = names.length > 0
+        ? names.join(", ")
+        : `no ${variable}`;
+      cache.set(variable, resolved);
+      return resolved;
+    }
 
     const memberMatch = variable.match(/^team(\d+)\.member(\d+)$/);
     const teamMatch = variable.match(/^team(\d+)$/);

@@ -18,8 +18,9 @@ type Props = {
 
 type MessagePart = {
   value: string;
-  kind?: "team" | "player" | "number" | "countdown";
+  kind?: "team" | "player" | "player-group" | "number" | "countdown";
   team?: Team;
+  groupPlayers?: Array<{ id: string; name: string; team: Team }>;
   countdownSeconds?: number;
 };
 
@@ -52,7 +53,25 @@ function createMessageParts(template: string, resolution: ResolvedHostMessage, t
     if (countdownSeconds) {
       value = formatHostMessageCountdown(countdownSeconds);
       kind = "countdown";
-    } else if (variable === "random.team" || variable === "random.player" || numberRange) {
+    } else if (variable === "males" || variable === "females") {
+      const gender = variable === "males" ? "M" : "F";
+      const groupPlayers = teams.flatMap((candidateTeam) => candidateTeam.players
+        .filter((player) => player.gender === gender && player.name.trim())
+        .map((player) => ({
+          id: player.id,
+          name: player.name.trim(),
+          team: candidateTeam,
+        })));
+      parts.push({ value, kind: "player-group", groupPlayers });
+      cursor = offset + match[0].length;
+      continue;
+    } else if (
+      variable === "random.team"
+      || variable === "random.player"
+      || variable === "random.male"
+      || variable === "random.female"
+      || numberRange
+    ) {
       const selection = resolution.randomSelections?.[randomSelectionIndex];
       randomSelectionIndex += 1;
       value = selection?.value ?? resolution.variables[variable] ?? match[0];
@@ -117,6 +136,43 @@ export function HostMessageRichText({ template, resolution, teams, countdownsAct
       return (
         <span className="host-message-entity host-message-number" key={index}>
           <span className="host-message-entity-name">{part.value}</span>
+        </span>
+      );
+    }
+    if (part.kind === "player-group") {
+      const groupPlayers = part.groupPlayers ?? [];
+      const density = groupPlayers.length > 16
+        ? " is-crowded"
+        : groupPlayers.length > 10
+          ? " is-dense"
+          : groupPlayers.length > 6
+            ? " is-compact"
+            : "";
+      return (
+        <span
+          className={`host-message-player-group${density}`}
+          key={index}
+          role="group"
+          aria-label={groupPlayers.map((player) => player.name).join(", ")}
+        >
+          {groupPlayers.map((player) => {
+            const accent = getTeamAccent(player.team);
+            return (
+              <span
+                className="host-message-entity host-message-player"
+                key={player.id}
+                style={{
+                  "--host-entity-base": accent.base,
+                  "--host-entity-color": accent.glow,
+                  "--host-entity-contrast": accent.onDark,
+                  "--host-entity-tint": accent.tint,
+                } as CSSProperties}
+              >
+                <span className="host-message-entity-emoji" aria-hidden>{getTeamMarker(player.team)}</span>
+                <span className="host-message-entity-name">{player.name}</span>
+              </span>
+            );
+          })}
         </span>
       );
     }

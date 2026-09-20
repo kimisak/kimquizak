@@ -29,6 +29,7 @@ function FittedHostMessage({
   const innerRef = useRef<HTMLSpanElement>(null);
   const characterCount = resolution.text.trim().length;
   const lineCount = resolution.text.split("\n").length;
+  const hasPlayerGroup = /\{(?:males|females)\}/i.test(message.text);
   const sizeClass = characterCount <= 36 && lineCount <= 2
     ? " host-message-copy-hero"
     : characterCount <= 90 && lineCount <= 3
@@ -46,7 +47,7 @@ function FittedHostMessage({
     const fit = () => {
       copy.style.removeProperty("font-size");
       const maximum = Number.parseFloat(window.getComputedStyle(copy).fontSize);
-      let lower = 28;
+      let lower = hasPlayerGroup ? 16 : 28;
       let upper = Math.max(lower, maximum);
 
       for (let iteration = 0; iteration < 9; iteration += 1) {
@@ -75,7 +76,7 @@ function FittedHostMessage({
       contentObserver.disconnect();
       window.cancelAnimationFrame(animationFrame);
     };
-  }, [message.text, resolution.text, teams]);
+  }, [hasPlayerGroup, message.text, resolution.text, teams]);
 
   return (
     <p id="host-message-copy" className={`host-message-copy${sizeClass}`} ref={copyRef}>

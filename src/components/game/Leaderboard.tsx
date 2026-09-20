@@ -52,6 +52,9 @@ const playgroundProps: Array<{ kind: TeamEffectKind; emoji: string; label: strin
 const playerTemperaments = ["bouncy", "cool", "shy", "dramatic"] as const;
 const neutralMoods = ["🙂", "😌", "😐", "🤔", "🤓", "🧐", "😶", "😙", "🙃", "😴", "😊", "😗"] as const;
 const scoreSuspenseMoods = ["😰", "😬", "🫣", "🤯", "😵‍💫", "😱", "🤞", "😶‍🌫️", "🫨", "😳", "🥶", "😈"] as const;
+const PLAYER_LAUNCH_SPEED_THRESHOLD = 0.9;
+const PLAYER_DROP_HEIGHT_THRESHOLD = 24;
+const PLAYER_RELEASE_VELOCITY_DECAY_MS = 140;
 
 const bondVisuals: Record<PlayerEncounterKind, { moods: readonly [string, string]; particles: readonly string[] }> = {
   sweethearts: { moods: ["😚", "🥰"], particles: ["💕", "❤️", "💖", "💗", "🫶", "💘", "❤️"] },
@@ -326,8 +329,18 @@ export function Leaderboard({ teams, onAdjust, onSet, history = [], onUndo, comp
     element.setPointerCapture?.(event.pointerId);
 
     const move = (pointerEvent: PointerEvent) => movePlayerDrag(pointerEvent);
-    const finish = (pointerEvent: PointerEvent) => finishPlayerDrag(pointerEvent.pointerId);
-    const cancel = (pointerEvent: PointerEvent) => finishPlayerDrag(pointerEvent.pointerId);
+    const finish = (pointerEvent: PointerEvent) => finishPlayerDrag(
+      pointerEvent.pointerId,
+      pointerEvent.timeStamp,
+      pointerEvent.clientX,
+      pointerEvent.clientY,
+    );
+    const cancel = (pointerEvent: PointerEvent) => finishPlayerDrag(
+      pointerEvent.pointerId,
+      pointerEvent.timeStamp,
+      pointerEvent.clientX,
+      pointerEvent.clientY,
+    );
     const removeListeners = () => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", finish);
@@ -370,8 +383,10 @@ export function Leaderboard({ teams, onAdjust, onSet, history = [], onUndo, comp
     const y = event.clientY - drag.startY;
     const now = event.timeStamp;
     const elapsed = Math.max(8, now - drag.lastMoveAt);
-    drag.velocityX = drag.velocityX * 0.55 + ((x - drag.lastX) / elapsed) * 0.45;
-    drag.velocityY = drag.velocityY * 0.55 + ((y - drag.lastY) / elapsed) * 0.45;
+    // Weight the newest movement heavily so a quick final flick actually feels
+    // stronger than a slow placement over the same distance.
+    drag.velocityX = drag.velocityX * 0.28 + ((x - drag.lastX) / elapsed) * 0.72;
+    drag.velocityY = drag.velocityY * 0.28 + ((y - drag.lastY) / elapsed) * 0.72;
     drag.lastX = x;
     drag.lastY = y;
     drag.lastMoveAt = now;
@@ -433,9 +448,24 @@ export function Leaderboard({ teams, onAdjust, onSet, history = [], onUndo, comp
     drag.collisions = collisions;
   };
 
-  const finishPlayerDrag = (pointerId: number) => {
+  const finishPlayerDrag = (
+    pointerId: number,
+    releasedAt: number,
+    releaseClientX: number,
+    releaseClientY: number,
+  ) => {
     const drag = activeDrag.current;
     if (!drag || drag.pointerId !== pointerId) return;
+    const releaseX = releaseClientX - drag.startX;
+    const releaseY = releaseClientY - drag.startY;
+    const finalMoveElapsed = releasedAt - drag.lastMoveAt;
+    if (finalMoveElapsed > 0 && (releaseX !== drag.x || releaseY !== drag.y)) {
+      const sampleElapsed = Math.max(4, finalMoveElapsed);
+      drag.velocityX = drag.velocityX * 0.2 + ((releaseX - drag.x) / sampleElapsed) * 0.8;
+      drag.velocityY = drag.velocityY * 0.2 + ((releaseY - drag.y) / sampleElapsed) * 0.8;
+      drag.x = releaseX;
+      drag.y = releaseY;
+    }
     activeDrag.current = null;
     drag.removeListeners();
     setDraggedPlayerId(null);
@@ -505,14 +535,23 @@ export function Leaderboard({ teams, onAdjust, onSet, history = [], onUndo, comp
       }, 5200));
     }
     const releaseDistance = Math.hypot(drag.x, drag.y);
-    const releaseSpeed = Math.hypot(drag.velocityX, drag.velocityY);
-    const shouldDrop = Boolean(visitedTeam) || releaseDistance >= 64 || releaseSpeed >= 0.55;
-    if (!shouldDrop) {
+    const releaseIdleTime = Math.max(0, releasedAt - drag.lastMoveAt);
+    const releaseVelocityDecay = Math.max(0, 1 - releaseIdleTime / PLAYER_RELEASE_VELOCITY_DECAY_MS);
+    const releaseVelocityX = drag.velocityX * releaseVelocityDecay;
+    const releaseVelocityY = drag.velocityY * releaseVelocityDecay;
+    const releaseSpeed = Math.hypot(releaseVelocityX, releaseVelocityY);
+    const wasLaunched = releaseDistance >= 24 && releaseSpeed >= PLAYER_LAUNCH_SPEED_THRESHOLD;
+    const wasDroppedFromAbove = drag.y <= -PLAYER_DROP_HEIGHT_THRESHOLD;
+    const shouldFall = wasLaunched || wasDroppedFromAbove;
+    if (!visitedTeam && !shouldFall) {
+      // A normal reposition is not a throw. Return from every direction without
+      // the exaggerated walk/fall sequence (especially for horizontal moves).
+      const gentleDuration = Math.max(280, Math.min(700, 260 + releaseDistance * 1.05));
       const gentleReturn = element.animate([
         { transform: `translate3d(${drag.x}px,${drag.y}px,0) scale(1.035) rotate(${Math.max(-3, Math.min(3, drag.x / 38))}deg)` },
-        { transform: `translate3d(${drag.x * -0.07}px,${drag.y * -0.07}px,0) scale(1.01) rotate(0deg)`, offset: 0.78 },
+        { transform: `translate3d(${drag.x * 0.3}px,${drag.y * 0.3}px,0) scale(1.01) rotate(0deg)`, offset: 0.7 },
         { transform: "translate3d(0,0,0) scale(1) rotate(0deg)" },
-      ], { duration: 520, easing: "cubic-bezier(.2,.88,.24,1)", fill: "both" });
+      ], { duration: gentleDuration, easing: "cubic-bezier(.2,.78,.22,1)", fill: "both" });
       returnAnimations.current.set(drag.playerId, gentleReturn);
       if (drag.isDizzy) {
         const dizzyTimer = window.setTimeout(() => {
@@ -541,17 +580,30 @@ export function Leaderboard({ teams, onAdjust, onSet, history = [], onUndo, comp
     const rowRect = visitedTeam
       ? teamElements.current.get(visitedTeam.id)?.getBoundingClientRect()
       : element.closest(".scoreboard-team")?.getBoundingClientRect();
-    const projectedX = drag.x + Math.max(-70, Math.min(70, drag.velocityX * 105));
+    const launchFlightMs = Math.max(220, Math.min(620, 150 + releaseSpeed * 190));
+    const maxHorizontalLaunch = Math.min(460, Math.max(210, window.innerWidth * 0.32));
+    const launchTravelX = Math.max(
+      -maxHorizontalLaunch,
+      Math.min(maxHorizontalLaunch, releaseVelocityX * launchFlightMs * 0.62),
+    );
+    const projectedX = wasLaunched
+      ? drag.x + launchTravelX
+      : drag.x;
     const rowFloorY = rowRect ? rowRect.bottom - drag.origin.bottom - 8 : drag.y + 30;
-    const projectedFall = Math.max(24, Math.min(130, 34 + drag.velocityY * 85));
-    const groundY = visitedTeam
-      ? Math.max(rowFloorY, drag.y + 8)
-      : Math.max(rowFloorY, drag.y + projectedFall);
+    const projectedFall = Math.max(
+      34,
+      Math.min(190, 42 + releaseVelocityY * launchFlightMs * 0.34 + releaseSpeed * 24),
+    );
+    const groundY = shouldFall
+      ? visitedTeam
+        ? Math.max(rowFloorY, drag.y + 8)
+        : Math.max(rowFloorY, drag.y + projectedFall)
+      : drag.y;
     const homeDistance = Math.hypot(projectedX, groundY);
     const duration = visitedTeam
-      ? Math.min(5200, 3350 + homeDistance * 2.7)
-      : Math.min(3900, 2150 + homeDistance * 2.7);
-    const releaseRotation = Math.max(-11, Math.min(11, drag.velocityX * 8 + drag.x / 30));
+      ? Math.max(1450, Math.min(3400, 1050 + homeDistance * 3.2))
+      : Math.max(1250, Math.min(3200, 900 + homeDistance * 3));
+    const releaseRotation = Math.max(-11, Math.min(11, releaseVelocityX * 8 + drag.x / 30));
     const at = (progress: number, step: number) => {
       const remaining = 1 - progress;
       const x = projectedX * remaining;
@@ -559,13 +611,36 @@ export function Leaderboard({ teams, onAdjust, onSet, history = [], onUndo, comp
       const rotation = step % 2 === 0 ? -4 : 4;
       return `translate3d(${x}px,${y}px,0) scale(1) rotate(${rotation}deg)`;
     };
-    const fallAndRecover: Keyframe[] = [
+    const launchArcHeight = Math.max(
+      52,
+      Math.min(170, 42 + releaseSpeed * 28 + Math.max(0, -releaseVelocityY) * 38),
+    );
+    const launchArcFrame = (progress: number, offset: number): Keyframe => {
+      const x = drag.x + (projectedX - drag.x) * progress;
+      const linearY = drag.y + (groundY - drag.y) * progress;
+      const y = linearY - launchArcHeight * 4 * progress * (1 - progress);
+      return {
+        transform: `translate3d(${x}px,${y}px,0) scale(1.06) rotate(${releaseRotation * (.4 + progress * .6)}deg)`,
+        offset,
+        easing: "linear",
+      };
+    };
+    const fallAndRecover: Keyframe[] = shouldFall ? [
       { transform: `translate3d(${drag.x}px,${drag.y}px,0) scale(1.06) rotate(${releaseRotation * 0.4}deg)`, offset: 0, easing: "cubic-bezier(.18,.62,.42,1)" },
+      ...(wasLaunched ? [
+        launchArcFrame(0.2, 0.034),
+        launchArcFrame(0.4, 0.068),
+        launchArcFrame(0.6, 0.102),
+        launchArcFrame(0.8, 0.136),
+      ] : []),
       { transform: `translate3d(${projectedX}px,${groundY}px,0) scale(1.08,.86) rotate(${releaseRotation}deg)`, offset: 0.17, easing: "cubic-bezier(.22,.78,.3,1)" },
       { transform: `translate3d(${projectedX}px,${groundY - 14}px,0) scale(.98,1.05) rotate(${releaseRotation * -0.45}deg)`, offset: 0.22, easing: "ease-out" },
       { transform: `translate3d(${projectedX}px,${groundY}px,0) scale(1.05,.91) rotate(${releaseRotation * 0.3}deg)`, offset: 0.27 },
       { transform: `translate3d(${projectedX}px,${groundY}px,0) scale(.94,1.06) rotate(-8deg)`, offset: 0.32 },
       { transform: `translate3d(${projectedX}px,${groundY}px,0) scale(1) rotate(0deg)`, offset: 0.38 },
+    ] : [
+      { transform: `translate3d(${drag.x}px,${drag.y}px,0) scale(1.035) rotate(${Math.max(-3, Math.min(3, drag.x / 38))}deg)`, offset: 0 },
+      { transform: `translate3d(${drag.x}px,${drag.y}px,0) scale(1) rotate(0deg)`, offset: 0.38 },
     ];
     const visitPause: Keyframe[] = visitedTeam ? [
       { transform: `translate3d(${projectedX}px,${groundY - 2}px,0) scale(1) rotate(-3deg)`, offset: 0.46 },

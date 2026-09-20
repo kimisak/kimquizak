@@ -38,20 +38,32 @@ export function useAudioCue() {
   const slotSpinStopRef = useRef<(() => void) | null>(null);
   const finaleDrumrollStopRef = useRef<(() => void) | null>(null);
   const finaleDrumrollAudioRef = useRef<HTMLAudioElement | null>(null);
+  const podiumBronzeAudioRef = useRef<HTMLAudioElement | null>(null);
+  const podiumSilverAudioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     const spinAudio = new Audio("/audio/sleigh-bells-fast.mp3");
     const selectionAudio = new Audio("/audio/christmas-selection-glockenspiel.mp3");
     const finaleDrumrollAudio = new Audio("/audio/drum-roll-intro-cc0.mp3");
+    const podiumBronzeAudio = new Audio("/audio/podium-bronze-tada-cc0.mp3");
+    const podiumSilverAudio = new Audio("/audio/podium-silver-anime-wow.mp3");
     spinAudio.preload = "auto";
     selectionAudio.preload = "auto";
     finaleDrumrollAudio.preload = "auto";
     finaleDrumrollAudio.loop = false;
     finaleDrumrollAudio.volume = 0.52;
+    podiumBronzeAudio.preload = "auto";
+    podiumSilverAudio.preload = "auto";
+    podiumBronzeAudio.volume = 0.58;
+    podiumSilverAudio.volume = 0.58;
     spinAudio.load();
     selectionAudio.load();
     finaleDrumrollAudio.load();
+    podiumBronzeAudio.load();
+    podiumSilverAudio.load();
     finaleDrumrollAudioRef.current = finaleDrumrollAudio;
+    podiumBronzeAudioRef.current = podiumBronzeAudio;
+    podiumSilverAudioRef.current = podiumSilverAudio;
 
     let cancelled = false;
     const normalizeCueVolumes = async () => {
@@ -87,7 +99,11 @@ export function useAudioCue() {
       spinAudio.pause();
       selectionAudio.pause();
       finaleDrumrollAudio.pause();
+      podiumBronzeAudio.pause();
+      podiumSilverAudio.pause();
       finaleDrumrollAudioRef.current = null;
+      podiumBronzeAudioRef.current = null;
+      podiumSilverAudioRef.current = null;
     };
   }, []);
 
@@ -331,6 +347,20 @@ export function useAudioCue() {
     finaleDrumrollStopRef.current?.();
   };
 
+  const playPodiumReveal = (place: 2 | 3) => {
+    const bronze = podiumBronzeAudioRef.current;
+    const silver = podiumSilverAudioRef.current;
+    bronze?.pause();
+    silver?.pause();
+    if (bronze) bronze.currentTime = 0;
+    if (silver) silver.currentTime = 0;
+    const audio = place === 3 ? bronze : silver;
+    if (!audio) return;
+    void audio.play().catch((error) => {
+      console.warn(`Unable to play the ${place === 3 ? "bronze" : "silver"} podium cue`, error);
+    });
+  };
+
   return {
     playSadBlip,
     playCountdownBeep,
@@ -344,5 +374,6 @@ export function useAudioCue() {
     stopSlotSpinLoop,
     startFinaleDrumroll,
     stopFinaleDrumroll,
+    playPodiumReveal,
   };
 }
