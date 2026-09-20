@@ -66,12 +66,10 @@ function withSettingsDefaults(settings: Partial<AppSettings>): AppSettings {
 }
 
 export async function buildBackupPayload(): Promise<BackupPayload> {
-  const teams =
-    readLocalStorage<Team[]>(TEAM_STORAGE_KEY, []).length > 0
-      ? readLocalStorage<Team[]>(TEAM_STORAGE_KEY, [])
-      : readLocalStorage<Team[]>(LEGACY_TEAM_STORAGE_KEY, []);
+  const teams = readLocalStorage<Team[] | null>(TEAM_STORAGE_KEY, null)
+    ?? readLocalStorage<Team[]>(LEGACY_TEAM_STORAGE_KEY, []);
   const questions = await readQuestions();
-  const turnState = readLocalStorage<TurnState>(TURN_STATE_STORAGE_KEY, fallbackTurnState);
+  const turnState = readLocalStorage<TurnState | null>(TURN_STATE_STORAGE_KEY, null);
   const legacyTurnState = readLocalStorage<TurnState>(
     LEGACY_TURN_STATE_STORAGE_KEY,
     fallbackTurnState,
@@ -82,13 +80,7 @@ export async function buildBackupPayload(): Promise<BackupPayload> {
     exportedAt: new Date().toISOString(),
     teams,
     questions,
-    turnState:
-      turnState.order.length > 0 || turnState.boardIndex > 0 || turnState.lyricsIndex > 0
-      || Object.keys(turnState.audioPlaybackCounts ?? {}).length > 0
-      || Object.keys(turnState.audioReplayValues ?? {}).length > 0
-      || turnState.scoresHidden === true
-        ? turnState
-        : legacyTurnState,
+    turnState: turnState ?? legacyTurnState,
     settings: withSettingsDefaults(
       readLocalStorage<Partial<AppSettings>>(SETTINGS_STORAGE_KEY, DEFAULT_SETTINGS),
     ),

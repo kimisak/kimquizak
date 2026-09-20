@@ -1,6 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Regression runs can use an isolated cache without disturbing a host's dev server.
+  distDir: process.env.QUIZ_TEST_DIST_DIR || ".next",
   experimental: {
     // Run webpack directly to avoid the build worker TCP binding that fails in restricted sandboxes.
     webpackBuildWorker: false,

@@ -1,5 +1,14 @@
 # Product backlog
 
+## Regression follow-up
+
+The September regression pass and repeatable checks are documented in `docs/regression-review.md`.
+
+- Verify physical Surface Pro, ultrawide, and TV readability; automated viewport checks are covered.
+- Run the same flows in Microsoft Edge, including audio autoplay and actual cue balance.
+- Exercise live Google Maps exploration and map-pin locking with the host's API configuration.
+- Expand browser coverage for unusually large rosters, long host messages, and remaining question gameplay permutations.
+
 ## Host-message variables — implemented 2026-09-13
 
 Add template variables to scheduled host messages so messages can address configured teams and players dynamically.
@@ -29,3 +38,7 @@ The completed Three.js + cannon-es pachinko reveal is parked because its physica
 - The implementation remains in `src/components/game/PachinkoDraw.tsx` and `src/lib/pachinkoPhysics.ts`.
 - It is intentionally disconnected from `HostMessageOverlay`.
 - Reconsider it later as a standalone bonus challenge or dedicated random-draw game rather than an interruption before a host message.
+
+## Persistence follow-up
+
+- Show saving/saved status for question edits and guard hard navigation while IndexedDB writes are pending. An immediate refresh can otherwise discard the latest edit before its save completes.

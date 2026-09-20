@@ -16,6 +16,7 @@ import {
   POINT_VALUES,
   type PointValue,
   type Question,
+  type QuestionTypeDraft,
   type ScoreTransaction,
   type Team,
 } from "@/lib/types";
@@ -449,7 +450,7 @@ const McqFields = React.memo(function McqFields({
   return (
     <>
       <label className="label" style={{ marginTop: "8px" }}>
-        Prompt
+        Question
       </label>
       <textarea
         value={q?.prompt ?? ""}
@@ -675,537 +676,6 @@ const McqFields = React.memo(function McqFields({
     </>
   );
 });
-export default function QuestionConfigPage() {
-  const [settings, setSettings] = useSettings();
-  const [questions, setQuestions, questionsHydrated] = usePersistentQuestions();
-  const [newCategory, setNewCategory] = useState("");
-  const [categoryNames, setCategoryNames] = useState<Record<string, string>>({});
-  const [activeCategory, setActiveCategory] = useState<string | null>(null);
-  const [dragging, setDragging] = useState<{ category: string; points: PointValue } | null>(null);
-  const [dragOver, setDragOver] = useState<PointValue | null>(null);
-  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
-  const dragOrigin = React.useRef<{ x: number; y: number } | null>(null);
-  const [draggingCategory, setDraggingCategory] = useState<string | null>(null);
-  const [categoryDragOver, setCategoryDragOver] = useState<string | null>(null);
-  const [categoryDragOffset, setCategoryDragOffset] = useState(0);
-  const categoryDragOrigin = React.useRef<number | null>(null);
-  const [isMobile, setIsMobile] = useState(false);
-  const [showFinaleMusicPreview, setShowFinaleMusicPreview] = useState(false);
-  const [hostMessagesExpanded, setHostMessagesExpanded] = useState(false);
-  const [expandedQuestions, setExpandedQuestions] = useState<Set<string>>(
-    () => new Set(),
-  );
-  const cardPresses = React.useRef(new Map<string, { x: number; y: number; blocked: boolean }>());
-  const [teams, setTeams] = usePersistentState<Team[]>(
-    TEAM_STORAGE_KEY,
-    [],
-    [LEGACY_TEAM_STORAGE_KEY],
-  );
-  const [, setScoreHistory] = usePersistentState<ScoreTransaction[]>(
-    SCORE_HISTORY_STORAGE_KEY,
-    [],
-  );
-  const { reset: resetTurnState } = useTurnState();
-
-  const finaleMusicEnabled = settings.finaleMusicEnabled ?? DEFAULT_SETTINGS.finaleMusicEnabled;
-  const finaleMusicUrl = settings.finaleMusicUrl ?? DEFAULT_SETTINGS.finaleMusicUrl;
-  const finaleMusicStartSeconds = settings.finaleMusicStartSeconds
-    ?? getYouTubeStartSeconds(finaleMusicUrl);
-  const finaleMusicVolume = settings.finaleMusicVolume ?? DEFAULT_SETTINGS.finaleMusicVolume;
-  const legacyFinaleDuration = settings.finaleMusicDurationSeconds
-    ?? (DEFAULT_SETTINGS.finaleMusicEndSeconds - DEFAULT_SETTINGS.finaleMusicStartSeconds);
-  const finaleMusicEndSeconds = settings.finaleMusicEndSeconds
-    ?? (finaleMusicStartSeconds + legacyFinaleDuration);
-  const finaleMusicRangeValid = finaleMusicEndSeconds > finaleMusicStartSeconds;
-  const finaleMusicPreviewUrl = finaleMusicRangeValid ? buildYouTubeEmbedUrl(finaleMusicUrl, {
-    startSeconds: finaleMusicStartSeconds,
-    endSeconds: finaleMusicEndSeconds,
-  }) : "";
-  const hostMessages = settings.hostMessages ?? DEFAULT_SETTINGS.hostMessages;
-  const playableBoardQuestionCount = questions.filter(isQuestionReady).length;
-
-  const addHostMessage = () => {
-    const lastTrigger = hostMessages.reduce(
-      (highest, message) => Math.max(highest, message.afterQuestionCount),
-      0,
-    );
-    setSettings((previous) => ({
-      ...previous,
-      hostMessages: [
-        ...(previous.hostMessages ?? []),
-        {
-          id: makeId("host-message"),
-          afterQuestionCount: lastTrigger > 0
-            ? lastTrigger + 5
-            : playableBoardQuestionCount > 0
-              ? Math.min(5, playableBoardQuestionCount)
-              : 5,
-          text: "",
-          revealStyle: "spin-wheel",
-        },
-      ],
-    }));
-    setHostMessagesExpanded(true);
-  };
-
-  const updateHostMessage = (
-    id: string,
-    updates: Partial<HostMessage>,
-  ) => {
-    setSettings((previous) => ({
-      ...previous,
-      hostMessages: (previous.hostMessages ?? []).map((message) =>
-        message.id === id ? { ...message, ...updates } : message,
-      ),
-    }));
-  };
-
-  const removeHostMessage = (id: string) => {
-    setSettings((previous) => ({
-      ...previous,
-      hostMessages: (previous.hostMessages ?? []).filter((message) => message.id !== id),
-    }));
-  };
-
-  const categories = useMemo(() => {
-    const list = questionsHydrated && Array.isArray(questions) ? questions : [];
-    return Array.from(new Set(list.map((q) => q.category)));
-  }, [questions, questionsHydrated]);
-  const finalRowPoints = Math.max(0, ...questions.map((question) => question.points));
-  const finalRowMissingCategories = categories.filter((category) =>
-    !questions.some((question) => question.category === category && question.points === finalRowPoints),
-  );
-  const finalCategory = Object.keys(settings.boardRevealRules?.categories ?? {})[0] ?? "";
-  const finalMode = Object.keys(settings.boardRevealRules?.rows ?? {}).length ? "row" : finalCategory ? "category" : "none";
-  const setRevealRule = (scope: keyof BoardRevealRules, key: string, rule: BoardRevealRule | null) => {
-    setSettings((previous) => {
-      const scoped = scope === "categories" || scope === "rows"
-        ? {} as Record<string, BoardRevealRule>
-        : { ...(previous.boardRevealRules?.[scope] ?? {}) };
-      if (rule) scoped[key] = rule;
-      else delete scoped[key];
-      return {
-        ...previous,
-        boardRevealRules: { ...previous.boardRevealRules, [scope]: scoped },
-      };
-    });
-  };
-  const setFinalReveal = (mode: "none" | "row" | "category", category = finalCategory || categories[categories.length - 1]) => {
-    setSettings((previous) => ({
-      ...previous,
-      boardRevealRules: {
-        ...previous.boardRevealRules,
-        rows: mode === "row" && finalRowPoints ? { [String(finalRowPoints)]: { when: "board-complete" } } : {},
-        categories: mode === "category" && category ? { [category]: { when: "board-complete" } } : {},
-      },
-    }));
-    if (mode === "category" && category) {
-      setQuestions((previous) => [
-        ...previous.filter((question) => question.category !== category),
-        ...previous.filter((question) => question.category === category),
-      ]);
-    }
-  };
-
-  useEffect(() => {
-    const finalQuestionIds = new Set(categories.map((category) =>
-      questions.filter((question) => question.category === category)
-        .sort((first, second) => second.points - first.points)[0]?.id,
-    ).filter(Boolean));
-    const current = settings.boardRevealRules?.questions ?? {};
-    const cleaned: Record<string, BoardRevealRule> = Object.fromEntries(Object.entries(current)
-      .filter(([id]) => finalQuestionIds.has(id))
-      .map(([id, rule]) => [id, rule.when === "category-complete"
-        ? { when: "category-complete" as const, category: OWN_CATEGORY }
-        : rule]));
-    if (JSON.stringify(cleaned) === JSON.stringify(current)) return;
-    setSettings((previous) => ({
-      ...previous,
-      boardRevealRules: { ...previous.boardRevealRules, questions: cleaned },
-    }));
-  }, [categories, questions, setSettings, settings.boardRevealRules?.questions]);
-
-  useEffect(() => {
-    setCategoryNames((prev) => {
-      const next = { ...prev };
-      categories.forEach((cat) => {
-        if (!next[cat]) next[cat] = cat;
-      });
-      // prune removed categories
-      Object.keys(next).forEach((key) => {
-        if (!categories.includes(key)) {
-          delete next[key];
-        }
-      });
-      return next;
-    });
-  }, [categories]);
-
-  useEffect(() => {
-    setActiveCategory((prev) => {
-      if (prev && categories.includes(prev)) return prev;
-      return categories[0] ?? null;
-    });
-  }, [categories]);
-
-  useEffect(() => {
-    const update = () => {
-      if (typeof window === "undefined") return;
-      setIsMobile(window.innerWidth <= 768);
-    };
-    update();
-    window.addEventListener("resize", update);
-    return () => window.removeEventListener("resize", update);
-  }, []);
-
-  const upsertQuestion = (
-    category: string,
-    points: PointValue,
-    updates: Partial<Question>,
-  ) => {
-    setQuestions((prev) => {
-      const index = prev.findIndex(
-        (q) => q.category === category && q.points === points,
-      );
-      if (index >= 0) {
-        const updated = [...prev];
-        updated[index] = { ...updated[index], ...updates };
-        return updated;
-      }
-      return [
-        ...prev,
-        {
-          id: makeId("q"),
-          category,
-          points,
-          prompt: "",
-          answer: "",
-          answered: false,
-          imageData: null,
-          imageName: null,
-          answerImageData: null,
-          answerImageName: null,
-          type: "standard",
-          lyricsSegments: [],
-          lyricsInfoText: null,
-          mapEmbedUrl: null,
-          answerLocationLabel: null,
-          answerLocationUrl: null,
-          answerVideoUrl: null,
-          answerVideoAutoplay: true,
-          geoUnlockCost: 0,
-          geoUnlockLevels: 1,
-          jokerCount: 5,
-          jokerMin: 1,
-          jokerMax: 9,
-          timelineCenterYear: 2000,
-          timelineCenterLabel: "Center year",
-          timelineTitle: "Timeline",
-          timelineEvents: [],
-          jokerRotateOnMiss: true,
-          timelineRotateOnMiss: true,
-          mcqOptions: [],
-          mcqCorrectIndex: 0,
-          audioUrl: null,
-          audioStopSeconds: null,
-          audioStartSeconds: null,
-          audioReplayEnabled: false,
-          ...updates,
-        },
-      ];
-    });
-  };
-
-  const moveQuestionTo = (category: string, fromPoints: PointValue, toPoints: PointValue) => {
-    if (fromPoints === toPoints) return;
-    setQuestions((prev) => {
-      const next = [...prev];
-      const fromIdx = next.findIndex((q) => q.category === category && q.points === fromPoints);
-      const toIdx = next.findIndex((q) => q.category === category && q.points === toPoints);
-      if (fromIdx === -1 || toIdx === -1) return prev;
-      const fromQ = next[fromIdx];
-      const toQ = next[toIdx];
-      next[fromIdx] = { ...toQ, points: fromPoints };
-      next[toIdx] = { ...fromQ, points: toPoints };
-      return next;
-    });
-  };
-
-  const bumpQuestion = (category: string, points: PointValue, direction: -1 | 1) => {
-    const values = questions.filter((question) => question.category === category)
-      .map((question) => question.points).sort((first, second) => first - second);
-    const idx = values.indexOf(points);
-    const target = values[idx + direction];
-    if (idx === -1 || target === undefined) return;
-    moveQuestionTo(category, points, target);
-  };
-
-  const addQuestion = (category: string) => {
-    const categoryQuestions = questions.filter((question) => question.category === category);
-    const occupied = new Set(categoryQuestions.map((question) => question.points));
-    let points = POINT_STEP;
-    while (occupied.has(points)) points += POINT_STEP;
-    const previousFinal = Math.max(0, ...questions.map((question) => question.points));
-    if (points > previousFinal) {
-      const oldRule = settings.boardRevealRules?.rows?.[String(previousFinal)];
-      if (oldRule) setRevealRule("rows", String(points), oldRule);
-    }
-    const previousFinalQuestion = [...categoryQuestions].sort((a, b) => b.points - a.points)[0];
-    const previousQuestionRule = previousFinalQuestion
-      ? settings.boardRevealRules?.questions?.[previousFinalQuestion.id]
-      : undefined;
-    const id = makeId("q");
-    upsertQuestion(category, points, { id });
-    if (previousQuestionRule) {
-      setRevealRule("questions", previousFinalQuestion.id, null);
-      setRevealRule("questions", id, previousQuestionRule);
-    }
-    setExpandedQuestions((previous) => new Set(previous).add(`${category}-${points}`));
-  };
-
-  const removeQuestion = (question: Question) => {
-    const inCategory = questions.filter((candidate) => candidate.category === question.category);
-    if (inCategory.length <= 1) return;
-    if (finalMode === "row" && question.points === finalRowPoints) return;
-    if (!window.confirm(
-      `Remove the ${question.points}-point question from ${question.category}? Any points already awarded will stay on the scoreboard.`,
-    )) return;
-    const finalPoints = Math.max(0, ...questions.map((candidate) => candidate.points));
-    const remaining = questions.filter((candidate) => candidate.id !== question.id);
-    const nextFinal = Math.max(0, ...remaining.map((candidate) => candidate.points));
-    if (question.points === finalPoints && nextFinal < finalPoints) {
-      const oldRule = settings.boardRevealRules?.rows?.[String(finalPoints)];
-      if (oldRule) setRevealRule("rows", String(nextFinal), oldRule);
-    }
-    const questionRule = settings.boardRevealRules?.questions?.[question.id];
-    const nextCategoryFinal = remaining
-      .filter((candidate) => candidate.category === question.category)
-      .sort((a, b) => b.points - a.points)[0];
-    if (questionRule && nextCategoryFinal) setRevealRule("questions", nextCategoryFinal.id, questionRule);
-    setQuestions((previous) => previous.filter((candidate) => candidate.id !== question.id));
-    setRevealRule("questions", question.id, null);
-    setExpandedQuestions((previous) => {
-      const next = new Set(previous);
-      next.delete(`${question.category}-${question.points}`);
-      return next;
-    });
-  };
-
-  const moveCategoryTo = (category: string, targetCategory: string) => {
-    if (category === targetCategory) return;
-    setQuestions((previous) => {
-      const order = Array.from(new Set(previous.map((question) => question.category)));
-      const fromIndex = order.indexOf(category);
-      const toIndex = order.indexOf(targetCategory);
-      if (fromIndex < 0 || toIndex < 0) return previous;
-      const bonusCategory = Object.keys(settings.boardRevealRules?.categories ?? {})[0];
-      if (bonusCategory && (order[fromIndex] === bonusCategory || order[toIndex] === bonusCategory)) return previous;
-
-      const [moved] = order.splice(fromIndex, 1);
-      order.splice(toIndex, 0, moved);
-      const questionsByCategory = new Map<string, Question[]>();
-      previous.forEach((question) => {
-        const group = questionsByCategory.get(question.category) ?? [];
-        group.push(question);
-        questionsByCategory.set(question.category, group);
-      });
-
-      return order.flatMap((name) => questionsByCategory.get(name) ?? []);
-    });
-  };
-
-  const setCategoryCollapsed = (category: string, collapsed: boolean) => {
-    setExpandedQuestions((previous) => {
-      const next = new Set(previous);
-      questions.filter((question) => question.category === category).forEach(({ points }) => {
-        const key = `${category}-${points}`;
-        if (collapsed) next.delete(key);
-        else next.add(key);
-      });
-      return next;
-    });
-  };
-
-  const handleNewCategory = () => {
-    if (!newCategory.trim()) return;
-    const name = newCategory.trim();
-    setQuestions((prev) => {
-      const hasCategory = prev.some((q) => q.category === name);
-      if (hasCategory) return prev;
-      const categoryPointValues = finalMode === "row"
-        ? Array.from({ length: finalRowPoints / POINT_STEP }, (_, index) => (index + 1) * POINT_STEP)
-        : POINT_VALUES;
-      const additions = categoryPointValues.map<Question>((points) => ({
-        id: makeId("q"),
-        category: name,
-        points,
-        prompt: "",
-        answer: "",
-        answered: false,
-        imageData: null,
-        imageName: null,
-        answerImageData: null,
-        answerImageName: null,
-        type: "standard",
-        lyricsSegments: [],
-        lyricsInfoText: null,
-        mapEmbedUrl: null,
-        answerLocationLabel: null,
-          answerLocationUrl: null,
-          answerVideoUrl: null,
-          answerVideoAutoplay: true,
-          geoUnlockCost: 0,
-          geoUnlockLevels: 1,
-          jokerCount: 5,
-          jokerMin: 1,
-          jokerMax: 9,
-          timelineCenterYear: 2000,
-          timelineCenterLabel: "Center year",
-          timelineTitle: "Timeline",
-          timelineEvents: [],
-          jokerRotateOnMiss: true,
-          timelineRotateOnMiss: true,
-          mcqOptions: [],
-          mcqCorrectIndex: 0,
-          audioUrl: null,
-          audioStopSeconds: null,
-          audioStartSeconds: null,
-          audioReplayEnabled: false,
-      }));
-      const bonusCategory = Object.keys(settings.boardRevealRules?.categories ?? {})[0];
-      const firstBonusIndex = bonusCategory ? prev.findIndex((question) => question.category === bonusCategory) : -1;
-      return firstBonusIndex < 0
-        ? [...prev, ...additions]
-        : [...prev.slice(0, firstBonusIndex), ...additions, ...prev.slice(firstBonusIndex)];
-    });
-    setNewCategory("");
-    setActiveCategory(name);
-  };
-
-  const deleteCategory = (category: string) => {
-    setSettings((previous) => {
-      const rules = previous.boardRevealRules ?? {};
-      const categories = { ...rules.categories };
-      delete categories[category];
-      const remap = (items?: Record<string, BoardRevealRule>) => Object.fromEntries(
-        Object.entries(items ?? {}).filter(([, rule]) => rule.when !== "category-complete" || rule.category !== category),
-      );
-      return { ...previous, boardRevealRules: {
-        categories: remap(categories), rows: remap(rules.rows), questions: remap(rules.questions),
-      } };
-    });
-    setQuestions((prev) => prev.filter((q) => q.category !== category));
-    setActiveCategory((prevActive) => {
-      if (!prevActive) return null;
-      if (prevActive !== category) return prevActive;
-      const idx = categories.findIndex((c) => c === category);
-      if (idx === -1) return categories[0] ?? null;
-      const left = categories[idx - 1];
-      const right = categories[idx + 1];
-      return right ?? left ?? categories[0] ?? null;
-    });
-  };
-
-  const renameCategory = (oldName: string, newNameRaw: string) => {
-    const newName = newNameRaw.trim();
-    if (!newName || newName === oldName) return;
-    // avoid duplicates
-    if (categories.includes(newName)) {
-      alert("A category with that name already exists.");
-      return;
-    }
-    setSettings((previous) => {
-      const rules = previous.boardRevealRules ?? {};
-      const renamed = (items?: Record<string, BoardRevealRule>) => Object.fromEntries(
-        Object.entries(items ?? {}).map(([key, rule]) => [key, rule.when === "category-complete" && rule.category === oldName
-          ? { ...rule, category: newName } : rule]),
-      );
-      const categoryRules = renamed(rules.categories);
-      if (categoryRules[oldName]) {
-        categoryRules[newName] = categoryRules[oldName];
-        delete categoryRules[oldName];
-      }
-      return { ...previous, boardRevealRules: {
-        categories: categoryRules, rows: renamed(rules.rows), questions: renamed(rules.questions),
-      } };
-    });
-    setQuestions((prev) =>
-      prev.map((q) =>
-        q.category === oldName
-          ? {
-              ...q,
-              category: newName,
-            }
-          : q,
-      ),
-    );
-  };
-
-  const resetGameProgress = () => {
-    if (!window.confirm(
-      "Reset all scores, played tiles, score visibility, audio replay usage, turn order, revealed categories, dismissed host messages, and score history? Team and question content will be kept.",
-    )) return;
-
-    setQuestions((prev) => prev.map((q) => ({ ...q, answered: false })));
-    setTeams((previous) => previous.map((team) => ({ ...team, score: 0 })));
-    setScoreHistory([]);
-    resetTurnState();
-  };
-
-  const getQuestion = (category: string, points: PointValue) =>
-    questions.find((q) => q.category === category && q.points === points);
-
-  const handleImageChange = (
-    category: string,
-    points: PointValue,
-    file: File | null,
-  ) => {
-    if (!file) {
-      upsertQuestion(category, points, { imageData: null, imageName: null });
-      return;
-    }
-    if (file.size > 3 * 1024 * 1024) {
-      alert("Image is too large. Please keep it under ~3MB.");
-      return;
-    }
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const result = reader.result?.toString() ?? "";
-      upsertQuestion(category, points, {
-        imageData: result,
-        imageName: file.name,
-      });
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const handleAnswerImageChange = (
-    category: string,
-    points: PointValue,
-    file: File | null,
-  ) => {
-    if (!file) {
-      upsertQuestion(category, points, {
-        answerImageData: null,
-        answerImageName: null,
-      });
-      return;
-    }
-    if (file.size > 3 * 1024 * 1024) {
-      alert("Image is too large. Please keep it under ~3MB.");
-      return;
-    }
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const result = reader.result?.toString() ?? "";
-      upsertQuestion(category, points, {
-        answerImageData: result,
-        answerImageName: file.name,
-      });
-    };
-    reader.readAsDataURL(file);
-};
-
 const StandardFields = React.memo(function StandardFields({
   category,
   points,
@@ -2405,6 +1875,531 @@ const TimelineFields = React.memo(function TimelineFields({
   );
 });
 
+export default function QuestionConfigPage() {
+  const [settings, setSettings] = useSettings();
+  const [questions, setQuestions, questionsHydrated] = usePersistentQuestions();
+  const [newCategory, setNewCategory] = useState("");
+  const [categoryNames, setCategoryNames] = useState<Record<string, string>>({});
+  const [activeCategory, setActiveCategory] = useState<string | null>(null);
+  const [dragging, setDragging] = useState<{ category: string; points: PointValue } | null>(null);
+  const [dragOver, setDragOver] = useState<PointValue | null>(null);
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const dragOrigin = React.useRef<{ x: number; y: number } | null>(null);
+  const [draggingCategory, setDraggingCategory] = useState<string | null>(null);
+  const [categoryDragOver, setCategoryDragOver] = useState<string | null>(null);
+  const [categoryDragOffset, setCategoryDragOffset] = useState(0);
+  const categoryDragOrigin = React.useRef<number | null>(null);
+  const [isMobile, setIsMobile] = useState(false);
+  const [showFinaleMusicPreview, setShowFinaleMusicPreview] = useState(false);
+  const [hostMessagesExpanded, setHostMessagesExpanded] = useState(false);
+  const [expandedQuestions, setExpandedQuestions] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const cardPresses = React.useRef(new Map<string, { x: number; y: number; blocked: boolean }>());
+  const [teams, setTeams] = usePersistentState<Team[]>(
+    TEAM_STORAGE_KEY,
+    [],
+    [LEGACY_TEAM_STORAGE_KEY],
+  );
+  const [, setScoreHistory] = usePersistentState<ScoreTransaction[]>(
+    SCORE_HISTORY_STORAGE_KEY,
+    [],
+  );
+  const { reset: resetTurnState } = useTurnState();
+
+  const finaleMusicEnabled = settings.finaleMusicEnabled ?? DEFAULT_SETTINGS.finaleMusicEnabled;
+  const finaleMusicUrl = settings.finaleMusicUrl ?? DEFAULT_SETTINGS.finaleMusicUrl;
+  const finaleMusicStartSeconds = settings.finaleMusicStartSeconds
+    ?? getYouTubeStartSeconds(finaleMusicUrl);
+  const finaleMusicVolume = settings.finaleMusicVolume ?? DEFAULT_SETTINGS.finaleMusicVolume;
+  const legacyFinaleDuration = settings.finaleMusicDurationSeconds
+    ?? (DEFAULT_SETTINGS.finaleMusicEndSeconds - DEFAULT_SETTINGS.finaleMusicStartSeconds);
+  const finaleMusicEndSeconds = settings.finaleMusicEndSeconds
+    ?? (finaleMusicStartSeconds + legacyFinaleDuration);
+  const finaleMusicRangeValid = finaleMusicEndSeconds > finaleMusicStartSeconds;
+  const finaleMusicPreviewUrl = finaleMusicRangeValid ? buildYouTubeEmbedUrl(finaleMusicUrl, {
+    startSeconds: finaleMusicStartSeconds,
+    endSeconds: finaleMusicEndSeconds,
+  }) : "";
+  const hostMessages = settings.hostMessages ?? DEFAULT_SETTINGS.hostMessages;
+  const playableBoardQuestionCount = questions.filter(isQuestionReady).length;
+
+  const addHostMessage = () => {
+    const lastTrigger = hostMessages.reduce(
+      (highest, message) => Math.max(highest, message.afterQuestionCount),
+      0,
+    );
+    setSettings((previous) => ({
+      ...previous,
+      hostMessages: [
+        ...(previous.hostMessages ?? []),
+        {
+          id: makeId("host-message"),
+          afterQuestionCount: lastTrigger > 0
+            ? lastTrigger + 5
+            : playableBoardQuestionCount > 0
+              ? Math.min(5, playableBoardQuestionCount)
+              : 5,
+          text: "",
+          revealStyle: "spin-wheel",
+        },
+      ],
+    }));
+    setHostMessagesExpanded(true);
+  };
+
+  const updateHostMessage = (
+    id: string,
+    updates: Partial<HostMessage>,
+  ) => {
+    setSettings((previous) => ({
+      ...previous,
+      hostMessages: (previous.hostMessages ?? []).map((message) =>
+        message.id === id ? { ...message, ...updates } : message,
+      ),
+    }));
+  };
+
+  const removeHostMessage = (id: string) => {
+    setSettings((previous) => ({
+      ...previous,
+      hostMessages: (previous.hostMessages ?? []).filter((message) => message.id !== id),
+    }));
+  };
+
+  const categories = useMemo(() => {
+    const list = questionsHydrated && Array.isArray(questions) ? questions : [];
+    return Array.from(new Set(list.map((q) => q.category)));
+  }, [questions, questionsHydrated]);
+  const finalRowPoints = Math.max(0, ...questions.map((question) => question.points));
+  const finalRowMissingCategories = categories.filter((category) =>
+    !questions.some((question) => question.category === category && question.points === finalRowPoints),
+  );
+  const finalCategory = Object.keys(settings.boardRevealRules?.categories ?? {})[0] ?? "";
+  const finalMode = Object.keys(settings.boardRevealRules?.rows ?? {}).length ? "row" : finalCategory ? "category" : "none";
+  const setRevealRule = (scope: keyof BoardRevealRules, key: string, rule: BoardRevealRule | null) => {
+    setSettings((previous) => {
+      const scoped = scope === "categories" || scope === "rows"
+        ? {} as Record<string, BoardRevealRule>
+        : { ...(previous.boardRevealRules?.[scope] ?? {}) };
+      if (rule) scoped[key] = rule;
+      else delete scoped[key];
+      return {
+        ...previous,
+        boardRevealRules: { ...previous.boardRevealRules, [scope]: scoped },
+      };
+    });
+  };
+  const setFinalReveal = (mode: "none" | "row" | "category", category = finalCategory || categories[categories.length - 1]) => {
+    setSettings((previous) => ({
+      ...previous,
+      boardRevealRules: {
+        ...previous.boardRevealRules,
+        rows: mode === "row" && finalRowPoints ? { [String(finalRowPoints)]: { when: "board-complete" } } : {},
+        categories: mode === "category" && category ? { [category]: { when: "board-complete" } } : {},
+      },
+    }));
+    if (mode === "category" && category) {
+      setQuestions((previous) => [
+        ...previous.filter((question) => question.category !== category),
+        ...previous.filter((question) => question.category === category),
+      ]);
+    }
+  };
+
+  useEffect(() => {
+    const finalQuestionIds = new Set(categories.map((category) =>
+      questions.filter((question) => question.category === category)
+        .sort((first, second) => second.points - first.points)[0]?.id,
+    ).filter(Boolean));
+    const current = settings.boardRevealRules?.questions ?? {};
+    const cleaned: Record<string, BoardRevealRule> = Object.fromEntries(Object.entries(current)
+      .filter(([id]) => finalQuestionIds.has(id))
+      .map(([id, rule]) => [id, rule.when === "category-complete"
+        ? { when: "category-complete" as const, category: OWN_CATEGORY }
+        : rule]));
+    if (JSON.stringify(cleaned) === JSON.stringify(current)) return;
+    setSettings((previous) => ({
+      ...previous,
+      boardRevealRules: { ...previous.boardRevealRules, questions: cleaned },
+    }));
+  }, [categories, questions, setSettings, settings.boardRevealRules?.questions]);
+
+  useEffect(() => {
+    setCategoryNames((prev) => {
+      const next = { ...prev };
+      categories.forEach((cat) => {
+        if (!next[cat]) next[cat] = cat;
+      });
+      // prune removed categories
+      Object.keys(next).forEach((key) => {
+        if (!categories.includes(key)) {
+          delete next[key];
+        }
+      });
+      return next;
+    });
+  }, [categories]);
+
+  useEffect(() => {
+    setActiveCategory((prev) => {
+      if (prev && categories.includes(prev)) return prev;
+      return categories[0] ?? null;
+    });
+  }, [categories]);
+
+  useEffect(() => {
+    const update = () => {
+      if (typeof window === "undefined") return;
+      setIsMobile(window.innerWidth <= 768);
+    };
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
+
+  const upsertQuestion = (
+    category: string,
+    points: PointValue,
+    updates: Partial<Question>,
+  ) => {
+    setQuestions((prev) => {
+      const index = prev.findIndex(
+        (q) => q.category === category && q.points === points,
+      );
+      if (index >= 0) {
+        const updated = [...prev];
+        updated[index] = { ...updated[index], ...updates };
+        return updated;
+      }
+      return [
+        ...prev,
+        {
+          id: makeId("q"),
+          category,
+          points,
+          prompt: "",
+          answer: "",
+          answered: false,
+          type: "standard",
+          ...updates,
+        },
+      ];
+    });
+  };
+
+  const switchQuestionType = (
+    category: string,
+    points: PointValue,
+    nextType: QuestionType,
+  ) => {
+    setQuestions((previous) => {
+      if (!previous.some((question) => question.category === category && question.points === points)) {
+        return [...previous, {
+          id: makeId("q"),
+          category,
+          points,
+          prompt: "",
+          answer: "",
+          answered: false,
+          type: nextType,
+        }];
+      }
+      return previous.map((question) => {
+        if (question.category !== category || question.points !== points) return question;
+        const currentType = (question.type ?? "standard") as QuestionType;
+        if (currentType === nextType) return question;
+
+        const activeDraft: Partial<Question> = { ...question };
+        delete activeDraft.id;
+        delete activeDraft.category;
+        delete activeDraft.points;
+        delete activeDraft.answered;
+        delete activeDraft.type;
+        delete activeDraft.typeDrafts;
+        const drafts = { ...(question.typeDrafts ?? {}) };
+        drafts[currentType] = activeDraft as QuestionTypeDraft;
+        const restoredDraft = drafts[nextType];
+        delete drafts[nextType];
+
+        return {
+          id: question.id,
+          category: question.category,
+          points: question.points,
+          answered: question.answered,
+          prompt: "",
+          answer: "",
+          ...(restoredDraft ?? {}),
+          type: nextType,
+          typeDrafts: Object.keys(drafts).length ? drafts : undefined,
+        };
+      });
+    });
+  };
+
+  const moveQuestionTo = (category: string, fromPoints: PointValue, toPoints: PointValue) => {
+    if (fromPoints === toPoints) return;
+    setQuestions((prev) => {
+      const next = [...prev];
+      const fromIdx = next.findIndex((q) => q.category === category && q.points === fromPoints);
+      const toIdx = next.findIndex((q) => q.category === category && q.points === toPoints);
+      if (fromIdx === -1 || toIdx === -1) return prev;
+      const fromQ = next[fromIdx];
+      const toQ = next[toIdx];
+      next[fromIdx] = { ...toQ, points: fromPoints };
+      next[toIdx] = { ...fromQ, points: toPoints };
+      return next;
+    });
+  };
+
+  const bumpQuestion = (category: string, points: PointValue, direction: -1 | 1) => {
+    const values = questions.filter((question) => question.category === category)
+      .map((question) => question.points).sort((first, second) => first - second);
+    const idx = values.indexOf(points);
+    const target = values[idx + direction];
+    if (idx === -1 || target === undefined) return;
+    moveQuestionTo(category, points, target);
+  };
+
+  const addQuestion = (category: string) => {
+    const categoryQuestions = questions.filter((question) => question.category === category);
+    const occupied = new Set(categoryQuestions.map((question) => question.points));
+    let points = POINT_STEP;
+    while (occupied.has(points)) points += POINT_STEP;
+    const previousFinal = Math.max(0, ...questions.map((question) => question.points));
+    if (points > previousFinal) {
+      const oldRule = settings.boardRevealRules?.rows?.[String(previousFinal)];
+      if (oldRule) setRevealRule("rows", String(points), oldRule);
+    }
+    const previousFinalQuestion = [...categoryQuestions].sort((a, b) => b.points - a.points)[0];
+    const previousQuestionRule = previousFinalQuestion
+      ? settings.boardRevealRules?.questions?.[previousFinalQuestion.id]
+      : undefined;
+    const id = makeId("q");
+    upsertQuestion(category, points, { id });
+    if (previousQuestionRule) {
+      setRevealRule("questions", previousFinalQuestion.id, null);
+      setRevealRule("questions", id, previousQuestionRule);
+    }
+    setExpandedQuestions((previous) => new Set(previous).add(`${category}-${points}`));
+  };
+
+  const removeQuestion = (question: Question) => {
+    const inCategory = questions.filter((candidate) => candidate.category === question.category);
+    if (inCategory.length <= 1) return;
+    if (finalMode === "row" && question.points === finalRowPoints) return;
+    if (!window.confirm(
+      `Remove the ${question.points}-point question from ${question.category}? Any points already awarded will stay on the scoreboard.`,
+    )) return;
+    const finalPoints = Math.max(0, ...questions.map((candidate) => candidate.points));
+    const remaining = questions.filter((candidate) => candidate.id !== question.id);
+    const nextFinal = Math.max(0, ...remaining.map((candidate) => candidate.points));
+    if (question.points === finalPoints && nextFinal < finalPoints) {
+      const oldRule = settings.boardRevealRules?.rows?.[String(finalPoints)];
+      if (oldRule) setRevealRule("rows", String(nextFinal), oldRule);
+    }
+    const questionRule = settings.boardRevealRules?.questions?.[question.id];
+    const nextCategoryFinal = remaining
+      .filter((candidate) => candidate.category === question.category)
+      .sort((a, b) => b.points - a.points)[0];
+    if (questionRule && nextCategoryFinal) setRevealRule("questions", nextCategoryFinal.id, questionRule);
+    setQuestions((previous) => previous.filter((candidate) => candidate.id !== question.id));
+    setRevealRule("questions", question.id, null);
+    setExpandedQuestions((previous) => {
+      const next = new Set(previous);
+      next.delete(`${question.category}-${question.points}`);
+      return next;
+    });
+  };
+
+  const moveCategoryTo = (category: string, targetCategory: string) => {
+    if (category === targetCategory) return;
+    setQuestions((previous) => {
+      const order = Array.from(new Set(previous.map((question) => question.category)));
+      const fromIndex = order.indexOf(category);
+      const toIndex = order.indexOf(targetCategory);
+      if (fromIndex < 0 || toIndex < 0) return previous;
+      const bonusCategory = Object.keys(settings.boardRevealRules?.categories ?? {})[0];
+      if (bonusCategory && (order[fromIndex] === bonusCategory || order[toIndex] === bonusCategory)) return previous;
+
+      const [moved] = order.splice(fromIndex, 1);
+      order.splice(toIndex, 0, moved);
+      const questionsByCategory = new Map<string, Question[]>();
+      previous.forEach((question) => {
+        const group = questionsByCategory.get(question.category) ?? [];
+        group.push(question);
+        questionsByCategory.set(question.category, group);
+      });
+
+      return order.flatMap((name) => questionsByCategory.get(name) ?? []);
+    });
+  };
+
+  const setCategoryCollapsed = (category: string, collapsed: boolean) => {
+    setExpandedQuestions((previous) => {
+      const next = new Set(previous);
+      questions.filter((question) => question.category === category).forEach(({ points }) => {
+        const key = `${category}-${points}`;
+        if (collapsed) next.delete(key);
+        else next.add(key);
+      });
+      return next;
+    });
+  };
+
+  const handleNewCategory = () => {
+    if (!newCategory.trim()) return;
+    const name = newCategory.trim();
+    setQuestions((prev) => {
+      const hasCategory = prev.some((q) => q.category === name);
+      if (hasCategory) return prev;
+      const categoryPointValues = finalMode === "row"
+        ? Array.from({ length: finalRowPoints / POINT_STEP }, (_, index) => (index + 1) * POINT_STEP)
+        : POINT_VALUES;
+      const additions = categoryPointValues.map<Question>((points) => ({
+        id: makeId("q"),
+        category: name,
+        points,
+        prompt: "",
+        answer: "",
+        answered: false,
+        type: "standard",
+      }));
+      const bonusCategory = Object.keys(settings.boardRevealRules?.categories ?? {})[0];
+      const firstBonusIndex = bonusCategory ? prev.findIndex((question) => question.category === bonusCategory) : -1;
+      return firstBonusIndex < 0
+        ? [...prev, ...additions]
+        : [...prev.slice(0, firstBonusIndex), ...additions, ...prev.slice(firstBonusIndex)];
+    });
+    setNewCategory("");
+    setActiveCategory(name);
+  };
+
+  const deleteCategory = (category: string) => {
+    setSettings((previous) => {
+      const rules = previous.boardRevealRules ?? {};
+      const categories = { ...rules.categories };
+      delete categories[category];
+      const remap = (items?: Record<string, BoardRevealRule>) => Object.fromEntries(
+        Object.entries(items ?? {}).filter(([, rule]) => rule.when !== "category-complete" || rule.category !== category),
+      );
+      return { ...previous, boardRevealRules: {
+        categories: remap(categories), rows: remap(rules.rows), questions: remap(rules.questions),
+      } };
+    });
+    setQuestions((prev) => prev.filter((q) => q.category !== category));
+    setActiveCategory((prevActive) => {
+      if (!prevActive) return null;
+      if (prevActive !== category) return prevActive;
+      const idx = categories.findIndex((c) => c === category);
+      if (idx === -1) return categories[0] ?? null;
+      const left = categories[idx - 1];
+      const right = categories[idx + 1];
+      return right ?? left ?? categories[0] ?? null;
+    });
+  };
+
+  const renameCategory = (oldName: string, newNameRaw: string) => {
+    const newName = newNameRaw.trim();
+    if (!newName || newName === oldName) return;
+    // avoid duplicates
+    if (categories.includes(newName)) {
+      alert("A category with that name already exists.");
+      return;
+    }
+    setSettings((previous) => {
+      const rules = previous.boardRevealRules ?? {};
+      const renamed = (items?: Record<string, BoardRevealRule>) => Object.fromEntries(
+        Object.entries(items ?? {}).map(([key, rule]) => [key, rule.when === "category-complete" && rule.category === oldName
+          ? { ...rule, category: newName } : rule]),
+      );
+      const categoryRules = renamed(rules.categories);
+      if (categoryRules[oldName]) {
+        categoryRules[newName] = categoryRules[oldName];
+        delete categoryRules[oldName];
+      }
+      return { ...previous, boardRevealRules: {
+        categories: categoryRules, rows: renamed(rules.rows), questions: renamed(rules.questions),
+      } };
+    });
+    setQuestions((prev) =>
+      prev.map((q) =>
+        q.category === oldName
+          ? {
+              ...q,
+              category: newName,
+            }
+          : q,
+      ),
+    );
+  };
+
+  const resetGameProgress = () => {
+    if (!window.confirm(
+      "Reset all scores, played tiles, score visibility, audio replay usage, turn order, revealed categories, dismissed host messages, and score history? Team and question content will be kept.",
+    )) return;
+
+    setQuestions((prev) => prev.map((q) => ({ ...q, answered: false })));
+    setTeams((previous) => previous.map((team) => ({ ...team, score: 0 })));
+    setScoreHistory([]);
+    resetTurnState();
+  };
+
+  const getQuestion = (category: string, points: PointValue) =>
+    questions.find((q) => q.category === category && q.points === points);
+
+  const handleImageChange = (
+    category: string,
+    points: PointValue,
+    file: File | null,
+  ) => {
+    if (!file) {
+      upsertQuestion(category, points, { imageData: null, imageName: null });
+      return;
+    }
+    if (file.size > 3 * 1024 * 1024) {
+      alert("Image is too large. Please keep it under ~3MB.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const result = reader.result?.toString() ?? "";
+      upsertQuestion(category, points, {
+        imageData: result,
+        imageName: file.name,
+      });
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleAnswerImageChange = (
+    category: string,
+    points: PointValue,
+    file: File | null,
+  ) => {
+    if (!file) {
+      upsertQuestion(category, points, {
+        answerImageData: null,
+        answerImageName: null,
+      });
+      return;
+    }
+    if (file.size > 3 * 1024 * 1024) {
+      alert("Image is too large. Please keep it under ~3MB.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const result = reader.result?.toString() ?? "";
+      upsertQuestion(category, points, {
+        answerImageData: result,
+        answerImageName: file.name,
+      });
+    };
+    reader.readAsDataURL(file);
+};
+
+
   return (
     <main className="question-studio">
       <div className="question-studio-header">
@@ -3064,7 +3059,7 @@ const TimelineFields = React.memo(function TimelineFields({
                                 type="button"
                                 className={selected ? "selected" : ""}
                                 aria-pressed={selected}
-                                onClick={() => upsertQuestion(category, points, { type })}
+                                onClick={() => switchQuestionType(category, points, type)}
                                 style={{ "--type-color": option.accent } as React.CSSProperties}
                               >
                                 <span aria-hidden>{option.icon}</span>

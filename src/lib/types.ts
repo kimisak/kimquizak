@@ -31,6 +31,8 @@ export type Team = {
   accentGlow?: string | null;
 };
 
+export type QuestionKind = "standard" | "lyrics" | "geoguesser" | "joker" | "timeline" | "mcq" | "audio" | "booby";
+
 export type Question = {
   id: string;
   category: string;
@@ -42,7 +44,8 @@ export type Question = {
   imageName?: string | null;
   answerImageData?: string | null;
   answerImageName?: string | null;
-  type?: "standard" | "lyrics" | "geoguesser" | "joker" | "timeline" | "mcq" | "audio" | "booby";
+  type?: QuestionKind;
+  typeDrafts?: Partial<Record<QuestionKind, QuestionTypeDraft>>;
   lyricsSegments?: string[];
   lyricsInfoText?: string | null;
   mapEmbedUrl?: string | null;
@@ -83,6 +86,11 @@ export type Question = {
   audioStartSeconds?: number | null;
   audioReplayEnabled?: boolean | null;
 };
+
+export type QuestionTypeDraft = Partial<Omit<
+  Question,
+  "id" | "category" | "points" | "answered" | "type" | "typeDrafts"
+>>;
 
 export type TeamMap = Record<string, Team>;
 export type QuestionMap = Record<string, Question>;
