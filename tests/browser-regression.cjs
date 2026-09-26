@@ -67,6 +67,16 @@ const baseUrl = process.env.QUIZ_TEST_URL || 'http://localhost:3012';
   const downloaded=await downloadPromise;
   const backupText=fs.readFileSync(await downloaded.path(),'utf8');
   const backup=JSON.parse(backupText);
+  if (process.env.QUIZ_TEST_FINALE_ONLY === '1') {
+    await require('./finale-reveal-browser.cjs')(page, baseUrl, backup);
+    assert.deepEqual(errors, [], 'Browser runtime errors');
+    return;
+  }
+  if (process.env.QUIZ_TEST_IMAGE_ONLY === '1') {
+    await require('./image-reveal-browser.cjs')(page, baseUrl, backup);
+    assert.deepEqual(errors, [], 'Browser runtime errors');
+    return;
+  }
   assert.equal(Object.keys(backup.questions[0].typeDrafts).length,7);
   await Promise.all([page.waitForEvent('load'), page.locator('.archive-panel input[type=file]').setInputFiles({name:'roundtrip.json',mimeType:'application/json',buffer:Buffer.from(backupText)})]);
   await page.locator('.question-card').first().click();
@@ -104,11 +114,13 @@ const baseUrl = process.env.QUIZ_TEST_URL || 'http://localhost:3012';
     await page.getByRole('button',{name:'Preview finale',exact:true}).click();
     await page.getByRole('button',{name:'Continue to the podium',exact:true}).click();
     const before=await page.locator('.finale-team').evaluateAll(els=>els.map(el=>{const r=el.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height}}));
-    for (const place of ['3rd','2nd','1st']) {
-      await page.getByRole('button',{name:`Reveal ${place} place`,exact:true}).click();
+    while (await page.locator('.finale-place-reveal').count()) {
+      const place = await page.locator('.finale-place-reveal').innerText();
+      await page.locator('.finale-place-reveal').click();
       await page.waitForTimeout(850);
+      const awaitingMore = await page.locator('.finale-place-reveal').count() > 0;
       const after=await page.locator('.finale-team').evaluateAll(els=>els.map(el=>{const r=el.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height}}));
-      after.forEach((r,i)=>{assert.equal(r.width,before[i].width);assert.equal(r.height,before[i].height);if(place!=='1st')assert.equal(r.y,before[i].y)});
+      after.forEach((r,i)=>{assert.equal(r.width,before[i].width);assert.equal(r.height,before[i].height);if(awaitingMore)assert.equal(r.y,before[i].y)});
       const particles=await page.locator('.finale-intermediate-ooze > span').evaluateAll(els=>els.map(el=>({opacity:Number(getComputedStyle(el).opacity),duration:getComputedStyle(el).animationDuration})));
       assert(particles.some(p=>p.opacity>0.1),place+' has no visible particles');
       assert(await page.locator('.finale-actions').evaluate(el=>el.getBoundingClientRect().bottom<=innerHeight),'Finale controls clipped');
@@ -171,11 +183,12 @@ const baseUrl = process.env.QUIZ_TEST_URL || 'http://localhost:3012';
   assert.equal(await page.locator('#host-message-title').innerText(),hostText,'Host random selection rerolled');
   await page.getByRole('button',{name:'Continue the game',exact:true}).click();
   await page.getByRole('button',{name:'Continue to the podium',exact:true}).click();
-  for(const place of ['3rd','2nd','1st']) await page.getByRole('button',{name:`Reveal ${place} place`,exact:true}).click();
+  while (await page.locator('.finale-place-reveal').count()) await page.locator('.finale-place-reveal').click();
   await page.getByRole('heading',{name:/that's a wrap!/i}).waitFor();
   assert.equal(await page.locator('.finale-encore-team').count(),2);
   assert(await page.locator('.finale-actions').evaluate(el=>el.getBoundingClientRect().bottom<=innerHeight),'Five-team finale controls clipped');
   console.log('PASS: actual final question, hidden category, host-message persistence, staged finale');
+  await require('./image-reveal-browser.cjs')(page, baseUrl, backup);
   assert.deepEqual(errors,[],'Browser runtime errors');
 })().catch(async e=>{
   console.error(e);

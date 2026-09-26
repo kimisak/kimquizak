@@ -39,19 +39,25 @@ export function useAudioCue() {
   const finaleDrumrollStopRef = useRef<(() => void) | null>(null);
   const finaleDrumrollAudioRef = useRef<HTMLAudioElement | null>(null);
   const podiumBronzeAudioRef = useRef<HTMLAudioElement | null>(null);
+  const podiumLowerAudioRef = useRef<HTMLAudioElement | null>(null);
   const podiumSilverAudioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     const spinAudio = new Audio("/audio/sleigh-bells-fast.mp3");
     const selectionAudio = new Audio("/audio/christmas-selection-glockenspiel.mp3");
     const finaleDrumrollAudio = new Audio("/audio/drum-roll-intro-cc0.mp3");
-    const podiumBronzeAudio = new Audio("/audio/podium-bronze-tada-cc0.mp3");
+    const podiumBronzeAudio = new Audio("/audio/podium-bronze-fanfare-cc0.mp3");
+    const podiumLowerAudio = new Audio("/audio/podium-bronze-tada-cc0.mp3");
     const podiumSilverAudio = new Audio("/audio/podium-silver-anime-wow.mp3");
     spinAudio.preload = "auto";
     selectionAudio.preload = "auto";
     finaleDrumrollAudio.preload = "auto";
     finaleDrumrollAudio.loop = false;
-    finaleDrumrollAudio.volume = 0.52;
+    finaleDrumrollAudio.volume = 0.18;
+    podiumLowerAudio.preload = "auto";
+    podiumLowerAudio.volume = 0.58;
+    podiumLowerAudio.load();
+    podiumLowerAudioRef.current = podiumLowerAudio;
     podiumBronzeAudio.preload = "auto";
     podiumSilverAudio.preload = "auto";
     podiumBronzeAudio.volume = 0.58;
@@ -100,6 +106,8 @@ export function useAudioCue() {
       selectionAudio.pause();
       finaleDrumrollAudio.pause();
       podiumBronzeAudio.pause();
+      podiumLowerAudio.pause();
+      podiumLowerAudioRef.current = null;
       podiumSilverAudio.pause();
       finaleDrumrollAudioRef.current = null;
       podiumBronzeAudioRef.current = null;
@@ -347,17 +355,20 @@ export function useAudioCue() {
     finaleDrumrollStopRef.current?.();
   };
 
-  const playPodiumReveal = (place: 2 | 3) => {
+  const playPodiumReveal = (place: 2 | 3 | 4) => {
     const bronze = podiumBronzeAudioRef.current;
     const silver = podiumSilverAudioRef.current;
+    const lower = podiumLowerAudioRef.current;
+    lower?.pause();
+    if (lower) lower.currentTime = 0;
     bronze?.pause();
     silver?.pause();
     if (bronze) bronze.currentTime = 0;
     if (silver) silver.currentTime = 0;
-    const audio = place === 3 ? bronze : silver;
+    const audio = place === 2 ? silver : place === 3 ? bronze : lower;
     if (!audio) return;
     void audio.play().catch((error) => {
-      console.warn(`Unable to play the ${place === 3 ? "bronze" : "silver"} podium cue`, error);
+      console.warn(`Unable to play the place ${place} podium cue`, error);
     });
   };
 

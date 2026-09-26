@@ -1,6 +1,7 @@
 import type { Question } from "@/lib/types";
 import { parseStreetViewSource } from "@/lib/geoguesser";
 import { extractYouTubeId } from "@/lib/youtube";
+import { getImageRevealAreas, getImageAreaPlayableIndexes } from "@/lib/imageReveal";
 
 function hasText(value: string | null | undefined): boolean {
   return Boolean(value?.trim());
@@ -11,6 +12,18 @@ export function getQuestionIssues(question: Question): string[] {
   const issues: string[] = [];
 
   if (type === "joker") return issues;
+
+  if (type === "imageReveal") {
+    if (!question.imageData) issues.push("Add the image to reveal");
+    if (!hasText(question.answer)) issues.push("Add the answer");
+    if (question.imageRevealStyle === "areas") {
+      const areas = getImageRevealAreas(question);
+      if (areas.length < 2 || areas.some(tiles => !tiles.length)) issues.push("Paint at least two areas, with tiles in every numbered area");
+      if (areas.some(tiles => tiles.length) && getImageAreaPlayableIndexes(question).length < areas.filter(tiles => tiles.length).length) issues.push("Each area must reveal a covered cell. Reduce opening clues or redraw the area");
+      if (question.imageRevealAreaMode === "limited" && question.points < areas.length) issues.push("Use fewer areas or more points so every guess can have a lower positive reward");
+    }
+    return issues;
+  }
 
   if (type === "booby") {
     if (!hasText(question.prompt)) issues.push("Add the challenge instructions");

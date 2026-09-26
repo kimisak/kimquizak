@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from "react";
+import { useRef, useState, type CSSProperties } from "react";
 import type { TimelineEvent } from "@/lib/types";
 import { TeamPill } from "@/components/game/TeamPill";
 import { QuestionModalHeader } from "./QuestionModalHeader";
@@ -10,6 +10,7 @@ type PlacedEvent = TimelineEvent & { status?: "correct" | "wrong" };
 type Props = {
   category?: string;
   centerYear: number;
+  currentTeamId?: string;
   currentTeamName?: string;
   currentTeamColor?: string;
   currentTeamEmoji?: string | null;
@@ -17,6 +18,7 @@ type Props = {
   placedLeft: PlacedEvent[];
   placedRight: PlacedEvent[];
   onPlace: (slot: { index: number; onYear?: number | null }) => void;
+  onClose: () => void;
   disableActions?: boolean;
   scoreResults?: Array<{
     teamId: string;
@@ -24,7 +26,7 @@ type Props = {
     teamColor: string;
     teamEmoji?: string | null;
     correctCount: number;
-    sharedMissCount: number;
+    wrongCount: number;
     points: number;
   }>;
   points?: number;
@@ -45,6 +47,7 @@ function formatYear(year: number | null | undefined) {
 export function TimelineModal({
   category,
   centerYear,
+  currentTeamId,
   currentTeamName,
   currentTeamColor,
   currentTeamEmoji,
@@ -52,6 +55,7 @@ export function TimelineModal({
   placedLeft,
   placedRight,
   onPlace,
+  onClose,
   disableActions,
   scoreResults = [],
   points,
@@ -104,9 +108,10 @@ export function TimelineModal({
   const timelineStack = largestYearStack > 4 ? "deep" : largestYearStack > 1 ? "stacked" : "single";
   const isComplete = !activeEvent && (scoreResults.length > 0 || Boolean(noWinner));
   const distributedPoints = scoreResults.reduce((sum, result) => sum + result.points, 0);
+  const compactScores = scoreResults.length >= 4;
   const instruction = rotateInfo
-    ? "Each event is one share of the point pool. Place it correctly to claim the share; place it wrong and the other teams split it. A miss also passes play to the next team."
-    : "Each event is one share of the point pool. Place it correctly to claim the share; place it wrong and the other teams split it, while the same team continues."
+    ? "A correct placement earns one share of the points. A wrong card returns to the back of the deck without revealing its year. The next team takes the next card; no points are lost."
+    : "A correct placement earns one share of the points. A wrong card returns to the back of the deck without revealing its year. The same team takes the next card; no points are lost."
 
   const renderDropZone = (slot: { index: number; onYear?: number | null }, key: string) => (
     <div
@@ -152,22 +157,31 @@ export function TimelineModal({
             </div>
           </header>
 
-          <section className={`timeline-live-scores${isComplete ? " final" : ""}`} aria-label="Current Timeline scores">
+          <section className={`timeline-live-scores${isComplete ? " final" : ""}${compactScores ? " compact-teams" : ""}`} aria-label="Current Timeline scores">
             <div className="timeline-live-score-label">
               <small>{isComplete ? "Final distribution" : "Timeline score"}</small>
               <strong>{distributedPoints}<span>/{potentialScore ?? points ?? 0}</span></strong>
             </div>
             <div className="timeline-live-score-teams">
-              {scoreResults.map((result) => (
-                <div className="timeline-live-score" key={result.teamId}>
-                  <TeamPill name={result.teamName} color={result.teamColor} emoji={result.teamEmoji} />
+              {scoreResults.map((result) => {
+                const isAnswering = Boolean(activeEvent) && result.teamId === currentTeamId;
+                return (
+                <div
+                  className={`timeline-live-score${isAnswering ? " is-answering" : ""}`}
+                  key={result.teamId}
+                  style={{ "--timeline-team-color": result.teamColor } as CSSProperties}
+                  aria-current={isAnswering ? "true" : undefined}
+                  title={isAnswering ? `${result.teamName} · Answering now` : compactScores ? result.teamName : undefined}
+                >
+                  <TeamPill name={result.teamName} color={result.teamColor} emoji={result.teamEmoji || "⭐️"} />
                   <small>
                     {result.correctCount} correct
-                    {result.sharedMissCount > 0 ? ` · ${result.sharedMissCount} shared` : ""}
+                    {!compactScores && result.wrongCount > 0 ? ` · ${result.wrongCount} wrong` : ""}
                   </small>
                   <strong>{result.points}<span> pts</span></strong>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </section>
 
@@ -251,6 +265,11 @@ export function TimelineModal({
           <div className="timeline-result no-winner"><span aria-hidden>◇</span><strong>Timeline complete · no points awarded</strong></div>
         ) : (
           <div className="timeline-result"><span aria-hidden>✓</span><strong>All events placed</strong></div>
+        )}
+        {!activeEvent && (
+          <button className="button primary timeline-close" type="button" onClick={onClose}>
+            Close
+          </button>
         )}
       </footer>
 

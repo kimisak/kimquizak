@@ -1,4 +1,5 @@
 import type { Question } from "@/lib/types";
+import { migrateImageRevealQuestion } from "@/lib/imageReveal";
 import { LEGACY_QUESTION_STORAGE_KEY, QUESTION_STORAGE_KEY } from "@/lib/storage";
 
 const DATABASE_NAME = "kimquizak-content";
@@ -40,11 +41,11 @@ function legacyQuestions(): Question[] | undefined {
 export async function readQuestions(): Promise<Question[]> {
   await pendingWrite.catch(() => undefined);
   const stored = await storedQuestions();
-  if (stored !== undefined) return stored;
+  if (stored !== undefined) return stored.map(migrateImageRevealQuestion);
   const legacy = legacyQuestions();
   if (legacy !== undefined) {
     await writeQuestions(legacy);
-    return legacy;
+    return legacy.map(migrateImageRevealQuestion);
   }
   return [];
 }
@@ -75,7 +76,7 @@ function persistQuestions(questions: Question[]): Promise<void> {
 }
 
 export function writeQuestions(questions: Question[]): Promise<void> {
-  pendingWrite = pendingWrite.catch(() => undefined).then(() => persistQuestions(questions));
+  pendingWrite = pendingWrite.catch(() => undefined).then(() => persistQuestions(questions.map(migrateImageRevealQuestion)));
   return pendingWrite;
 }
 

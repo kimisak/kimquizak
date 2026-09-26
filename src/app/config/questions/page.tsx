@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { YouTubeClipPreview } from "@/components/config/YouTubeClipPreview";
+import { ImageRevealFields } from "@/components/config/ImageRevealFields";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { usePersistentQuestions } from "@/hooks/usePersistentQuestions";
 import { useSettings } from "@/hooks/useSettings";
@@ -275,6 +276,7 @@ const QUESTION_TYPE_META: Record<
   { label: string; icon: string; accent: string; soft: string }
 > = {
   standard: { label: "Standard", icon: "Q", accent: "#60a5fa", soft: "rgba(96,165,250,0.14)" },
+  imageReveal: { label: "Image reveal", icon: "▧", accent: "#d4ad68", soft: "rgba(212,173,104,0.14)" },
   mcq: { label: "Multiple choice", icon: "A", accent: "#a78bfa", soft: "rgba(167,139,250,0.14)" },
   audio: { label: "Guess the audio", icon: "♪", accent: "#f472b6", soft: "rgba(244,114,182,0.14)" },
   booby: { label: "Challenge", icon: "🎁", accent: "#e8b86a", soft: "rgba(232,184,106,0.14)" },
@@ -1855,6 +1857,9 @@ const TimelineFields = React.memo(function TimelineFields({
           Rotate teams on wrong guess
         </label>
       </div>
+      <p className="muted" style={{ margin: "8px 0", fontSize: ".85rem" }}>
+        Each event is worth one share of the question’s points. Correct placements earn that share. Wrong cards return to the back of the deck without revealing their year or losing points. With rotation enabled, the next team takes the next card. If only one card remains, it is tried again. The full pool is awarded once every card is placed correctly.
+      </p>
       <label className="label" style={{ marginTop: "10px" }}>
         Events (one per line: YEAR AC/BC, Event prompt, Timeline text)
       </label>
@@ -2181,7 +2186,11 @@ export default function QuestionConfigPage() {
       setRevealRule("questions", previousFinalQuestion.id, null);
       setRevealRule("questions", id, previousQuestionRule);
     }
-    setExpandedQuestions((previous) => new Set(previous).add(`${category}-${points}`));
+    setExpandedQuestions((previous) => {
+      const next = new Set(previous);
+      next.delete(`${category}-${points}`);
+      return next;
+    });
   };
 
   const removeQuestion = (question: Question) => {
@@ -2458,14 +2467,14 @@ export default function QuestionConfigPage() {
                     name="final-board-reveal"
                     value={mode}
                     checked={finalMode === mode}
-                    disabled={mode !== "none" && (mode === "row" ? !finalRowPoints || finalRowMissingCategories.length > 0 : !categories.length)}
+                    disabled={mode !== "none" && (mode === "row" ? !finalRowPoints : !categories.length)}
                     onChange={() => setFinalReveal(mode)}
                   />
                   {label}
                 </label>
               ))}
             </div>
-            {finalRowMissingCategories.length > 0 && (
+            {finalMode === "row" && finalRowMissingCategories.length > 0 && (
               <aside className="question-final-row-hint" role="status">
                 <span className="question-final-row-hint-icon" aria-hidden>!</span>
                 <span className="question-final-row-hint-copy">
@@ -2504,8 +2513,8 @@ export default function QuestionConfigPage() {
                 }))}
               />
               <span>
-                <strong>Reveal podium one place at a time</strong>
-                <small>Host reveals bronze, then silver, then gold. The WRAP song and full celebration begin with first place.</small>
+                <strong>Reveal podium tier by tier</strong>
+                <small>Reveal each place from last to first. Tied teams reveal together. The WRAP song and full celebration start when first place is revealed.</small>
               </span>
             </label>
 
@@ -3075,6 +3084,11 @@ export default function QuestionConfigPage() {
                           </div>
                         )}
                         <div className="question-editor">
+                    {questionType === "imageReveal" && q && (
+                      <ImageRevealFields question={q} boardValues={questions.map(question => question.points)}
+                        onChange={patch => upsertQuestion(category, points, patch)}
+                        onImage={file => handleImageChange(category, points, file)} />
+                    )}
                     {questionType === "standard" && (
                       <StandardFields
                         category={category}

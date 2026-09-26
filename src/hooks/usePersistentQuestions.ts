@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import type { Question } from "@/lib/types";
 import { readQuestions, writeQuestions } from "@/lib/questionStorage";
+import { migrateImageRevealQuestion } from "@/lib/imageReveal";
 
 let saveFailureShown = false;
 
@@ -25,7 +26,7 @@ export function usePersistentQuestions() {
 
   const update = useCallback<Dispatch<SetStateAction<Question[]>>>((action) => {
     updatedRef.current = true;
-    const next = typeof action === "function" ? action(valueRef.current) : action;
+    const next = (typeof action === "function" ? action(valueRef.current) : action).map(migrateImageRevealQuestion);
     valueRef.current = next;
     setQuestions(next);
     if (hydratedRef.current) save(next);

@@ -31,7 +31,9 @@ export type Team = {
   accentGlow?: string | null;
 };
 
-export type QuestionKind = "standard" | "lyrics" | "geoguesser" | "joker" | "timeline" | "mcq" | "audio" | "booby";
+export type QuestionKind = "standard" | "lyrics" | "geoguesser" | "joker" | "timeline" | "mcq" | "audio" | "booby" | "imageReveal";
+export type ImageRevealStyle = "zoom" | "blur" | "noise" | "areas";
+export type ImageRevealProgress = { step: number; points: number; answerRevealed?: boolean; outcome?: "correct" | "skipped"; teamId?: string; revealedAreas?: number[]; areaChosenThisTurn?: boolean };
 
 export type Question = {
   id: string;
@@ -46,6 +48,23 @@ export type Question = {
   answerImageName?: string | null;
   type?: QuestionKind;
   typeDrafts?: Partial<Record<QuestionKind, QuestionTypeDraft>>;
+  imageRevealStyle?: ImageRevealStyle;
+  imageRevealLevels?: number[];
+  imageRevealStyleLevels?: Partial<Record<ImageRevealStyle, number[]>>;
+  imageRevealPatchOverrides?: Array<Record<number, boolean>>;
+  imageRevealAreas?: number[][];
+  imageRevealAreaMode?: "rollover" | "limited";
+  imageRevealOpeningCoverage?: number;
+  imageRevealInitiallyVisible?: number[];
+  imageRevealOpeningOverrides?: Record<number, boolean>;
+  imageRevealCostsPoints?: boolean;
+  imageRevealRotateOnMiss?: boolean;
+  imageRevealFocusX?: number;
+  imageRevealFillFrame?: boolean;
+  imageRevealAreaFrameAspect?: number;
+  imageRevealFraming?: Partial<Record<"blur" | "areas", { zoom: number; x: number; y: number }>>;
+  imageRevealFocusY?: number;
+  imageRevealStageFocus?: Array<{ x: number; y: number } | null>;
   lyricsSegments?: string[];
   lyricsInfoText?: string | null;
   mapEmbedUrl?: string | null;
@@ -139,6 +158,7 @@ export type TurnState = {
   resolvedHostMessages?: Record<string, ResolvedHostMessage>;
   audioPlaybackCounts?: Record<string, number>;
   audioReplayValues?: Record<string, number>;
+  imageRevealProgress?: Record<string, ImageRevealProgress>;
   scoresHidden?: boolean;
   hiddenScoreOrder?: string[];
 };

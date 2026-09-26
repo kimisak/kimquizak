@@ -19,6 +19,7 @@ export function useTurnState() {
       resolvedHostMessages: {},
       audioPlaybackCounts: {},
       audioReplayValues: {},
+      imageRevealProgress: {},
       scoresHidden: false,
       hiddenScoreOrder: [],
     },
@@ -57,6 +58,7 @@ export function useTurnState() {
       resolvedHostMessages: {},
       audioPlaybackCounts: {},
       audioReplayValues: {},
+      imageRevealProgress: {},
       scoresHidden: false,
       hiddenScoreOrder: [],
     });

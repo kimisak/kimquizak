@@ -42,8 +42,11 @@ import { DEFAULT_SETTINGS } from "@/lib/settings";
 import { resolveHostMessageTemplate } from "@/lib/hostMessageTemplates";
 import { isQuestionReady } from "@/lib/questionValidation";
 import { getTeamAccent, reconcileTeamTheme } from "@/lib/teamPresentation";
-import { allocateTimelinePoints, type TimelinePlacementOutcome } from "@/lib/timelineScoring";
+import { advanceTimelineQueue, allocateTimelinePoints, type TimelinePlacementOutcome } from "@/lib/timelineScoring";
 import { getAudioAvailablePoints } from "@/lib/audioScoring";
+import { getImageRevealLevels, getImageRevealPoints, getImageAreaRewards, chooseImageArea, missImageArea, canGuessImageArea } from "@/lib/imageReveal";
+import { getFinaleRevealPlan } from "@/lib/finaleReveal";
+import { ImageRevealModal } from "@/components/game/modals/ImageRevealModal";
 import { getGeoExploreValue } from "@/lib/geoguesser";
 import { getVisibleBoardQuestions } from "@/lib/boardReveal";
 import { changeJokerLevel, getJokerLevelPoints, JOKER_MAX_LEVEL } from "@/lib/jokerScoring";
@@ -58,7 +61,7 @@ type TimelineScoreResult = {
   teamColor: string;
   teamEmoji?: string | null;
   correctCount: number;
-  sharedMissCount: number;
+  wrongCount: number;
   points: number;
 };
 
@@ -278,7 +281,7 @@ export default function GameBoardPage() {
       setFinaleRevealed(true);
       return;
     }
-    setFinalePodiumRevealCount(Math.min(3, teams.length));
+    setFinalePodiumRevealCount(getFinaleRevealPlan(teams).steps.length);
     if (finaleSoundtrack.status !== "error") finaleSoundtrack.requestPlay();
     setFinaleRevealed(true);
   }, [
@@ -288,7 +291,7 @@ export default function GameBoardPage() {
     showFinalLeaderboard,
     stagedPodiumReveal,
     stopFinaleDrumroll,
-    teams.length,
+    teams,
   ]);
   const activeTurnOrder = useMemo(
     () => turnOrder.filter((id) => teams.some((t) => t.id === id)),
@@ -561,7 +564,7 @@ export default function GameBoardPage() {
           teamColor: getTeamAccent(team).base,
           teamEmoji: team.badgeEmoji,
           correctCount: 0,
-          sharedMissCount: 0,
+          wrongCount: 0,
           points: 0,
         }];
       }));
@@ -601,7 +604,15 @@ export default function GameBoardPage() {
     }
   };
 
-  const closeModal = () => {
+  const dismissQuestion = (finalized = false) => {
+    if (activeQuestion?.type === "imageReveal" && !activeQuestion.answered && !finalized) {
+      const questionId = activeQuestion.id;
+      setTurnState(previous => {
+        const progress = { ...previous.imageRevealProgress };
+        delete progress[questionId];
+        return { ...previous, imageRevealProgress: progress };
+      });
+    }
     setActiveQuestion(null);
     setShowAnswer(false);
     setSelectedTeamId("");
@@ -621,6 +632,7 @@ export default function GameBoardPage() {
     setMcqResolved(false);
     setMcqResolvedInfo(null);
   };
+  const closeModal = () => dismissQuestion();
 
   useEffect(() => {
     if (!activeQuestion || !gameModalRef.current) return;
@@ -828,7 +840,7 @@ export default function GameBoardPage() {
     const teamIdToScore =
       activeQuestion.type === "lyrics"
         ? getLyricsTeamId()
-        : lastGuessTeamId || selectedTeamId || getBoardTeamId();
+        : (activeQuestion.type === "imageReveal" ? turnState.imageRevealProgress?.[activeQuestion.id]?.teamId : undefined) || lastGuessTeamId || selectedTeamId || getBoardTeamId();
 
     if (activeQuestion.type === "booby" && !correct && teamIdToScore) {
       const team = teams.find((candidate) => candidate.id === teamIdToScore);
@@ -856,7 +868,9 @@ export default function GameBoardPage() {
             questions.map((question) => question.points),
             turnState.audioReplayValues?.[activeQuestion.id],
           )
-        : basePoints;
+        : activeQuestion.type === "imageReveal"
+          ? turnState.imageRevealProgress?.[activeQuestion.id]?.points ?? basePoints
+          : basePoints;
 
     if (teamIdToScore && correct && rewardPoints > 0) {
       applyScoreChange(
@@ -866,11 +880,11 @@ export default function GameBoardPage() {
         activeQuestion.id,
       );
     }
-    if (stageResult && teamIdToScore && rewardPoints === 0) {
+    if (activeQuestion.type === "geoguesser" && teamIdToScore && (!correct || rewardPoints === 0)) {
       const team = teams.find((candidate) => candidate.id === teamIdToScore);
       if (team) setScoreHistory((previous) => [{
         id: makeId("score"), teamId: team.id, teamName: team.name, delta: 0,
-        reason: `${activeQuestion.category} · ${activeQuestion.points} · Pin the Globe · ${stageResult.distanceKm === null ? "No pin" : `${stageResult.distanceKm.toFixed(1)} km away`} · 0 pts`,
+        reason: `${activeQuestion.category} · ${activeQuestion.points} · ${stageResult ? `Pin the Globe · ${stageResult.distanceKm === null ? "No pin" : `${stageResult.distanceKm.toFixed(1)} km away`}` : correct ? "Correct · no points remaining" : "Wrong"} · 0 pts`,
         createdAt: new Date().toISOString(), questionId: activeQuestion.id,
       }, ...previous].slice(0, 100));
     }
@@ -883,7 +897,7 @@ export default function GameBoardPage() {
       advanceBoard();
     }
     setLastGuessTeamId("");
-    closeModal();
+    dismissQuestion(true);
   };
 
   const getJokerMaximumReward = () => {
@@ -1060,8 +1074,6 @@ export default function GameBoardPage() {
     }
     const rotateOnMiss = activeQuestion.timelineRotateOnMiss ?? true;
 
-    const remaining = (timelineQueue ?? []).slice(1);
-
     // Build combined sorted timeline including center pivot
     const combined = [
       ...(timelinePlacedLeft ?? []),
@@ -1087,16 +1099,17 @@ export default function GameBoardPage() {
         ? candidateYear === targetOnYear
         : slot.index === actualIndex && candidateYear !== actualYearAtIndex;
 
+    const remaining = advanceTimelineQueue(timelineQueue ?? [], correct);
     const placedEvent: PlacedTimelineEvent = {
       ...current,
-      status: correct ? "correct" : "wrong",
+      status: "correct",
     };
 
-    if (candidateYear < (timelineCenterYear ?? 0)) {
+    if (correct && candidateYear < (timelineCenterYear ?? 0)) {
       setTimelinePlacedLeft((prev) =>
         [...(prev ?? []), placedEvent].sort((a, b) => (a.year ?? 0) - (b.year ?? 0)),
       );
-    } else {
+    } else if (correct) {
       setTimelinePlacedRight((prev) =>
         [...(prev ?? []), placedEvent].sort((a, b) => (a.year ?? 0) - (b.year ?? 0)),
       );
@@ -1122,7 +1135,7 @@ export default function GameBoardPage() {
         teamColor: getTeamAccent(team).base,
         teamEmoji: team.badgeEmoji,
         correctCount: allocation.correctCount,
-        sharedMissCount: allocation.sharedMissCount,
+        wrongCount: allocation.wrongCount,
         points: allocation.points,
       }];
     });
@@ -1146,7 +1159,7 @@ export default function GameBoardPage() {
         applyScoreChange(
           result.teamId,
           result.points,
-          `${activeQuestion.category} · Timeline · ${result.correctCount} correct · ${result.sharedMissCount} shared misses`,
+          `${activeQuestion.category} · Timeline · ${result.correctCount} correct · ${result.wrongCount} wrong`,
           activeQuestion.id,
         );
       });
@@ -1277,6 +1290,7 @@ export default function GameBoardPage() {
         <TimelineModal
           category={modalQuestion.category}
           centerYear={timelineCenterYear}
+          currentTeamId={timelineTeamId}
           currentTeamName={timelineTeam?.name}
           currentTeamColor={timelineTeam ? getTeamAccent(timelineTeam).base : "#c99c4a"}
           currentTeamEmoji={timelineTeamEmoji}
@@ -1284,6 +1298,7 @@ export default function GameBoardPage() {
           placedLeft={timelinePlacedLeft ?? []}
           placedRight={timelinePlacedRight ?? []}
           onPlace={handleTimelinePlace}
+          onClose={closeModal}
           disableActions={!timelineTeamId}
           scoreResults={timelineScoreResults}
           points={activeQuestion.points}
@@ -1295,6 +1310,64 @@ export default function GameBoardPage() {
           basePoints={activeQuestion.points}
         />
       );
+    }
+    if (activeQuestion.type === "imageReveal") {
+      const questionId = activeQuestion.id;
+      const isAreas = activeQuestion.imageRevealStyle === "areas";
+      const limitedAreas = isAreas && activeQuestion.imageRevealAreaMode === "limited";
+      const savedProgress = turnState.imageRevealProgress?.[questionId] ?? { step: 0, points: activeQuestion.points };
+      const progress = isAreas && !limitedAreas ? { ...savedProgress, points: activeQuestion.points } : savedProgress;
+      const levels = getImageRevealLevels(activeQuestion.imageRevealLevels);
+      const nextStep = Math.min(levels.length - 1, progress.step + 1);
+      const boardValues = questions.map(q => q.points);
+      const areaRewards = isAreas ? getImageAreaRewards(activeQuestion, boardValues) : [];
+      const nextPoints = isAreas ? areaRewards[Math.min(areaRewards.length - 1, progress.revealedAreas?.length ?? 0)] ?? activeQuestion.points
+        : Math.min(progress.points, getImageRevealPoints(activeQuestion.points, nextStep, boardValues, activeQuestion.imageRevealCostsPoints ?? true));
+      const team = teams.find(t => t.id === (progress.teamId || answeringTeamId));
+      return <ImageRevealModal question={modalQuestion} progress={progress} team={team} nextPoints={nextPoints}
+        onChooseArea={area => setTurnState(previous => {
+          const saved = previous.imageRevealProgress?.[questionId] ?? progress;
+          if (!isAreas) return previous;
+          const next = chooseImageArea(activeQuestion, saved, area, boardValues, team?.id);
+          return next === saved ? previous : { ...previous, imageRevealProgress: { ...previous.imageRevealProgress, [questionId]: next } };
+        })}
+        onReveal={answerRevealed => setTurnState(previous => {
+          const saved = previous.imageRevealProgress?.[questionId] ?? progress;
+          if (saved.outcome) return previous;
+          return { ...previous, imageRevealProgress: { ...previous.imageRevealProgress, [questionId]: { ...saved, answerRevealed } } };
+        })}
+        onMore={() => setTurnState(previous => {
+          const saved = previous.imageRevealProgress?.[questionId] ?? progress;
+          if (saved.outcome) return previous;
+          return { ...previous, imageRevealProgress: { ...previous.imageRevealProgress, [questionId]: { ...saved, step: nextStep, points: nextPoints } } };
+        })}
+        onWrong={() => {
+          if (progress.outcome) return;
+          if (isAreas && !canGuessImageArea(activeQuestion, progress)) return;
+          const rollover = isAreas ? !limitedAreas : activeQuestion.imageRevealRotateOnMiss !== false;
+          setTurnState(previous => {
+            const saved = previous.imageRevealProgress?.[questionId] ?? progress;
+            if (saved.outcome) return previous;
+            if (isAreas) {
+              const next = missImageArea(activeQuestion, saved);
+              return next === saved ? previous : { ...previous, imageRevealProgress: { ...previous.imageRevealProgress, [questionId]: next } };
+            }
+            return { ...previous, imageRevealProgress: { ...previous.imageRevealProgress, [questionId]: rollover
+              ? { ...saved, answerRevealed: false, areaChosenThisTurn: false }
+              : { ...saved, answerRevealed: true, outcome: "skipped", teamId: answeringTeamId } } };
+          });
+          if (!rollover) return;
+          advanceBoard();
+          setLastGuessTeamId("");
+          setSelectedTeamId(activeTurnOrder[(boardTurnIndex + 1) % activeTurnOrder.length] ?? "");
+        }}
+        onResolve={correct => setTurnState(previous => {
+          const saved = previous.imageRevealProgress?.[questionId] ?? progress;
+          if (saved.outcome || (isAreas && correct && !canGuessImageArea(activeQuestion, saved))) return previous;
+          return { ...previous, imageRevealProgress: { ...previous.imageRevealProgress, [questionId]: { ...saved, points: isAreas && !limitedAreas ? activeQuestion.points : saved.points, outcome: correct ? "correct" : "skipped", teamId: saved.teamId ?? answeringTeamId } } };
+        })}
+        onFinish={() => markAnswered(progress.outcome === "correct")}
+      />;
     }
     if (activeQuestion.type === "audio") {
       return (
@@ -1568,7 +1641,7 @@ export default function GameBoardPage() {
           <button
             className="button primary"
             onClick={() => {
-              setFinalePodiumRevealCount(Math.min(3, sortedTeams.length));
+              setFinalePodiumRevealCount(getFinaleRevealPlan(sortedTeams).steps.length);
               setFinaleRevealed(true);
               setShowFinalLeaderboard(true);
             }}
@@ -1680,22 +1753,23 @@ export default function GameBoardPage() {
             if (stagedPodiumReveal) {
               setFinalePodiumRevealCount(0);
             } else {
-              setFinalePodiumRevealCount(Math.min(3, sortedTeams.length));
+              setFinalePodiumRevealCount(getFinaleRevealPlan(sortedTeams).steps.length);
               if (finaleSoundtrack.status !== "error") finaleSoundtrack.requestPlay();
             }
             setFinaleRevealed(true);
           }}
           onRevealNextPlace={() => {
             stopFinaleDrumroll();
-            const podiumSize = Math.min(3, sortedTeams.length);
-            const nextRevealCount = Math.min(podiumSize, finalePodiumRevealCount + 1);
-            if (nextRevealCount >= podiumSize) {
+            const steps = getFinaleRevealPlan(sortedTeams).steps;
+            const nextStep = steps[finalePodiumRevealCount];
+            if (!nextStep) return;
+            const nextRevealCount = finalePodiumRevealCount + 1;
+            if (nextStep.final) {
               setFinalePodiumRevealCount(nextRevealCount);
               if (finaleSoundtrack.status !== "error") finaleSoundtrack.requestPlay();
               return;
             }
-            const revealedPlace = podiumSize - nextRevealCount + 1;
-            if (revealedPlace === 2 || revealedPlace === 3) playPodiumReveal(revealedPlace);
+            playPodiumReveal(nextStep.ranks.includes(2) ? 2 : nextStep.ranks.includes(3) ? 3 : 4);
             setFinalePodiumRevealCount(nextRevealCount);
           }}
           onRevealCueStart={() => startFinaleDrumroll()}

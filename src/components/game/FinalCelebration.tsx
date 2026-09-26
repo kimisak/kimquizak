@@ -5,6 +5,7 @@ import type { FinaleMusicStatus } from "@/hooks/useFinaleSoundtrack";
 import { TeamPill } from "@/components/game/TeamPill";
 import type { Team } from "@/lib/types";
 import { getTeamAccent, getTeamMarker } from "@/lib/teamPresentation";
+import { getFinaleRevealPlan, ordinalPlace } from "@/lib/finaleReveal";
 
 type Props = {
   teams: Team[];
@@ -34,7 +35,6 @@ const celebrationEmoji = ["✨", "🎊", "⭐", "🥂", "🎉", "❄️", "💫"
 const playerMoods = ["🥳", "😄", "🤩", "😁", "😆", "☺️"];
 const flushReactions = ["😱", "😢", "😬", "🤢", "🤮"];
 const playerCheers = ["🍻", "🥂", "🍺", "🎉", "🎊", "🍾", "✨"];
-const flushDrift = [-100, -38, 38, 100];
 const fireworkOrigins = [
   { left: "13%", top: "25%", delay: "0s" },
   { left: "86%", top: "20%", delay: "-.85s" },
@@ -51,7 +51,7 @@ export function FinalCelebration({
   drumrollStarted,
   drumrollSeconds = 4,
   stagedReveal = false,
-  revealedPlaceCount = 3,
+  revealedPlaceCount = Number.MAX_SAFE_INTEGER,
   onRevealNextPlace,
   onRevealCueStart,
   onRevealCueStop,
@@ -60,22 +60,18 @@ export function FinalCelebration({
 }: Props) {
   const podium = teams.slice(0, 3);
   const winner = podium[0];
-  const visiblePlaceCount = stagedReveal
-    ? Math.max(0, Math.min(podium.length, revealedPlaceCount))
-    : podium.length;
-  const celebrationActive = !stagedReveal || visiblePlaceCount >= podium.length;
-  const latestRevealedIndex = podium.length - visiblePlaceCount;
-  const nextPlaceIndex = latestRevealedIndex - 1;
-  const intermediateRevealEmoji = latestRevealedIndex === 0
-    ? ["🥇", "🏆", "✨", "🍾", "🥂", "🎉", "👑"]
-    : latestRevealedIndex === 1
-      ? ["🥈", "✨", "🎉", "🥂", "👏"]
-      : ["🥉", "✨", "🎊", "👏", "🌟"];
-  const placeLabel = (index: number) => index === 0 ? "1st" : index === 1 ? "2nd" : "3rd";
+  const { tiers, steps } = getFinaleRevealPlan(teams);
+  const visiblePlaceCount = stagedReveal ? Math.max(0, Math.min(steps.length, revealedPlaceCount)) : steps.length;
+  const celebrationActive = !stagedReveal || visiblePlaceCount >= steps.length;
+  const visibleIds = new Set(steps.slice(0, visiblePlaceCount).flatMap(step => step.teamIds));
+  const latestIds = new Set(steps[visiblePlaceCount - 1]?.teamIds ?? []);
+  const nextStep = steps[visiblePlaceCount];
+  const rankOf = (team: Team) => tiers.find(tier => tier.teamIds.includes(team.id))?.rank ?? 1;
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
   const [forceMotion, setForceMotion] = useState(true);
   const [cheerBeat, setCheerBeat] = useState(0);
   const [flushVisible, setFlushVisible] = useState(false);
+  const [hasBeenFlushed, setHasBeenFlushed] = useState(false);
   const [flushBeat, setFlushBeat] = useState(0);
   const [drumrollCountdown, setDrumrollCountdown] = useState(drumrollSeconds);
 
@@ -125,10 +121,10 @@ export function FinalCelebration({
   }, [drumrollSeconds, drumrollStarted]);
 
   useEffect(() => {
-    if (!flushVisible) return;
+    if (!hasBeenFlushed || (prefersReducedMotion && !forceMotion)) return;
     const interval = window.setInterval(() => setFlushBeat((beat) => beat + 1), 1000);
     return () => window.clearInterval(interval);
-  }, [flushVisible]);
+  }, [hasBeenFlushed, prefersReducedMotion, forceMotion]);
 
   useEffect(() => {
     if (!revealed || !celebrationActive || teams.length < 4 || (prefersReducedMotion && !forceMotion)) return;
@@ -138,6 +134,7 @@ export function FinalCelebration({
     const showTimer = window.setTimeout(() => {
       setFlushBeat(0);
       setFlushVisible(true);
+      setHasBeenFlushed(true);
       hideTimer = window.setTimeout(() => setFlushVisible(false), 6200);
     }, delay);
     return () => {
@@ -158,7 +155,7 @@ export function FinalCelebration({
         style={{ "--team-base": accent.base } as CSSProperties}
       >
         {namedPlayers.map((player, playerIndex) => {
-          const isAffected = flushVisible && teamIndex >= 3;
+          const isAffected = hasBeenFlushed && teamIndex >= 3;
           const mood = isAffected
             ? flushReactions[(flushBeat + playerIndex + (teamIndex - 3) * 2) % flushReactions.length]
             : playerMoods[(cheerBeat + playerIndex + teamIndex * 2) % playerMoods.length];
@@ -313,35 +310,47 @@ export function FinalCelebration({
 
       <section className="finale-stage">
         <header className="finale-header">
+          <div className="finale-header-final" style={{ visibility: celebrationActive ? "visible" : "hidden" }} aria-hidden={!celebrationActive}>
           <span className="finale-kicker">
-            {celebrationActive ? preview ? "Finale preview" : "The final scores are in" : "One place at a time"}
+            {preview ? "Finale preview" : "The final scores are in"}
           </span>
-          <h1 id="finale-title">{celebrationActive ? "That's a wrap!" : "Final podium"}</h1>
+          <h1 id={celebrationActive ? "finale-title" : undefined}>That's a wrap!</h1>
           <p>
-            {celebrationActive && winner
-              ? <>Make some noise for <strong>{winner.name}</strong>!</>
-              : celebrationActive ? "Your final podium will take the stage here." : "The host controls every reveal."}
+            {winner
+              ? tiers[0]?.teamIds.length > 1 ? <>Make some noise for our <strong>joint winners</strong>!</> : <>Make some noise for <strong>{winner.name}</strong>!</>
+              : "Your final podium will take the stage here."}
           </p>
+          </div>
+          {!celebrationActive && <div className="finale-header-pending">
+            <span className="finale-kicker">From last place to the winner</span>
+            <h1 id="finale-title">Final podium</h1>
+            <p>The host controls every reveal.</p>
+          </div>}
         </header>
 
         <section className="finale-podium" aria-label="Final podium">
           {podium.length > 0 ? podium.map((team, index) => {
             const accent = getTeamAccent(team);
-            const isPlaceVisible = index >= latestRevealedIndex;
-            const isLatestReveal = isPlaceVisible && index === latestRevealedIndex;
+            const rank = rankOf(team);
+            const isPlaceVisible = visibleIds.has(team.id);
+            const isLatestReveal = isPlaceVisible && latestIds.has(team.id);
+            const intermediateRevealEmoji = rank === 1 ? ["🥇", "🏆", "✨", "🍾", "🥂", "🎉", "👑"]
+              : rank === 2 ? ["🥈", "✨", "🎉", "🥂", "👏"] : ["🥉", "✨", "🎊", "👏", "🌟"];
             return (
               <article
                 key={team.id}
-                className={`finale-team finale-team-${index + 1}${isPlaceVisible ? " is-place-visible" : " is-place-concealed"}${isLatestReveal ? " is-latest-reveal" : ""}${index === 2 && flushVisible ? " is-flushing" : ""}`}
+                data-team-id={team.id}
+                data-rank={rank}
+                className={`finale-team finale-team-${index + 1}${isPlaceVisible ? " is-place-visible" : " is-place-concealed"}${isLatestReveal ? " is-latest-reveal" : ""}`}
                 style={{
                   "--finale-team-base": accent.base,
                   "--finale-team-accent": accent.onLight,
                   "--finale-team-glow": accent.glow,
                 } as CSSProperties}
               >
-                <div className="finale-team-content" aria-hidden={!isPlaceVisible}>
-                    <span className="finale-medal" aria-label={`Place ${index + 1}`} role="img">
-                      {podiumMedals[index]}
+                <div className="finale-team-content" aria-hidden={!isPlaceVisible} style={isPlaceVisible ? undefined : { visibility: "hidden", opacity: 0, pointerEvents: "none" }}>
+                    <span className="finale-medal" aria-label={`Place ${rank}`} role="img">
+                      {podiumMedals[rank - 1] ?? "🎉"}
                     </span>
                     <div className="finale-team-identity">
                       <div
@@ -359,12 +368,12 @@ export function FinalCelebration({
                     <strong className="finale-score">{team.score}<small> pts</small></strong>
                 </div>
                 {!isPlaceVisible && (
-                  <div className="finale-place-concealed" aria-label={`${placeLabel(index)} place is hidden`}>
+                  <div className="finale-place-concealed" aria-label={`${ordinalPlace(index + 1)} place is hidden`}>
                     <span className="finale-skeleton-medal" aria-hidden>✦</span>
                     <div className="finale-skeleton-identity" aria-hidden>
                       <span className="finale-skeleton-team">
                         <i />
-                        <strong>{placeLabel(index)} place</strong>
+                        <strong>{ordinalPlace(index + 1)} place</strong>
                       </span>
                       {team.players.some((player) => player.name.trim()) && (
                         <span className="finale-skeleton-players">
@@ -420,24 +429,6 @@ export function FinalCelebration({
                     </div>
                   </div>
                 )}
-                {isPlaceVisible && index === 2 && flushVisible && teams.length > 3 && (
-                  <div className="finale-flush" aria-hidden="true">
-                    <span className="finale-flush-source">🚽</span>
-                    <span className="finale-flush-swirl">🌀</span>
-                    {Array.from({ length: 3 }, (_, wave) => flushDrift.map((drift, pieceIndex) => (
-                      <span
-                        className="finale-flush-piece"
-                        key={`${wave}-${pieceIndex}`}
-                        style={{
-                          "--flush-drift": `${drift}px`,
-                          "--flush-mid": `${Math.round(drift * 0.18)}px`,
-                          "--flush-end": `${Math.round(drift * 1.2)}px`,
-                          "--flush-delay": `${wave * 1.25 + pieceIndex * 0.14}s`,
-                        } as CSSProperties}
-                      >💩</span>
-                    )))}
-                  </div>
-                )}
               </article>
             );
           }) : (
@@ -445,30 +436,48 @@ export function FinalCelebration({
           )}
         </section>
 
-        {stagedReveal && !celebrationActive && nextPlaceIndex >= 0 && (
-          <button
-            className="button primary finale-place-reveal"
-            type="button"
-            onClick={onRevealNextPlace}
-            onMouseEnter={onRevealCueStart}
-            onMouseLeave={onRevealCueStop}
-            onFocus={onRevealCueStart}
-            onBlur={onRevealCueStop}
-          >
-            Reveal {placeLabel(nextPlaceIndex)} place
-          </button>
-        )}
-
-        {celebrationActive && teams.length > 3 && (
+        {teams.length > 3 && (
           <div className="finale-everyone">
-            <span>And a huge cheer for</span>
-            <div>
-              {teams.slice(3).map((team, index) => (
-                <div className="finale-encore-team" key={team.id}>
-                  <span className="finale-encore-name"><span aria-hidden>{getTeamMarker(team)}</span> {team.name}</span>
-                  {renderPlayers(team, index + 3)}
+            <span>{celebrationActive ? "And a huge cheer for" : "The remaining places"}</span>
+            <div className="finale-encore-group">
+              {teams.slice(3).map((team, index) => {
+                const visible = visibleIds.has(team.id);
+                const rank = rankOf(team);
+                return <div className={`finale-encore-team${visible ? " is-place-visible" : " is-place-concealed"}${hasBeenFlushed ? " has-flush-residue" : ""}`} key={team.id} data-team-id={team.id} data-rank={rank}>
+                  <div className="finale-encore-content" aria-hidden={!visible} style={visible ? undefined : { visibility: "hidden", opacity: 0, pointerEvents: "none" }}>
+                    <span className="finale-encore-name"><span aria-hidden>{getTeamMarker(team)}</span> {team.name}</span>
+                    <strong className="finale-encore-score">{ordinalPlace(rank)} · {team.score} pts</strong>
+                    {renderPlayers(team, index + 3)}
+                  </div>
+                  {!visible && <span className="finale-encore-concealed">{ordinalPlace(index + 4)} place</span>}
+                  {stagedReveal && visible && latestIds.has(team.id) && <span key={visiblePlaceCount} className="finale-encore-burst" aria-hidden>✨ 🎉 ✨</span>}
+                  {hasBeenFlushed && <span className="finale-flush-residue" aria-hidden="true">
+                    {Array.from({ length:24 }, (_, index) => <i key={index} style={{
+                      left:`${3 + index * 94 / 23}%`,
+                      bottom:`${index % 3}px`,
+                      animationDelay:`${.8 + index % 8 * .35}s`,
+                    }}>💩</i>)}
+                  </span>}
+                </div>;
+              })}
+              {flushVisible && (
+                <div className="finale-flush" aria-hidden="true">
+                  {["left", "right"].map(side => (
+                    <div className={`finale-fountain ${side}`} key={side}>
+                      <span className="finale-fountain-toilet">🚽</span>
+                      <span className="finale-flush-swirl">🌀</span>
+                      {Array.from({ length: 18 }, (_, index) => (
+                        <span className="finale-fountain-flight" key={index} style={{
+                          "--fountain-reach": `${18 + (index * 19 % 67)}%`,
+                          "--fountain-height": `${85 + index % 4 * 14}px`,
+                          "--fountain-land": `${28 + index % 3 * 12}px`,
+                          "--fountain-delay": `${Math.floor(index / 6) * 1.15 + index % 6 * .14}s`,
+                        } as CSSProperties}><span>💩</span></span>
+                      ))}
+                    </div>
+                  ))}
                 </div>
-              ))}
+              )}
             </div>
           </div>
         )}
@@ -480,20 +489,20 @@ export function FinalCelebration({
               <div>
                 <strong>
                   {music.status === "playing"
-                    ? `Finale soundtrack · ${music.remaining.toFixed(1)}s`
+                    ? `Music · ${music.remaining.toFixed(1)}s`
                     : music.status === "loading" || music.status === "preparing"
-                      ? "Preparing finale soundtrack…"
+                      ? "Loading music…"
                       : music.status === "ended"
-                        ? "Soundtrack finished"
+                        ? "Music ended"
                         : music.status === "error"
-                          ? "Soundtrack unavailable"
-                          : "Finale soundtrack ready"}
+                          ? "Music unavailable"
+                          : "Music ready"}
                 </strong>
                 {music.message && <small>{music.message}</small>}
               </div>
               {["ready", "blocked", "ended", "error", "idle"].includes(music.status) && (
-                <button className="button finale-music-start" type="button" onClick={music.onStart}>
-                  {music.status === "ended" ? "Replay music" : "▶ Start music"}
+                <button className="button finale-music-start" type="button" onClick={music.onStart} aria-label={music.status === "ended" ? "Replay music" : "Play music"}>
+                  {music.status === "ended" ? "Replay" : "▶ Play"}
                 </button>
               )}
             </div>
@@ -503,13 +512,28 @@ export function FinalCelebration({
               className="button finale-motion-toggle"
               type="button"
               onClick={() => setForceMotion((enabled) => !enabled)}
+              aria-label={forceMotion ? "Pause animation" : "Resume animation"}
+              title={forceMotion ? "Pause animation" : "Resume animation"}
             >
-              {forceMotion ? "Pause animation" : "▶ Start celebration"}
+              {forceMotion ? "⏸ Effects" : "▶ Effects"}
             </button>
           )}
           <button className="button finale-close" type="button" onClick={onClose} autoFocus>
             Back to the board
           </button>
+          {stagedReveal && !celebrationActive && nextStep && (
+            <button
+              className="button primary finale-place-reveal"
+              type="button"
+              onClick={onRevealNextPlace}
+              onMouseEnter={onRevealCueStart}
+              onMouseLeave={onRevealCueStop}
+              onFocus={onRevealCueStart}
+              onBlur={onRevealCueStop}
+            >
+              Reveal next
+            </button>
+          )}
         </div>
       </section>
     </div>

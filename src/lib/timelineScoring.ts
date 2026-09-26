@@ -3,10 +3,16 @@ export type TimelinePlacementOutcome = {
   correct: boolean;
 };
 
+/** Misses go to the back, with their year and point share still unclaimed. */
+export function advanceTimelineQueue<T>(queue: readonly T[], correct: boolean): T[] {
+  if (!queue.length) return [];
+  return correct ? queue.slice(1) : [...queue.slice(1), queue[0]];
+}
+
 export type TimelinePointAllocation = {
   teamId: string;
   correctCount: number;
-  sharedMissCount: number;
+  wrongCount: number;
   points: number;
 };
 
@@ -25,7 +31,7 @@ export function allocateTimelinePoints(
   const eventShare = safeTotal / safeEventCount;
   const rawPoints = new Map(eligibleTeams.map((teamId) => [teamId, 0]));
   const correctCounts = new Map(eligibleTeams.map((teamId) => [teamId, 0]));
-  const sharedMissCounts = new Map(eligibleTeams.map((teamId) => [teamId, 0]));
+  const wrongCounts = new Map(eligibleTeams.map((teamId) => [teamId, 0]));
 
   outcomes.forEach((outcome) => {
     if (outcome.correct) {
@@ -34,22 +40,17 @@ export function allocateTimelinePoints(
       return;
     }
 
-    const recipients = eligibleTeams.filter((teamId) => teamId !== outcome.teamId);
-    const actualRecipients = recipients.length > 0 ? recipients : [outcome.teamId];
-    const sharedPoints = eventShare / actualRecipients.length;
-    actualRecipients.forEach((teamId) => {
-      rawPoints.set(teamId, (rawPoints.get(teamId) ?? 0) + sharedPoints);
-      sharedMissCounts.set(teamId, (sharedMissCounts.get(teamId) ?? 0) + 1);
-    });
+    // Misses do not consume shares: the event returns to the queue until placed correctly.
+    wrongCounts.set(outcome.teamId, (wrongCounts.get(outcome.teamId) ?? 0) + 1);
   });
 
-  const targetDistributed = Math.round(eventShare * outcomes.length);
+  const targetDistributed = Math.round(eventShare * outcomes.filter(outcome => outcome.correct).length);
   const allocations = eligibleTeams.map((teamId) => {
     const raw = rawPoints.get(teamId) ?? 0;
     return {
       teamId,
       correctCount: correctCounts.get(teamId) ?? 0,
-      sharedMissCount: sharedMissCounts.get(teamId) ?? 0,
+      wrongCount: wrongCounts.get(teamId) ?? 0,
       points: Math.floor(raw),
       remainder: raw - Math.floor(raw),
     };
@@ -70,7 +71,7 @@ export function allocateTimelinePoints(
   return allocations.map((allocation) => ({
     teamId: allocation.teamId,
     correctCount: allocation.correctCount,
-    sharedMissCount: allocation.sharedMissCount,
+    wrongCount: allocation.wrongCount,
     points: allocation.points,
   }));
 }

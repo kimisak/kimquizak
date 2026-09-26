@@ -1,0 +1,9 @@
+Trumpet Fanfare — Graciano Choc (gchoc / Bz.gamedev)
+Source: https://opengameart.org/content/trumpet-fanfare
+Original: https://opengameart.org/sites/default/files/castlefanfare.mp3
+License: CC0 1.0 Universal / public-domain dedication
+https://creativecommons.org/publicdomain/zero/1.0/
+License checked September 23, 2026.
+
+Converted to 192 kbps MP3 and loudness-normalized to -20 LUFS for this app.
+Used for third-place reveal. The existing Fupicat ta-da remains for fourth and lower places.

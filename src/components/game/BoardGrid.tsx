@@ -98,7 +98,7 @@ export function BoardGrid({
               return results;
             }, new Map());
           const results = Array.from(resultByTeam.values())
-            .filter((entry) => entry.delta !== 0 || q?.type === "booby" || q?.geoExplorationMode === "stage")
+            .filter((entry) => entry.delta !== 0 || q?.type === "booby" || q?.type === "geoguesser")
             .sort((first, second) => second.delta - first.delta);
           const visibleResults = scoresHidden ? [] : results;
           return (
