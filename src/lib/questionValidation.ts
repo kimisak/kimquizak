@@ -1,3 +1,4 @@
+import { getConnectionsIssues } from "@/lib/connections";
 import { MCQ_MIN_OPTIONS, MCQ_MAX_OPTIONS, getMcqCorrectIndexes, getMcqRequiredCorrect } from "@/lib/mcq";
 import type { Question } from "@/lib/types";
 import { parseStreetViewSource } from "@/lib/geoguesser";
@@ -11,6 +12,8 @@ function hasText(value: string | null | undefined): boolean {
 export function getQuestionIssues(question: Question): string[] {
   const type = question.type ?? "standard";
   const issues: string[] = [];
+
+  if (type === "connections") return getConnectionsIssues(question);
 
   if (type === "joker") return issues;
 

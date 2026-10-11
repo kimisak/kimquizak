@@ -1,12 +1,26 @@
 # Product backlog
 
+## New game rounds — requested 2026-10-11
+
+Direction: grow KimQuizak into a quiz and games platform, with team games that fit the existing board and host-led play.
+
+Requested modes:
+
+- **Wordle-inspired word guessing:** the host supplies a secret word and optional clue; guesses reveal correct letters and positions. Decide word lengths, accepted guesses/languages, attempt limits, team rotation, and scoring before implementation.
+- **Connections-inspired grouping — implemented locally 2026-10-11:** 16 tiles in four real groups, with a host-selected finish target of 1–4 connections, a shuffle control, fading near-miss hints, split scoring, configurable rollover, 120 seconds per guess and four shared mistakes by default (both adjustable/optional). Without rollover the same team keeps playing. The host can end early; remaining answers animate into view one by one. See `docs/connections.md`.
+- **Hangman or an equivalent letter-reveal game:** the host supplies a word or phrase and optional clue; teams guess letters or attempt the full solution. A non-hanging visual could track mistakes. Decide turn rules, mistake limits, and scoring before implementation.
+
+Shared requirements: host-authored puzzles, readable shared-screen presentation, clear team turns and scoring, progress preserved across closing/reloading, backup and cloud-save support, and predictable reset behavior. Consider Norwegian letters (Æ, Ø, Å) in word-based modes.
+
+Connections was selected as the first implementation. Wordle and Hangman rules and priority remain to be agreed. Hosts control evening pacing; there is no restriction on the number of game rounds on a board.
+
 ## Regression follow-up
 
 The September regression pass and repeatable checks are documented in `docs/regression-review.md`.
 
 - Verify physical Surface Pro, ultrawide, and TV readability; automated viewport checks are covered.
 - Run the same flows in Microsoft Edge, including audio autoplay and actual cue balance.
-- Exercise live Google Maps exploration and map-pin locking with the host's API configuration.
+- GeoGuessr production check completed by the host on 2026-10-11; reported working correctly.
 - Expand browser coverage for unusually large rosters, long host messages, and remaining question gameplay permutations.
 
 ## Host-message variables — implemented 2026-09-13

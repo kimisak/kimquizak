@@ -499,3 +499,150 @@ test('multi-answer MCQ supports a smaller finish target, retained points on a mi
   assert.equal(result.points, 300);
   assert(result.progress.finished);
 });
+
+function connectionsQuestion(overrides = {}) {
+  return { id: 'connections', type: 'connections', category: 'Games', prompt: '', answer: '', answered: false, points: 501,
+    connectionsGroups: Array.from({ length: 4 }, (_, group) => ({ label: `Group ${group}`, words: Array.from({ length: 4 }, (_, word) => `Tile ${group}-${word}`) })), ...overrides };
+}
+
+test('Connections validates four distinct groups, Unicode tiles, and optional pacing limits', () => {
+  const { getQuestionIssues } = projectLoader()('@/lib/questionValidation');
+  const q = connectionsQuestion();
+  assert.deepEqual(getQuestionIssues(q), []);
+  assert.deepEqual(getQuestionIssues({ ...q, connectionsGuessSeconds: 0, connectionsMistakeLimit: 0 }), []);
+  for (const connectionsGuessSeconds of [-1, .5, NaN, 3601]) assert(getQuestionIssues({ ...q, connectionsGuessSeconds }).length);
+  for (const connectionsMistakeLimit of [-1, .5, NaN, 101]) assert(getQuestionIssues({ ...q, connectionsMistakeLimit }).length);
+  assert(getQuestionIssues({ ...q, connectionsGroups: q.connectionsGroups.slice(0, 3) }).length);
+  q.connectionsGroups[0].words = ['Æ', 'Ø', 'Å', 'å '];
+  assert(getQuestionIssues(q).includes('Every tile must be unique'));
+  q.connectionsGroups[0].words = ['Æ', 'Ø', 'Å', 'Snø'];
+  assert.deepEqual(getQuestionIssues(q), []);
+});
+
+test('Connections splits the exact pool, retains turns, and rejects duplicate or invalid submissions', () => {
+  const { createConnectionsProgress, advanceConnections } = projectLoader()('@/lib/connections');
+  const q = connectionsQuestion();
+  const order = ['a', 'b'];
+  let state = createConnectionsProgress('a');
+  assert.equal(new Set(state.order).size, 16);
+  assert.equal(advanceConnections(q, state, { type: 'guess', tiles: [0, 1, 2, 3] }, order, 0), null);
+  state = advanceConnections(q, state, { type: 'start' }, order, 1000).progress;
+  assert.equal(state.deadline, 121000);
+  for (const tiles of [[0,0,1,2], [0,1,2,16], [0,1,2,.5], [0,1,2]]) assert.equal(advanceConnections(q, state, { type:'guess', tiles }, order, 2000), null);
+  state = advanceConnections(q, state, { type:'guess', tiles:[0,1,2,3] }, order, 2000).progress;
+  assert.equal(state.deadline, 122000);
+  assert.equal(state.teamId, 'a');
+  assert.equal(state.pointsByTeam.a, 125);
+  assert.equal(advanceConnections(q, state, { type:'guess', tiles:[3,2,1,0] }, order, 2100), null);
+  state = advanceConnections(q, state, { type:'guess', tiles:[4,5,6,8] }, order, 3000).progress;
+  assert.equal(state.feedback, "Three are correct");
+  assert.equal(state.teamId, 'b');
+  assert.equal(state.mistakes, 1);
+  assert.equal(advanceConnections(q, state, { type:'guess', tiles:[8,6,5,4] }, order, 4000), null);
+  for (const group of [1,2,3]) state = advanceConnections(q, state, { type:'guess', tiles:[0,1,2,3].map(tile => group*4+tile) }, order, 5000).progress;
+  assert(state.finished);
+  assert.equal(state.finishReason, 'solved');
+  assert.deepEqual(state.pointsByTeam, { a:125, b:376 });
+  assert.equal(state.deadline, null);
+  assert.equal(advanceConnections(q, state, { type:'end' }, order, 5000), null);
+});
+
+test('Connections expires late guesses without points, resets each guess timer, and honors rollover off', () => {
+  const { createConnectionsProgress, advanceConnections } = projectLoader()('@/lib/connections');
+  const q = connectionsQuestion({ connectionsRotateOnMiss:false, connectionsGuessSeconds:10, connectionsMistakeLimit:2 });
+  let state = advanceConnections(q, createConnectionsProgress('a'), { type:'start' }, ['a','b'], 0).progress;
+  assert.equal(advanceConnections(q, state, { type:'timeout' }, ['a','b'], 9999), null);
+  state = advanceConnections(q, state, { type:'guess', tiles:[0,1,2,3] }, ['a','b'], 10000).progress;
+  assert.equal(state.mistakes, 1);
+  assert.equal(state.teamId, 'a');
+  assert.equal(state.deadline, 20000);
+  assert.deepEqual(state.solved, []);
+  state = advanceConnections(q, state, { type:'guess', tiles:[0,1,2,3] }, ['a','b'], 11000).progress;
+  assert.equal(state.deadline, 21000);
+  assert.equal(state.pointsByTeam.a, 125);
+  state = advanceConnections(q, state, { type:'timeout' }, ['a','b'], 21000).progress;
+  assert(state.finished);
+  assert.equal(state.finishReason, 'mistakes');
+  assert.equal(state.pointsByTeam.a, 125);
+});
+
+test('Connections restores deadlines and progress, supports unlimited play, and host termination', () => {
+  const { createConnectionsProgress, advanceConnections } = projectLoader()('@/lib/connections');
+  const q = connectionsQuestion({ connectionsGuessSeconds:0, connectionsMistakeLimit:0 });
+  let state = advanceConnections(q, createConnectionsProgress('a'), { type:'start' }, ['a','b'], 0).progress;
+  assert.equal(state.deadline, null);
+  assert.equal(advanceConnections(q, state, { type:'timeout' }, ['a','b'], 9999999), null);
+  state = advanceConnections(q, state, { type:'guess', tiles:[0,1,2,4] }, ['a','b'], 9999999).progress;
+  assert.equal(state.teamId, 'b');
+  assert(!state.finished);
+  const restored = JSON.parse(JSON.stringify(state));
+  assert.deepEqual(restored, state);
+  const finished = advanceConnections(q, restored, { type:'end' }, ['a','b'], 10000000);
+  assert.equal(finished.progress.finishReason, 'host');
+  assert.deepEqual(finished.progress.pointsByTeam, {});
+  const timed = connectionsQuestion();
+  state = advanceConnections(timed, createConnectionsProgress('a'), { type:'start' }, ['a','b'], 0).progress;
+  state = advanceConnections(timed, JSON.parse(JSON.stringify(state)), { type:'timeout' }, ['a','b'], 500000).progress;
+  assert.equal(state.mistakes, 1);
+  assert.equal(state.teamId, 'b');
+  assert.equal(state.deadline, 620000, 'returning after expiry starts a fresh guess, not a reset of the expired turn');
+});
+
+test('Connections text parses four lines and preserves quoted punctuation and Unicode', () => {
+  const { parseConnectionsText, formatConnectionsText, getConnectionsIssues } = projectLoader()('@/lib/connections');
+  const q = connectionsQuestion();
+  q.connectionsGroups[0] = { label:'Say: something', words:['Hello, world','Say "yes"','Æ','Snø'] };
+  const raw = formatConnectionsText(q.connectionsGroups);
+  const parsed = parseConnectionsText('\n' + raw.replace(/\n/g, '\r\n') + '\n');
+  assert.deepEqual(parsed.issues, []);
+  assert.deepEqual(parsed.groups, q.connectionsGroups);
+  for (const text of ['No delimiter', 'Name: one, two, three', 'Name: one, two, three, four, five', 'Name: one, two, three,', 'Name: "unclosed, two, three, four']) {
+    const result = parseConnectionsText(text);
+    assert(result.issues.some(issue => issue.startsWith('Line 1:')));
+    assert(getConnectionsIssues({ ...q, connectionsText:text }).length, 'Invalid raw draft cannot leave an old puzzle playable');
+  }
+  assert(parseConnectionsText(raw + '\nExtra: a,b,c,d').issues.length);
+  assert.deepEqual(parseConnectionsText(raw).groups, q.connectionsGroups);
+});
+
+test('Connections finish targets accept any groups, split the exact pool, and reject filler', () => {
+  const { advanceConnections, createConnectionsProgress, getConnectionsIssues, parseConnectionsText } = projectLoader()('@/lib/connections');
+  for (const target of [1,2,3,4]) {
+    const q = connectionsQuestion({connectionsRequired:target});
+    assert.deepEqual(getConnectionsIssues(q), []);
+    let state = advanceConnections(q, createConnectionsProgress('a'), {type:'start'}, ['a','b'], 0).progress;
+    for (let pick=0; pick<target; pick++) {
+      const group = 3-pick;
+      state = advanceConnections(q, state, {type:'guess',tiles:[0,1,2,3].map(i=>group*4+i)}, ['a','b'], 1000).progress;
+      assert.equal(state.finished, pick === target-1);
+      if (pick === 0 && target > 1) state = advanceConnections(q, state, {type:'guess',tiles:[0,1,2,4]}, ['a','b'], 1500).progress;
+    }
+    assert.equal(state.finishReason, 'solved');
+    assert.equal(Object.values(state.pointsByTeam).reduce((a,b)=>a+b,0),501);
+    assert.equal(state.deadline,null);
+    assert.equal(advanceConnections(q,state,{type:'guess',tiles:[0,1,2,3]},['a','b'],2000),null);
+  }
+  for (const required of [0,5,1.5,NaN]) assert(getConnectionsIssues(connectionsQuestion({connectionsRequired:required})).length);
+  assert(getConnectionsIssues(connectionsQuestion({connectionsFiller:['legacy draft']})).length);
+  assert(parseConnectionsText('Filler: one, two, three, four').issues.some(issue=>issue.includes('replace filler')));
+  assert(getConnectionsIssues({...connectionsQuestion(),connectionsGroups:connectionsQuestion().connectionsGroups.slice(0,3)}).length);
+});
+
+test('Connections shuffle changes only unsolved positions and never resets rules or deadlines', () => {
+  const { advanceConnections, createConnectionsProgress, shuffleConnectionsOrder } = projectLoader()('@/lib/connections');
+  const q = connectionsQuestion();
+  const unchangedRandom = () => .999999;
+  const ordered = Array.from({length:16}, (_,i)=>i);
+  assert.notDeepEqual(shuffleConnectionsOrder(ordered, [], unchangedRandom), ordered, 'Even an identity shuffle changes the layout');
+  let state = createConnectionsProgress('a', unchangedRandom);
+  state = advanceConnections(q, state, {type:'start'}, ['a','b'], 0, unchangedRandom).progress;
+  state = advanceConnections(q, state, {type:'guess',tiles:[0,1,2,3]}, ['a','b'], 1000).progress;
+  const shuffled = advanceConnections(q, state, {type:'shuffle'}, ['a','b'], 2000, unchangedRandom).progress;
+  assert.notDeepEqual(shuffled.order, state.order);
+  assert.deepEqual([...shuffled.order].sort((a,b)=>a-b), ordered);
+  state.order.forEach((tile,index)=>{if(tile<4) assert.equal(shuffled.order[index],tile);});
+  assert.deepEqual({...shuffled,order:state.order}, state);
+  const expired = advanceConnections(q, state, {type:'shuffle'}, ['a','b'], state.deadline).progress;
+  assert.equal(expired.mistakes, 1, 'Shuffle cannot bypass an expired guess');
+  assert.equal(expired.teamId, 'b');
+});

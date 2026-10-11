@@ -21,6 +21,7 @@ export function useTurnState() {
       audioReplayValues: {},
       imageRevealProgress: {},
       mcqProgress: {},
+      connectionsProgress: {},
       scoresHidden: false,
       hiddenScoreOrder: [],
     },
@@ -61,6 +62,7 @@ export function useTurnState() {
       audioReplayValues: {},
       imageRevealProgress: {},
       mcqProgress: {},
+      connectionsProgress: {},
       scoresHidden: false,
       hiddenScoreOrder: [],
     });

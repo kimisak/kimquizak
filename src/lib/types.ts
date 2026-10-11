@@ -31,7 +31,7 @@ export type Team = {
   accentGlow?: string | null;
 };
 
-export type QuestionKind = "standard" | "lyrics" | "geoguesser" | "joker" | "timeline" | "mcq" | "audio" | "booby" | "imageReveal" | "trivia";
+export type QuestionKind = "standard" | "lyrics" | "geoguesser" | "joker" | "timeline" | "mcq" | "audio" | "booby" | "imageReveal" | "trivia" | "connections";
 export type TriviaItem = { id: string; prompt: string; answer: string; imageData?: string | null; imageName?: string | null };
 export type ImageRevealStyle = "zoom" | "blur" | "noise" | "areas";
 export type ImageRevealProgress = { step: number; points: number; answerRevealed?: boolean; outcome?: "correct" | "skipped"; teamId?: string; revealedAreas?: number[]; areaChosenThisTurn?: boolean };
@@ -51,6 +51,13 @@ export type Question = {
   typeDrafts?: Partial<Record<QuestionKind, QuestionTypeDraft>>;
   imageRevealStyle?: ImageRevealStyle;
   triviaItems?: TriviaItem[];
+  connectionsGroups?: ConnectionsGroup[];
+  connectionsText?: string;
+  connectionsRequired?: number;
+  connectionsFiller?: string[]; // Legacy drafts only; must be replaced with real connections.
+  connectionsGuessSeconds?: number;
+  connectionsMistakeLimit?: number;
+  connectionsRotateOnMiss?: boolean;
   imageRevealLevels?: number[];
   imageRevealStyleLevels?: Partial<Record<ImageRevealStyle, number[]>>;
   imageRevealPatchOverrides?: Array<Record<number, boolean>>;
@@ -153,6 +160,21 @@ export type ResolvedHostMessage = {
   }>;
 };
 
+export type ConnectionsGroup = { label: string; words: string[] };
+export type ConnectionsProgress = {
+  order: number[];
+  solved: number[];
+  mistakes: number;
+  attempts: string[];
+  pointsByTeam: Record<string, number>;
+  teamId: string;
+  started: boolean;
+  deadline: number | null;
+  finished: boolean;
+  finishReason?: "solved" | "mistakes" | "host";
+  feedback?: string;
+};
+
 export type McqProgress = {
   found: number[];
   eliminated: number[];
@@ -173,6 +195,7 @@ export type TurnState = {
   audioReplayValues?: Record<string, number>;
   imageRevealProgress?: Record<string, ImageRevealProgress>;
   mcqProgress?: Record<string, McqProgress>;
+  connectionsProgress?: Record<string, ConnectionsProgress>;
   scoresHidden?: boolean;
   hiddenScoreOrder?: string[];
 };

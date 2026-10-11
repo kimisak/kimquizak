@@ -27,6 +27,11 @@ type ActiveDrag = {
   element: HTMLLIElement;
   startX: number;
   startY: number;
+  scrollAnchor: HTMLElement;
+  anchorX: number;
+  anchorY: number;
+  scrollX: number;
+  scrollY: number;
   x: number;
   y: number;
   lastX: number;
@@ -341,6 +346,30 @@ export function Leaderboard({ teams, onAdjust, onSet, history = [], onUndo, comp
     ], { duration: 680, easing: "cubic-bezier(.18,.84,.24,1)" });
   };
 
+  const syncPlayerDragScroll = () => {
+    const drag = activeDrag.current;
+    if (!drag) return;
+    const anchor = drag.scrollAnchor.getBoundingClientRect();
+    const scrollX = drag.anchorX - (anchor.left - drag.scrollAnchor.scrollLeft);
+    const scrollY = drag.anchorY - (anchor.top - drag.scrollAnchor.scrollTop);
+    const deltaX = scrollX - drag.scrollX;
+    const deltaY = scrollY - drag.scrollY;
+    if (deltaX === 0 && deltaY === 0) return;
+    drag.scrollX = scrollX;
+    drag.scrollY = scrollY;
+    // Only rebase layout coordinates. Pointer gesture history and velocity must
+    // not treat scrolling as shaking, spinning, or a throw.
+    drag.x += deltaX;
+    drag.y += deltaY;
+    drag.origin = new DOMRect(drag.origin.x - deltaX, drag.origin.y - deltaY, drag.origin.width, drag.origin.height);
+    drag.element.style.setProperty("--drag-x", `${drag.x}px`);
+    drag.element.style.setProperty("--drag-y", `${drag.y}px`);
+    drag.teammateRects.forEach((target, playerId) => {
+      const element = playerElements.current.get(playerId);
+      if (element) target.rect = element.getBoundingClientRect();
+    });
+  };
+
   const startPlayerDrag = (
     event: ReactPointerEvent<HTMLLIElement>,
     playerId: string,
@@ -355,6 +384,8 @@ export function Leaderboard({ teams, onAdjust, onSet, history = [], onUndo, comp
     returningAnimation?.cancel();
     returnAnimations.current.delete(playerId);
     const origin = element.getBoundingClientRect();
+    const scrollAnchor = element.parentElement!;
+    const anchor = scrollAnchor.getBoundingClientRect();
     const initialX = visibleRect ? visibleRect.left - origin.left : 0;
     const initialY = visibleRect ? visibleRect.top - origin.top : 0;
     const teammateRects = new Map<string, { rect: DOMRect; index: number; teamId: string }>();
@@ -391,11 +422,16 @@ export function Leaderboard({ teams, onAdjust, onSet, history = [], onUndo, comp
       pointerEvent.clientX,
       pointerEvent.clientY,
     );
+    const scroll = () => syncPlayerDragScroll();
     const removeListeners = () => {
+      window.removeEventListener("scroll", scroll, true);
+      window.removeEventListener("resize", scroll);
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", finish);
       window.removeEventListener("pointercancel", cancel);
     };
+    window.addEventListener("scroll", scroll, { capture: true, passive: true });
+    window.addEventListener("resize", scroll);
     window.addEventListener("pointermove", move, { passive: false });
     window.addEventListener("pointerup", finish);
     window.addEventListener("pointercancel", cancel);
@@ -407,6 +443,11 @@ export function Leaderboard({ teams, onAdjust, onSet, history = [], onUndo, comp
       element,
       startX: event.clientX - initialX,
       startY: event.clientY - initialY,
+      scrollAnchor,
+      anchorX: anchor.left - scrollAnchor.scrollLeft,
+      anchorY: anchor.top - scrollAnchor.scrollTop,
+      scrollX: 0,
+      scrollY: 0,
       x: initialX,
       y: initialY,
       lastX: initialX,
@@ -436,6 +477,7 @@ export function Leaderboard({ teams, onAdjust, onSet, history = [], onUndo, comp
     const drag = activeDrag.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
     event.preventDefault();
+    syncPlayerDragScroll();
     const x = event.clientX - drag.startX;
     const y = event.clientY - drag.startY;
     const now = event.timeStamp;
@@ -454,8 +496,8 @@ export function Leaderboard({ teams, onAdjust, onSet, history = [], onUndo, comp
     drag.lastX = x;
     drag.lastY = y;
     drag.lastMoveAt = now;
-    drag.x = x;
-    drag.y = y;
+    drag.x = x + drag.scrollX;
+    drag.y = y + drag.scrollY;
     const shake = trackPocketShake(drag.shake, x, y, now);
     drag.shake = shake.state;
     if (shake.ready && drag.isDizzy) {
@@ -513,13 +555,13 @@ export function Leaderboard({ teams, onAdjust, onSet, history = [], onUndo, comp
         pocketTimers.current.add(drag.pocketTimer);
       }
     }
-    drag.element.style.setProperty("--drag-x", `${x}px`);
-    drag.element.style.setProperty("--drag-y", `${y}px`);
+    drag.element.style.setProperty("--drag-x", `${drag.x}px`);
+    drag.element.style.setProperty("--drag-y", `${drag.y}px`);
     drag.element.style.setProperty("--drag-rotate", `${Math.max(-7, Math.min(7, x / 24))}deg`);
 
     const draggedRect = new DOMRect(
-      drag.origin.x + x,
-      drag.origin.y + y,
+      drag.origin.x + drag.x,
+      drag.origin.y + drag.y,
       drag.origin.width,
       drag.origin.height,
     );
@@ -560,8 +602,9 @@ export function Leaderboard({ teams, onAdjust, onSet, history = [], onUndo, comp
   ) => {
     const drag = activeDrag.current;
     if (!drag || drag.pointerId !== pointerId) return;
-    const releaseX = releaseClientX - drag.startX;
-    const releaseY = releaseClientY - drag.startY;
+    syncPlayerDragScroll();
+    const releaseX = releaseClientX - drag.startX + drag.scrollX;
+    const releaseY = releaseClientY - drag.startY + drag.scrollY;
     const finalMoveElapsed = releasedAt - drag.lastMoveAt;
     if (finalMoveElapsed > 0 && (releaseX !== drag.x || releaseY !== drag.y)) {
       const sampleElapsed = Math.max(4, finalMoveElapsed);

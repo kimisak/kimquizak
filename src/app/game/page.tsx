@@ -17,6 +17,9 @@ import {
   type JokerProgress,
   type JokerRound,
 } from "@/components/game/modals/JokerModal";
+import { ConnectionsModal } from "@/components/game/modals/ConnectionsModal";
+import { advanceConnections, createConnectionsProgress, type ConnectionsAction } from "@/lib/connections";
+import type { ConnectionsProgress } from "@/lib/types";
 import { createMcqProgress, pickMcqOption } from "@/lib/mcq";
 import type { McqProgress } from "@/lib/types";
 import { McqModal } from "@/components/game/modals/McqModal";
@@ -128,6 +131,7 @@ export default function GameBoardPage() {
   const [finaleDrumrollStarted, setFinaleDrumrollStarted] = useState(false);
   const [finaleDrumrollFinished, setFinaleDrumrollFinished] = useState(false);
   const [finalePodiumRevealCount, setFinalePodiumRevealCount] = useState(0);
+  const connectionsProgressRef = useRef<ConnectionsProgress | null>(null);
   const mcqProgressRef = useRef<McqProgress>(createMcqProgress());
   const prevAnsweringTeamRef = useRef<string | null>(null);
   const [slotFaces, setSlotFaces] = useState<Team[]>([]);
@@ -477,6 +481,11 @@ export default function GameBoardPage() {
   };
 
   const openQuestion = (question: Question) => {
+    if (question.type === "connections") {
+      const progress = turnState.connectionsProgress?.[question.id] ?? createConnectionsProgress(getBoardTeamId());
+      connectionsProgressRef.current = progress;
+      setTurnState(previous => ({ ...previous, connectionsProgress: { ...previous.connectionsProgress, [question.id]: progress } }));
+    }
     mcqProgressRef.current = turnState.mcqProgress?.[question.id] ?? createMcqProgress();
     questionTriggerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setJokerRound(null);
@@ -1008,6 +1017,31 @@ export default function GameBoardPage() {
     closeModal();
   };
 
+  const handleConnectionsAction = (action: ConnectionsAction) => {
+    if (!activeQuestion || activeQuestion.type !== "connections" || activeQuestion.answered || !connectionsProgressRef.current) return;
+    const order = activeTurnOrder.length ? activeTurnOrder : teams.map(team => team.id);
+    const result = advanceConnections(activeQuestion, connectionsProgressRef.current, action, order, Date.now());
+    if (!result) return;
+    const { progress, correct, points, awardedTeamId } = result;
+    connectionsProgressRef.current = progress;
+    if (correct) {
+      playSuccessChime();
+      applyScoreChange(awardedTeamId, points, `${activeQuestion.category} · Connections · Group found`, activeQuestion.id);
+    } else if (action.type === "guess" || action.type === "timeout") playDownbeat();
+    setTurnState(previous => ({ ...previous,
+      connectionsProgress: { ...previous.connectionsProgress, [activeQuestion.id]: progress },
+      boardIndex: activeTurnOrder.length ? Math.max(0, order.indexOf(progress.teamId)) : previous.boardIndex,
+    }));
+    if (progress.finished) {
+      if (remainingQuestionCount === 1) {
+        setFinaleRevealed(false); setFinaleDrumrollStarted(false);
+        setFinaleDrumrollFinished(false); setFinalePodiumRevealCount(0);
+      }
+      setQuestions(previous => previous.map(question => question.id === activeQuestion.id ? { ...question, answered: true } : question));
+      if (activeTurnOrder.length) advanceBoard();
+    }
+  };
+
   const handleMcqSelect = (idx: number) => {
     if (!activeQuestion || activeQuestion.type !== "mcq" || activeQuestion.answered) return;
     const currentTeamId = mcqProgressRef.current.teamId || lastGuessTeamId || selectedTeamId || getBoardTeamId();
@@ -1221,6 +1255,12 @@ export default function GameBoardPage() {
           onStageFinish={(points, distanceKm) => markAnswered(points > 0, { points, distanceKm })}
         />
       );
+    }
+    if (activeQuestion.type === "connections") {
+      const progress = turnState.connectionsProgress?.[activeQuestion.id];
+      if (!progress) return null;
+      return <ConnectionsModal key={activeQuestion.id} question={modalQuestion} progress={progress} teams={teams}
+        onAction={handleConnectionsAction} onContinue={closeModal} />;
     }
     if (activeQuestion.type === "mcq") {
       const progress = turnState.mcqProgress?.[activeQuestion.id] ?? createMcqProgress();

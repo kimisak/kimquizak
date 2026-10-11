@@ -19,6 +19,8 @@ Prod: https://kimquizak.com/
 - `Game`: draw the complete board-turn order with sleigh bells, reveal concealed category titles, play tiles, and track scores/answers. A glockenspiel confirms the selected opening team. Board turn advances after each resolved question.
 
 ## Question types (cheat sheet)
+
+- **Connections**: four hidden groups of four tiles. The host chooses how many connections (1–4) must be found to finish; points are split across that target. Shuffle unsolved tiles during play; near misses briefly show “Three are correct”. Points per solved group, configurable rollover, a per-guess timer (default 120 seconds), and shared mistakes (default 4). The host can end early; remaining solutions reveal one by one on the answer screen. [Setup, pacing, and rules](docs/connections.md).
 - **Standard**: prompt + answer; optional question/answer images.
 - **MCQ**: 2–12 options, starting with four. Mark one or more correct answers and choose how many must be found to finish. Points are split across the required correct picks; teams keep their earned points and continue after a correct pick. With rollover enabled, a wrong pick is disabled and passes play to the next team; otherwise it ends the question. Found answers and split scores survive closing/reloading the round, and Reset game progress clears them. Existing single-answer backups still work.
 - **Text grid (lyrics)**: one word/segment per line. Answer video must be a YouTube *embed* URL (not a share link). Red tiles rotate to the next team and shave the pot; “Next team” button available for hosts on wrong guesses.
