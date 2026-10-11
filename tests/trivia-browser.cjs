@@ -25,6 +25,21 @@ module.exports = async (page, baseUrl, backup) => {
   const open=()=>page.getByRole('button',{name:'ROUND, 300 points',exact:true}).click();
   const modal=page.locator('.trivia-modal');
   await open();
+  const assertControlsRight = async () => {
+    const layout = await modal.locator('.trivia-actions').evaluate(footer => {
+      const controls = footer.querySelector('.trivia-controls');
+      const rect = controls.getBoundingClientRect();
+      const parent = footer.getBoundingClientRect();
+      const padding = parseFloat(getComputedStyle(footer).paddingRight);
+      return {gap: parent.right - padding - rect.right, expanded: [...controls.children].some(button => getComputedStyle(button).flexGrow !== '0')};
+    });
+    assert(Math.abs(layout.gap)<2,'Trivia controls align with footer right edge');
+    assert.equal(layout.expanded,false,'Primary buttons must not expand and push navigation left');
+  };
+  await assertControlsRight();
+  await page.setViewportSize({width:700,height:900});
+  await assertControlsRight();
+  await page.setViewportSize({width:1280,height:854});
   await modal.screenshot({path:'/tmp/trivia-question.png'});
   assert.equal(await modal.getByText('First secret',{exact:true}).count(),0,'Answers hidden');
   await modal.getByRole('button',{name:'Expand trivia-picture.svg',exact:true}).click();
@@ -38,11 +53,13 @@ module.exports = async (page, baseUrl, backup) => {
   await modal.getByRole('button',{name:'Next',exact:true}).click();
   await modal.getByRole('button',{name:'Review answers',exact:true}).click();
   assert.equal(await modal.getByText('First secret',{exact:true}).count(),1);
+  await assertControlsRight();
   await modal.screenshot({path:'/tmp/trivia-review.png'});
   for(let i=0;i<3;i++) {
     await modal.getByRole('button',{name:fixture.teams[0].name+' correct',exact:true}).click();
     if(i<2) await modal.getByRole('button',{name:fixture.teams[1].name+' correct',exact:true}).click();
-    await modal.getByRole('button',{name:'Confirm marking',exact:true}).click();
+    await modal.getByRole('button',{name:i===2?'Finish review':'Next',exact:true}).click();
+    assert.equal(await modal.locator('.trivia-progress-tokens .is-complete').count(),i+1);
   }
   assert.equal(await modal.locator('.trivia-results').getByText('300 pts',{exact:true}).count(),1);
   assert.equal(await modal.locator('.trivia-results').getByText('200 pts',{exact:true}).count(),1);
@@ -50,9 +67,17 @@ module.exports = async (page, baseUrl, backup) => {
   await modal.getByRole('button',{name:fixture.teams[0].name+' correct',exact:true}).click();
   assert.equal(await modal.getByRole('button',{name:'See round results',exact:true}).count(),0,'Changed marks need confirmation');
   await modal.getByRole('button',{name:fixture.teams[0].name+' correct',exact:true}).click();
-  await modal.getByRole('button',{name:'Confirm marking',exact:true}).click();
+  assert.equal(await modal.locator('.trivia-progress-tokens .is-complete').count(),2,'Editing a reviewed answer removes its completion');
+  await modal.getByRole('button',{name:'Next',exact:true}).click();
+  assert.equal(await modal.locator('.trivia-progress-tokens .is-complete').count(),3,'Next reconfirms changed marking');
+  await modal.getByRole('button',{name:'Previous',exact:true}).click();
+  assert.equal(await modal.locator('.trivia-progress-tokens .is-complete').count(),3,'Going back preserves marking');
+  await modal.getByRole('button',{name:'Next',exact:true}).click();
+  await modal.getByRole('button',{name:'Next',exact:true}).click();
+  await modal.getByRole('button',{name:'Finish review',exact:true}).click();
   await page.setViewportSize({width:1280,height:854});
   const bounds=await modal.boundingBox();
+  await assertControlsRight();
   await modal.screenshot({path:'/tmp/trivia-results.png'});
   assert(bounds.y>=0 && bounds.y+bounds.height<=854,'Round fits Surface viewport');
   const award=modal.getByRole('button',{name:'Award points & finish',exact:true});
