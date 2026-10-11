@@ -256,3 +256,32 @@ test('delete targets exactly one owner snapshot and reports missing rows and dat
   assert.equal(failed.status, 503);
   assert.doesNotMatch(await failed.text(), /database details/);
 });
+
+test('all Supabase clients use Secure cookies in production and allow local HTTP development', async () => {
+  const original = process.env.NODE_ENV;
+  try {
+    for (const environment of ['production', 'development']) {
+      process.env.NODE_ENV = environment;
+      const options = [];
+      const clientFactory = (_url, _key, settings) => {
+        options.push(settings);
+        return { auth: { getClaims: async () => ({ data: { claims: null }, error: null }) } };
+      };
+      const stubs = {
+        './config': { getSupabaseConfig: () => config, requireSupabaseConfig: () => config },
+        '@supabase/ssr': { createServerClient: clientFactory, createBrowserClient: clientFactory },
+        'next/headers': { cookies: async () => ({ getAll: () => [], set: () => {} }) },
+      };
+      await load('src/lib/supabase/server.ts', stubs).createClient();
+      load('src/lib/supabase/client.ts', stubs).createClient();
+      await load('src/lib/supabase/proxy.ts', stubs).updateSession(new NextRequest('https://example.com/game'));
+      assert.equal(options.length, 3);
+      for (const settings of options) {
+        assert.equal(settings.cookieOptions.secure, environment === 'production');
+      }
+    }
+  } finally {
+    if (original === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = original;
+  }
+});

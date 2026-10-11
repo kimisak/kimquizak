@@ -5,5 +5,7 @@ import { requireSupabaseConfig } from "./config";
 
 export function createClient() {
   const { url, publishableKey } = requireSupabaseConfig();
-  return createBrowserClient(url, publishableKey);
+  return createBrowserClient(url, publishableKey, {
+    cookieOptions: { secure: process.env.NODE_ENV === "production" },
+  });
 }
