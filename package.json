@@ -3,19 +3,22 @@
   "version": "0.1.0",
   "private": true,
   "engines": {
-    "node": "20.x"
+    "node": "22.x"
   },
   "scripts": {
     "dev": "next dev",
     "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint",
-    "test": "node tests/regression.cjs",
-    "test:browser": "node tests/browser-regression.cjs"
+    "test": "node tests/regression.cjs && node tests/audio-cue-regression.cjs && node tests/pocket-shake-regression.cjs && node tests/supabase-regression.cjs && node tests/private-archive-regression.cjs",
+    "test:browser": "node tests/browser-regression.cjs",
+    "audit:privacy": "node scripts/audit-public-data.cjs"
   },
   "dependencies": {
+    "@supabase/ssr": "^0.12.7",
+    "@supabase/supabase-js": "^2.117.3",
     "cannon-es": "^0.20.0",
-    "next": "^16.0.7",
+    "next": "~16.3.8",
     "react": "19.2.0",
     "react-dom": "19.2.0",
     "three": "^0.186.0"
@@ -28,7 +31,7 @@
     "@types/three": "^0.186.0",
     "baseline-browser-mapping": "^2.11.14",
     "eslint": "^9",
-    "eslint-config-next": "16.0.6",
+    "eslint-config-next": "~16.3.8",
     "playwright": "^1.63.0",
     "tailwindcss": "^4",
     "typescript": "^5"

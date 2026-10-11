@@ -16,6 +16,7 @@ export function AppHeader() {
     { href: "/config/teams", number: "01", label: "Teams" },
     { href: "/config/questions", number: "02", label: "Questions" },
     { href: "/game", number: "03", label: "Play" },
+    { href: "/account", number: "04", label: "Host" },
   ];
 
   return (

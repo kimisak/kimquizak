@@ -1,0 +1,503 @@
+{
+  "version": 2,
+  "exportedAt": "2026-01-01T00:00:00.000Z",
+  "teams": [
+    {
+      "id": "team-granbarbanden",
+      "name": "Granskuddene",
+      "score": 0,
+      "badgeEmoji": "🎄",
+      "accentBase": "#0a9b58",
+      "accentGlow": "#d5ffea",
+      "players": [
+        {
+          "id": "demo-player-01",
+          "name": "Nora",
+          "bonds": [
+            {
+              "playerId": "demo-player-02",
+              "kind": "sweethearts"
+            }
+          ]
+        },
+        {
+          "id": "demo-player-02",
+          "name": "Emil",
+          "bonds": [
+            {
+              "playerId": "demo-player-01",
+              "kind": "sweethearts"
+            }
+          ]
+        },
+        {
+          "id": "demo-player-03",
+          "name": "Frida",
+          "bonds": [
+            {
+              "playerId": "demo-player-04",
+              "kind": "engaged"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "team-gavegjengen",
+      "name": "Gavegjengen",
+      "score": 0,
+      "badgeEmoji": "🎁",
+      "accentBase": "#c72a5b",
+      "accentGlow": "#ffdce6",
+      "players": [
+        {
+          "id": "demo-player-04",
+          "name": "Aksel",
+          "bonds": [
+            {
+              "playerId": "demo-player-03",
+              "kind": "engaged"
+            }
+          ]
+        },
+        {
+          "id": "demo-player-05",
+          "name": "Maja",
+          "bonds": [
+            {
+              "playerId": "demo-player-06",
+              "kind": "married"
+            }
+          ]
+        },
+        {
+          "id": "demo-player-06",
+          "name": "Jonas",
+          "bonds": [
+            {
+              "playerId": "demo-player-05",
+              "kind": "married"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "team-bjellebanden",
+      "name": "Bjelleklang",
+      "score": 0,
+      "badgeEmoji": "🔔",
+      "accentBase": "#b77a16",
+      "accentGlow": "#ffe9ad",
+      "players": [
+        {
+          "id": "demo-player-07",
+          "name": "Ingrid",
+          "bonds": [
+            {
+              "playerId": "demo-player-08",
+              "kind": "parents"
+            }
+          ]
+        },
+        {
+          "id": "demo-player-08",
+          "name": "Sander",
+          "bonds": [
+            {
+              "playerId": "demo-player-07",
+              "kind": "parents"
+            },
+            {
+              "playerId": "demo-player-09",
+              "kind": "drinking-buddies"
+            }
+          ]
+        },
+        {
+          "id": "demo-player-09",
+          "name": "Thea",
+          "bonds": [
+            {
+              "playerId": "demo-player-08",
+              "kind": "drinking-buddies"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "questions": [
+    {
+      "id": "q-norsk-jul-100",
+      "category": "NORSK JUL",
+      "points": 100,
+      "type": "standard",
+      "prompt": "Hva gjemmes tradisjonelt i julegrøten, og skal gi finneren hell?",
+      "answer": "En hel mandel.",
+      "answered": false,
+      "imageData": null,
+      "imageName": null,
+      "answerImageData": null,
+      "answerImageName": null
+    },
+    {
+      "id": "q-norsk-jul-200",
+      "category": "NORSK JUL",
+      "points": 200,
+      "type": "mcq",
+      "prompt": "Hvor mange slag julekaker sier tradisjonen at man bør bake?",
+      "answer": "7 slag.",
+      "answered": false,
+      "mcqOptions": [
+        "7 slag",
+        "9 slag",
+        "11 slag",
+        "13 slag"
+      ],
+      "mcqCorrectIndex": 0,
+      "mcqRotateOnMiss": true,
+      "imageData": null,
+      "answerImageData": null
+    },
+    {
+      "id": "q-norsk-jul-300",
+      "category": "NORSK JUL",
+      "points": 300,
+      "type": "lyrics",
+      "prompt": "Hvilken norsk julesang skjuler seg i rutene?",
+      "answer": "På låven sitter nissen.",
+      "answered": false,
+      "lyricsInfoText": "Velg en rute. En rød rute sender turen videre uten å endre poengsummen.",
+      "lyricsSegments": [
+        "På låven",
+        "sitter nissen",
+        "med sin julegrøt",
+        "så god",
+        "og så søt"
+      ],
+      "answerVideoUrl": null,
+      "answerVideoAutoplay": false,
+      "imageData": null,
+      "answerImageData": null
+    },
+    {
+      "id": "q-norsk-jul-400",
+      "category": "NORSK JUL",
+      "points": 400,
+      "type": "timeline",
+      "prompt": "Plasser de norske TV-julekalenderne i riktig premiereår.",
+      "answer": "1979: Jul i Skomakergata · 1994: The Julekalender · 2000: Vazelina Hjulkalender · 2016: Snøfall.",
+      "answered": false,
+      "timelineCenterYear": 1994,
+      "timelineCenterLabel": "1994 · The Julekalender",
+      "timelineTitle": "Norske TV-julekalendere",
+      "timelineRotateOnMiss": true,
+      "timelineEvents": [
+        {
+          "id": "tl-skomakergata",
+          "text": "Jul i Skomakergata",
+          "year": 1979,
+          "timelineText": "1979 · Jul i Skomakergata"
+        },
+        {
+          "id": "tl-vazelina",
+          "text": "Vazelina Hjulkalender",
+          "year": 2000,
+          "timelineText": "2000 · Vazelina Hjulkalender"
+        },
+        {
+          "id": "tl-snofall",
+          "text": "Snøfall",
+          "year": 2016,
+          "timelineText": "2016 · Snøfall"
+        }
+      ],
+      "imageData": null,
+      "answerImageData": null
+    },
+    {
+      "id": "q-norsk-jul-500",
+      "category": "NORSK JUL",
+      "points": 500,
+      "type": "geoguesser",
+      "prompt": "Hvilken norsk by står du i?",
+      "answer": "Bergen · Torgallmenningen.",
+      "answered": false,
+      "mapEmbedUrl": "https://www.google.com/maps/embed?pb=!4v1765183753215!6m8!1m7!1sGxcEs3hTQa28F2Pdbjsm6g!2m2!1d60.39321104609752!2d5.324059880868293!3f167.38348572852502!4f14.484171742486694!5f0.7820865974627469",
+      "answerLocationLabel": "Torgallmenningen, Bergen",
+      "answerLocationUrl": "https://maps.google.com/?q=60.39321104609752,5.324059880868293",
+      "geoExplorationMode": "look",
+      "geoTimerSeconds": 20,
+      "geoUnlockLevels": 1,
+      "imageData": null,
+      "answerImageData": null
+    },
+    {
+      "id": "q-lyd-100",
+      "category": "LYD & LERRET",
+      "points": 100,
+      "type": "audio",
+      "prompt": "Hvilken julesang hører vi? Artist og tittel gir full uttelling.",
+      "answer": "Last Christmas · Wham!",
+      "answered": false,
+      "audioUrl": "https://www.youtube.com/watch?v=E8gmARGvPlI",
+      "audioStartSeconds": 18,
+      "audioStopSeconds": 12,
+      "audioReplayEnabled": true,
+      "answerVideoAutoplay": true,
+      "imageData": null,
+      "answerImageData": null
+    },
+    {
+      "id": "q-lyd-200",
+      "category": "LYD & LERRET",
+      "points": 200,
+      "type": "standard",
+      "prompt": "Hvilken by reiser familien McCallister fra når Kevin blir glemt hjemme i Home Alone?",
+      "answer": "Chicago.",
+      "answered": false,
+      "imageData": null,
+      "answerImageData": null
+    },
+    {
+      "id": "q-lyd-300",
+      "category": "LYD & LERRET",
+      "points": 300,
+      "type": "mcq",
+      "prompt": "Hva heter hovmesteren i Grevinnen og hovmesteren?",
+      "answer": "James.",
+      "answered": false,
+      "mcqOptions": [
+        "James",
+        "Alfred",
+        "Winston",
+        "Charles"
+      ],
+      "mcqCorrectIndex": 0,
+      "mcqRotateOnMiss": false,
+      "imageData": null,
+      "answerImageData": null
+    },
+    {
+      "id": "q-lyd-400",
+      "category": "LYD & LERRET",
+      "points": 400,
+      "type": "joker",
+      "prompt": "Er neste skjulte tall høyere eller lavere? Finn julejokeren!",
+      "answer": "Joker-runden er ferdig.",
+      "answered": false,
+      "jokerCount": 5,
+      "jokerMin": 1,
+      "jokerMax": 9,
+      "jokerRotateOnMiss": true,
+      "imageData": null,
+      "answerImageData": null
+    },
+    {
+      "id": "q-lyd-500",
+      "category": "LYD & LERRET",
+      "points": 500,
+      "type": "timeline",
+      "prompt": "Plasser julefilmene i riktig premiereår.",
+      "answer": "1946: It's a Wonderful Life · 1990: Home Alone · 2000: The Grinch · 2003: Love Actually · 2019: Klaus.",
+      "answered": false,
+      "timelineCenterYear": 1990,
+      "timelineCenterLabel": "1990 · Home Alone",
+      "timelineTitle": "Julefilmer gjennom tidene",
+      "timelineRotateOnMiss": true,
+      "timelineEvents": [
+        {
+          "id": "tl-wonderful-life",
+          "text": "It's a Wonderful Life",
+          "year": 1946,
+          "timelineText": "1946 · It's a Wonderful Life"
+        },
+        {
+          "id": "tl-grinch",
+          "text": "How the Grinch Stole Christmas",
+          "year": 2000,
+          "timelineText": "2000 · How the Grinch Stole Christmas"
+        },
+        {
+          "id": "tl-love-actually",
+          "text": "Love Actually",
+          "year": 2003,
+          "timelineText": "2003 · Love Actually"
+        },
+        {
+          "id": "tl-klaus",
+          "text": "Klaus",
+          "year": 2019,
+          "timelineText": "2019 · Klaus"
+        }
+      ],
+      "imageData": null,
+      "answerImageData": null
+    },
+    {
+      "id": "q-verden-100",
+      "category": "JUL VERDEN RUNDT",
+      "points": 100,
+      "type": "standard",
+      "prompt": "Hvilket land gir hvert år juletreet på Trafalgar Square i London?",
+      "answer": "Norge.",
+      "answered": false,
+      "imageData": null,
+      "answerImageData": null
+    },
+    {
+      "id": "q-verden-200",
+      "category": "JUL VERDEN RUNDT",
+      "points": 200,
+      "type": "mcq",
+      "prompt": "I hvilket land har KFC blitt en kjent juletradisjon?",
+      "answer": "Japan.",
+      "answered": false,
+      "mcqOptions": [
+        "Japan",
+        "Canada",
+        "Brasil",
+        "Sør-Afrika"
+      ],
+      "mcqCorrectIndex": 0,
+      "mcqRotateOnMiss": true,
+      "imageData": null,
+      "answerImageData": null
+    },
+    {
+      "id": "q-verden-300",
+      "category": "JUL VERDEN RUNDT",
+      "points": 300,
+      "type": "booby",
+      "prompt": "Mime tre juletradisjoner uten ord: pynte treet, pakke inn en gave og gå rundt juletreet. Laget må gjette alle tre.",
+      "answer": "Alle tre tradisjonene ble gjettet innen tiden.",
+      "answered": false,
+      "challengeTimerSeconds": 60,
+      "challengeTimerMode": "countdown",
+      "challengeTimerShowTime": false,
+      "imageData": null,
+      "answerImageData": null
+    },
+    {
+      "id": "q-verden-400",
+      "category": "JUL VERDEN RUNDT",
+      "points": 400,
+      "type": "standard",
+      "prompt": "Julestjernen, planten med røde blader, kommer opprinnelig fra hvilket land?",
+      "answer": "Mexico.",
+      "answered": false,
+      "imageData": null,
+      "answerImageData": null
+    },
+    {
+      "id": "q-verden-500",
+      "category": "JUL VERDEN RUNDT",
+      "points": 500,
+      "type": "geoguesser",
+      "prompt": "Utforsk stedet, plasser nålen og finn byen.",
+      "answer": "New Orleans, Louisiana, USA.",
+      "answered": false,
+      "mapEmbedUrl": "https://www.google.com/maps/embed?pb=!4v1764969055025!6m8!1m7!1sfj0EC8FO4i4UKzSeguf61w!2m2!1d29.94909988802022!2d-90.07993276687564!3f333.2617552535312!4f22.208252430686443!5f0.7820865974627469",
+      "answerLocationLabel": "New Orleans, Louisiana, USA",
+      "answerLocationUrl": "https://maps.google.com/?q=29.94909988802022,-90.07993276687564",
+      "geoExplorationMode": "stage",
+      "geoStageExploreSeconds": 25,
+      "geoStageGuessSeconds": 20,
+      "geoStageDistanceBandsKm": [
+        1,
+        5,
+        25,
+        100,
+        500
+      ],
+      "geoStageDistanceUnit": "km",
+      "imageData": null,
+      "answerImageData": null
+    },
+    {
+      "id": "demo-image-reveal",
+      "category": "DEMO EXTRAS",
+      "points": 100,
+      "type": "imageReveal",
+      "prompt": "What building is hidden in this drawing?",
+      "answer": "A red house.",
+      "answered": false,
+      "imageData": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22800%22%20height%3D%22600%22%20viewBox%3D%220%200%20800%20600%22%3E%3Crect%20width%3D%22800%22%20height%3D%22600%22%20fill%3D%22%23c8e9f1%22%2F%3E%3Ccircle%20cx%3D%22650%22%20cy%3D%22100%22%20r%3D%2255%22%20fill%3D%22%23ffda65%22%2F%3E%3Cpath%20d%3D%22M0%20450L200%20240%20400%20450%20600%20270%20800%20450V600H0Z%22%20fill%3D%22%2333765b%22%2F%3E%3Crect%20x%3D%22250%22%20y%3D%22300%22%20width%3D%22300%22%20height%3D%22240%22%20fill%3D%22%23c94f42%22%2F%3E%3Cpath%20d%3D%22M210%20300L400%20140%20590%20300Z%22%20fill%3D%22%23493c50%22%2F%3E%3Crect%20x%3D%22370%22%20y%3D%22410%22%20width%3D%2265%22%20height%3D%22130%22%20fill%3D%22%23ffe4a0%22%2F%3E%3Crect%20x%3D%22280%22%20y%3D%22345%22%20width%3D%2260%22%20height%3D%2260%22%20fill%3D%22%23fff4d6%22%2F%3E%3Crect%20x%3D%22460%22%20y%3D%22345%22%20width%3D%2260%22%20height%3D%2260%22%20fill%3D%22%23fff4d6%22%2F%3E%3C%2Fsvg%3E",
+      "imageName": "demo-house.svg",
+      "imageRevealStyle": "blur",
+      "imageRevealLevels": [
+        0,
+        25,
+        50,
+        75,
+        100
+      ]
+    },
+    {
+      "id": "demo-trivia",
+      "category": "DEMO EXTRAS",
+      "points": 200,
+      "type": "trivia",
+      "prompt": "Fictional demo: three quick questions",
+      "answer": "See the answers for each item.",
+      "answered": false,
+      "triviaItems": [
+        {
+          "id": "demo-trivia-1",
+          "prompt": "How many sides does a triangle have?",
+          "answer": "Three."
+        },
+        {
+          "id": "demo-trivia-2",
+          "prompt": "Which planet is known as the Red Planet?",
+          "answer": "Mars."
+        },
+        {
+          "id": "demo-trivia-3",
+          "prompt": "What is 6 multiplied by 7?",
+          "answer": "42."
+        }
+      ]
+    }
+  ],
+  "turnState": {
+    "order": [],
+    "boardIndex": 0,
+    "lyricsIndex": 0,
+    "revealedCategories": [],
+    "dismissedHostMessageIds": [],
+    "resolvedHostMessages": {},
+    "audioPlaybackCounts": {},
+    "audioReplayValues": {},
+    "scoresHidden": false,
+    "hiddenScoreOrder": []
+  },
+  "settings": {
+    "quizTitle": "KimQuizak — Fictional Demo",
+    "themeId": "jul",
+    "hideCategoryHeadersAtStart": true,
+    "finaleMusicEnabled": true,
+    "finaleMusicUrl": "https://youtu.be/9QS0q3mGPGg?t=84",
+    "finaleMusicStartSeconds": 84,
+    "finaleMusicEndSeconds": 108,
+    "finaleMusicVolume": 35,
+    "stagedPodiumReveal": true,
+    "hostMessages": [
+      {
+        "id": "host-message-fellesskal",
+        "afterQuestionCount": 5,
+        "text": "Fellesskål! 🥂",
+        "revealStyle": "direct"
+      },
+      {
+        "id": "host-message-random-player",
+        "afterQuestionCount": 10,
+        "text": "{random.player} deler ut {1-3} slurker.",
+        "revealStyle": "spin-wheel"
+      }
+    ],
+    "boardRevealRules": {}
+  },
+  "scoreHistory": []
+}

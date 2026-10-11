@@ -174,7 +174,7 @@ export function StorageBackupPanel() {
         </div>
         <p>
           Save your local quiz to a JSON file, or load from one to seed
-          a new browser.
+          a new browser. Example players and relationships are fictional.
         </p>
       </div>
       <div className="archive-actions">

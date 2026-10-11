@@ -13,6 +13,14 @@ export function getQuestionIssues(question: Question): string[] {
 
   if (type === "joker") return issues;
 
+  if (type === "trivia") {
+    const items = question.triviaItems ?? [];
+    if (items.length < 2) issues.push("Add at least two questions to the trivia round");
+    if (items.some(item => !item.id || !hasText(item.prompt) || !hasText(item.answer))) issues.push("Every trivia question needs a question and answer");
+    if (new Set(items.map(item => item.id)).size !== items.length) issues.push("Trivia questions must have unique IDs");
+    return issues;
+  }
+
   if (type === "imageReveal") {
     if (!question.imageData) issues.push("Add the image to reveal");
     if (!hasText(question.answer)) issues.push("Add the answer");

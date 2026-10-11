@@ -72,10 +72,12 @@ export function useAudioCue() {
     podiumSilverAudioRef.current = podiumSilverAudio;
 
     let cancelled = false;
+    const normalizationController = new AbortController();
     const normalizeCueVolumes = async () => {
+      if (typeof OfflineAudioContext === "undefined") return;
       try {
         const decode = async (path: string) => {
-          const response = await fetch(path);
+          const response = await fetch(path, { signal: normalizationController.signal });
           if (!response.ok) throw new Error(`Unable to load ${path}`);
           const context = new OfflineAudioContext(2, 1, 48_000);
           return context.decodeAudioData(await response.arrayBuffer());
@@ -92,14 +94,17 @@ export function useAudioCue() {
             Math.min(1, SPIN_CUE_VOLUME * (spinRms / selectionRms)),
           );
         }
-      } catch (error) {
-        console.warn("Unable to normalize the spinner cue volumes", error);
+      } catch {
+        // Loudness matching is optional. Keep the fallback volume if fetching or
+        // decoding fails, including interrupted downloads during navigation.
+        normalizationController.abort();
       }
     };
     void normalizeCueVolumes();
 
     return () => {
       cancelled = true;
+      normalizationController.abort();
       slotSpinStopRef.current?.();
       finaleDrumrollStopRef.current?.();
       spinAudio.pause();

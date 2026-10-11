@@ -4,6 +4,9 @@ import { useEffect, useRef, useState, type CSSProperties, type PointerEvent as R
 import type { PlayerBondKind, ScoreTransaction, Team } from "@/lib/types";
 import { getTeamAccent, getTeamMarker } from "@/lib/teamPresentation";
 import { normalizePlayerBondKind } from "@/lib/playerBonds";
+import { createPortal } from "react-dom";
+import { getGestureShape, trackPocketShake, type GesturePoint, type PocketShake } from "@/lib/pocketShake";
+import pocketStyles from "./PocketSpill.module.css";
 
 type Props = {
   teams: Team[];
@@ -32,8 +35,15 @@ type ActiveDrag = {
   velocityX: number;
   velocityY: number;
   lastOrbitAngle: number | null;
+  lastOrbitX: number;
+  lastOrbitY: number;
+  orbitDistance: number;
+  orbitPoints: GesturePoint[];
   orbitAngle: number;
   isDizzy: boolean;
+  shake: PocketShake | null;
+  pocketSpilled: boolean;
+  pocketTimer: number | null;
   origin: DOMRect;
   teammateRects: Map<string, { rect: DOMRect; index: number; teamId: string }>;
   collisions: Set<string>;
@@ -55,6 +65,8 @@ const scoreSuspenseMoods = ["😰", "😬", "🫣", "🤯", "😵‍💫", "😱
 const PLAYER_LAUNCH_SPEED_THRESHOLD = 0.9;
 const PLAYER_DROP_HEIGHT_THRESHOLD = 24;
 const PLAYER_RELEASE_VELOCITY_DECAY_MS = 140;
+const pocketContents = [["🪙", "💵", "🪙"], ["🧦", "🩲", "🧦"], ["🧻", "🧻", "🧻"], ["🦆", "🦆", "🦆"]];
+type PocketParticle = { id: number; playerId: string; emoji: string; x: number; y: number; drift: number; turn: number };
 
 const bondVisuals: Record<PlayerEncounterKind, { moods: readonly [string, string]; particles: readonly string[] }> = {
   sweethearts: { moods: ["😚", "🥰"], particles: ["💕", "❤️", "💖", "💗", "🫶", "💘", "❤️"] },
@@ -115,9 +127,14 @@ export function Leaderboard({ teams, onAdjust, onSet, history = [], onUndo, comp
   const bondTimers = useRef(new Map<string, number>());
   const [spectatorReactions, setSpectatorReactions] = useState<Record<string, number>>({});
   const spectatorTimers = useRef(new Map<string, number>());
+  const playerPockets = useRef(new Map<string, string[]>());
+  const pocketTimers = useRef(new Set<number>());
+  const [pocketParticles, setPocketParticles] = useState<PocketParticle[]>([]);
 
   useEffect(() => () => {
     activeDrag.current?.removeListeners();
+    if (activeDrag.current?.pocketTimer != null) window.clearTimeout(activeDrag.current.pocketTimer);
+    pocketTimers.current.forEach((timer) => window.clearTimeout(timer));
     angerTimers.current.forEach((timer) => window.clearTimeout(timer));
     returnMoodTimers.current.forEach((timer) => window.clearTimeout(timer));
     returnAnimations.current.forEach((animation) => animation.cancel());
@@ -127,6 +144,35 @@ export function Leaderboard({ teams, onAdjust, onSet, history = [], onUndo, comp
     spectatorTimers.current.forEach((timer) => window.clearTimeout(timer));
     toyDragCleanup.current?.();
   }, []);
+
+  const spillPockets = (drag: ActiveDrag) => {
+    const schedule = (callback: () => void, delay: number) => {
+      const timer = window.setTimeout(() => {
+        pocketTimers.current.delete(timer);
+        callback();
+      }, delay);
+      pocketTimers.current.add(timer);
+    };
+    for (let index = 0; index < 8; index += 1) {
+      schedule(() => {
+        if (!drag.element.isConnected || drag.isDizzy) return;
+        if (!playerPockets.current.has(drag.playerId)) {
+          playerPockets.current.set(drag.playerId, pocketContents[Math.floor(Math.random() * pocketContents.length)]);
+        }
+        const contents = playerPockets.current.get(drag.playerId)!;
+        const rect = drag.element.getBoundingClientRect();
+        const id = ++effectEpoch.current;
+        const side = index % 2 ? 0.8 : 0.2;
+        setPocketParticles((current) => [...current, {
+          id, playerId: drag.playerId, emoji: contents[index % contents.length],
+          x: rect.left + rect.width * side, y: rect.bottom - 5,
+          drift: (side < 0.5 ? -1 : 1) * (18 + Math.random() * 50),
+          turn: (Math.random() - 0.5) * 300,
+        }]);
+        schedule(() => setPocketParticles((current) => current.filter((particle) => particle.id !== id)), 1900);
+      }, index * 170);
+    }
+  };
 
   const wakeSpectators = (teamId: string, excludedPlayerIds: string[]) => {
     const spectatorIds = teams.find((team) => team.id === teamId)?.players
@@ -228,8 +274,11 @@ export function Leaderboard({ teams, onAdjust, onSet, history = [], onUndo, comp
     }));
     setTravelMoods((current) => {
       const next = { ...current };
-      delete next[firstPlayerId];
-      delete next[secondPlayerId];
+      // A nearby friend can react without clearing an ongoing dizzy state.
+      // Gesture detection keeps isDizzy set, so it will not reapply the eyes.
+      for (const playerId of [firstPlayerId, secondPlayerId]) {
+        if (next[playerId] !== "dizzy") delete next[playerId];
+      }
       return next;
     });
     [firstPlayerId, secondPlayerId].forEach((playerId) => {
@@ -298,6 +347,7 @@ export function Leaderboard({ teams, onAdjust, onSet, history = [], onUndo, comp
     homeTeamId: string,
   ) => {
     if (event.button !== 0) return;
+    if (activeDrag.current) return;
     event.preventDefault();
     const element = event.currentTarget;
     const returningAnimation = returnAnimations.current.get(playerId);
@@ -365,8 +415,15 @@ export function Leaderboard({ teams, onAdjust, onSet, history = [], onUndo, comp
       velocityX: 0,
       velocityY: 0,
       lastOrbitAngle: null,
+      lastOrbitX: initialX,
+      lastOrbitY: initialY,
+      orbitDistance: 0,
+      orbitPoints: [],
       orbitAngle: 0,
       isDizzy: false,
+      shake: trackPocketShake(null, initialX, initialY, event.timeStamp).state,
+      pocketSpilled: false,
+      pocketTimer: null,
       origin,
       teammateRects,
       collisions: new Set(),
@@ -383,6 +440,13 @@ export function Leaderboard({ teams, onAdjust, onSet, history = [], onUndo, comp
     const y = event.clientY - drag.startY;
     const now = event.timeStamp;
     const elapsed = Math.max(8, now - drag.lastMoveAt);
+    if (elapsed > 1200) {
+      // A pause starts a fresh circle; the lift before the pause is not part of it.
+      drag.lastOrbitAngle = null;
+      drag.orbitAngle = 0;
+      drag.orbitDistance = 0;
+      drag.orbitPoints = [];
+    }
     // Weight the newest movement heavily so a quick final flick actually feels
     // stronger than a slow placement over the same distance.
     drag.velocityX = drag.velocityX * 0.28 + ((x - drag.lastX) / elapsed) * 0.72;
@@ -392,22 +456,62 @@ export function Leaderboard({ teams, onAdjust, onSet, history = [], onUndo, comp
     drag.lastMoveAt = now;
     drag.x = x;
     drag.y = y;
-    const orbitRadius = Math.hypot(x, y);
-    if (orbitRadius > 24) {
-      const angle = Math.atan2(y, x);
+    const shake = trackPocketShake(drag.shake, x, y, now);
+    drag.shake = shake.state;
+    if (shake.ready && drag.isDizzy) {
+      drag.isDizzy = false;
+      setTravelMoods((current) => ({ ...current, [drag.playerId]: "nervous" }));
+    }
+    const orbitDx = x - drag.lastOrbitX;
+    const orbitDy = y - drag.lastOrbitY;
+    const orbitStep = Math.hypot(orbitDx, orbitDy);
+    // Measure turning along the pointer path, not around the player's home.
+    // This also recognizes circles made after lifting or moving a player.
+    if (orbitStep >= 8) {
+      // Keep the geometry, even for a slow circle after holding the player still.
+      drag.orbitPoints = drag.orbitPoints.slice(-120);
+      drag.orbitPoints.push({ x, y, time: now });
+      const angle = Math.atan2(orbitDy, orbitDx);
       if (drag.lastOrbitAngle !== null) {
         let angleDelta = angle - drag.lastOrbitAngle;
         if (angleDelta > Math.PI) angleDelta -= Math.PI * 2;
         if (angleDelta < -Math.PI) angleDelta += Math.PI * 2;
-        if (Math.abs(angleDelta) < 1.2) drag.orbitAngle += angleDelta;
-        if (!drag.isDizzy && Math.abs(drag.orbitAngle) >= Math.PI * 1.55) {
+        if (Math.abs(angleDelta) < 1.2) {
+          drag.orbitAngle += angleDelta;
+          drag.orbitDistance += orbitStep;
+        } else {
+          // Abrupt reversals are shaking, not spinning.
+          drag.orbitAngle = 0;
+          drag.orbitDistance = 0;
+        }
+        if (!drag.isDizzy && !shake.ready
+          && getGestureShape(drag.orbitPoints).roundness > 0.32
+          && drag.orbitDistance >= 160 && Math.abs(drag.orbitAngle) >= Math.PI * 1.55) {
           drag.isDizzy = true;
+          if (drag.pocketTimer !== null) {
+            window.clearTimeout(drag.pocketTimer);
+            pocketTimers.current.delete(drag.pocketTimer);
+            drag.pocketTimer = null;
+          }
+          setPocketParticles((current) => current.filter((particle) => particle.playerId !== drag.playerId));
           setTravelMoods((current) => ({ ...current, [drag.playerId]: "dizzy" }));
         }
       }
       drag.lastOrbitAngle = angle;
-    } else {
-      drag.lastOrbitAngle = null;
+      drag.lastOrbitX = x;
+      drag.lastOrbitY = y;
+    }
+    if (!drag.pocketSpilled && drag.pocketTimer === null && !drag.isDizzy) {
+      if (shake.ready) {
+        drag.pocketTimer = window.setTimeout(() => {
+          pocketTimers.current.delete(drag.pocketTimer!);
+          drag.pocketTimer = null;
+          if (!drag.element.isConnected || drag.isDizzy) return;
+          drag.pocketSpilled = true;
+          spillPockets(drag);
+        }, 1000);
+        pocketTimers.current.add(drag.pocketTimer);
+      }
     }
     drag.element.style.setProperty("--drag-x", `${x}px`);
     drag.element.style.setProperty("--drag-y", `${y}px`);
@@ -691,6 +795,12 @@ export function Leaderboard({ teams, onAdjust, onSet, history = [], onUndo, comp
 
   return (
     <section className={`card scoreboard${compact ? " compact" : ""}`} style={{ padding: compact ? "12px" : "18px" }}>
+      {pocketParticles.length > 0 && createPortal(pocketParticles.map((particle) => (
+        <span key={particle.id} className={pocketStyles.particle} data-pocket-particle aria-hidden
+          style={{ left: particle.x, top: particle.y, "--pocket-drift": `${particle.drift}px`, "--pocket-turn": `${particle.turn}deg` } as CSSProperties}>
+          {particle.emoji}
+        </span>
+      )), document.body)}
       <div
         className="scoreboard-header"
         style={{

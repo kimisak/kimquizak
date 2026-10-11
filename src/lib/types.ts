@@ -31,7 +31,8 @@ export type Team = {
   accentGlow?: string | null;
 };
 
-export type QuestionKind = "standard" | "lyrics" | "geoguesser" | "joker" | "timeline" | "mcq" | "audio" | "booby" | "imageReveal";
+export type QuestionKind = "standard" | "lyrics" | "geoguesser" | "joker" | "timeline" | "mcq" | "audio" | "booby" | "imageReveal" | "trivia";
+export type TriviaItem = { id: string; prompt: string; answer: string; imageData?: string | null; imageName?: string | null };
 export type ImageRevealStyle = "zoom" | "blur" | "noise" | "areas";
 export type ImageRevealProgress = { step: number; points: number; answerRevealed?: boolean; outcome?: "correct" | "skipped"; teamId?: string; revealedAreas?: number[]; areaChosenThisTurn?: boolean };
 
@@ -49,6 +50,7 @@ export type Question = {
   type?: QuestionKind;
   typeDrafts?: Partial<Record<QuestionKind, QuestionTypeDraft>>;
   imageRevealStyle?: ImageRevealStyle;
+  triviaItems?: TriviaItem[];
   imageRevealLevels?: number[];
   imageRevealStyleLevels?: Partial<Record<ImageRevealStyle, number[]>>;
   imageRevealPatchOverrides?: Array<Record<number, boolean>>;

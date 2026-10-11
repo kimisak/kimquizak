@@ -314,7 +314,7 @@ export function FinalCelebration({
           <span className="finale-kicker">
             {preview ? "Finale preview" : "The final scores are in"}
           </span>
-          <h1 id={celebrationActive ? "finale-title" : undefined}>That's a wrap!</h1>
+          <h1 id={celebrationActive ? "finale-title" : undefined}>That&apos;s a wrap!</h1>
           <p>
             {winner
               ? tiers[0]?.teamIds.length > 1 ? <>Make some noise for our <strong>joint winners</strong>!</> : <>Make some noise for <strong>{winner.name}</strong>!</>

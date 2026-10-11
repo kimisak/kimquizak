@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { YouTubeClipPreview } from "@/components/config/YouTubeClipPreview";
 import { ImageRevealFields } from "@/components/config/ImageRevealFields";
+import { TriviaFields } from "@/components/config/TriviaFields";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { usePersistentQuestions } from "@/hooks/usePersistentQuestions";
 import { useSettings } from "@/hooks/useSettings";
@@ -40,6 +41,7 @@ import { getAudioReplayValue } from "@/lib/audioScoring";
 import { extractEmbedUrl } from "@/lib/embed";
 import { DEFAULT_GEO_STAGE_BANDS_KM, getGeoExploreValue, getGeoStageBands, isGoogleMapsShortLink, parseStreetViewSource } from "@/lib/geoguesser";
 import { StreetViewPicker } from "@/components/config/StreetViewPicker";
+import { GeoguesserSetupInfo } from "@/components/GeoguesserSetupInfo";
 import { StorageBackupPanel } from "@/components/StorageBackupPanel";
 import { getQuestionIssues, isQuestionReady } from "@/lib/questionValidation";
 
@@ -277,6 +279,7 @@ const QUESTION_TYPE_META: Record<
 > = {
   standard: { label: "Standard", icon: "Q", accent: "#60a5fa", soft: "rgba(96,165,250,0.14)" },
   imageReveal: { label: "Image reveal", icon: "▧", accent: "#d4ad68", soft: "rgba(212,173,104,0.14)" },
+  trivia: { label: "Trivia round", icon: "✎", accent: "#91bca5", soft: "rgba(145,188,165,0.14)" },
   mcq: { label: "Multiple choice", icon: "A", accent: "#a78bfa", soft: "rgba(167,139,250,0.14)" },
   audio: { label: "Guess the audio", icon: "♪", accent: "#f472b6", soft: "rgba(244,114,182,0.14)" },
   booby: { label: "Challenge", icon: "🎁", accent: "#e8b86a", soft: "rgba(232,184,106,0.14)" },
@@ -1356,6 +1359,7 @@ const GeoguesserFields = React.memo(function GeoguesserFields({
 
   return (
     <>
+      <GeoguesserSetupInfo />
       <label className="label">Hint (optional)</label>
       <textarea
         value={prompt}
@@ -2856,7 +2860,7 @@ export default function QuestionConfigPage() {
                 const isExpanded = expandedQuestions.has(questionKey);
                 const questionType = (q?.type ?? "standard") as QuestionType;
                 const typeMeta = QUESTION_TYPE_META[questionType];
-                const summary = questionType === "timeline"
+                const summary = questionType === "trivia" ? `${q?.triviaItems?.length ?? 0} questions · all teams` : questionType === "timeline"
                   ? `${q?.timelineEvents?.length ?? 0} timeline events`
                   : questionType === "lyrics"
                     ? `${q?.lyricsSegments?.filter((line) => line.trim()).length ?? 0} reveal lines`
@@ -3089,6 +3093,7 @@ export default function QuestionConfigPage() {
                         onChange={patch => upsertQuestion(category, points, patch)}
                         onImage={file => handleImageChange(category, points, file)} />
                     )}
+                    {questionType === "trivia" && q && <TriviaFields question={q} onChange={patch => upsertQuestion(category, points, patch)} />}
                     {questionType === "standard" && (
                       <StandardFields
                         category={category}

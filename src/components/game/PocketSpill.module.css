@@ -1,0 +1,22 @@
+.particle {
+  position: fixed;
+  z-index: 1000;
+  pointer-events: none;
+  user-select: none;
+  font-size: 22px;
+  line-height: 1;
+  animation: pocket-fall 1.8s ease-in both;
+}
+@keyframes pocket-fall {
+  0% { transform: translate(-50%, -50%) rotate(0deg); opacity: 0; }
+  8% { opacity: 1; }
+  75% { opacity: 1; }
+  100% { transform: translate(calc(-50% + var(--pocket-drift)), 260px) rotate(var(--pocket-turn)); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .particle { animation: pocket-fade 1s ease-out both; }
+  @keyframes pocket-fade {
+    from { opacity: 1; }
+    to { opacity: 0; }
+  }
+}

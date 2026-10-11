@@ -47,6 +47,8 @@ import { getAudioAvailablePoints } from "@/lib/audioScoring";
 import { getImageRevealLevels, getImageRevealPoints, getImageAreaRewards, chooseImageArea, missImageArea, canGuessImageArea } from "@/lib/imageReveal";
 import { getFinaleRevealPlan } from "@/lib/finaleReveal";
 import { ImageRevealModal } from "@/components/game/modals/ImageRevealModal";
+import { TriviaModal } from "@/components/game/modals/TriviaModal";
+import { getTriviaResults, isTriviaReviewed, type TriviaMarks } from "@/lib/trivia";
 import { getGeoExploreValue } from "@/lib/geoguesser";
 import { getVisibleBoardQuestions } from "@/lib/boardReveal";
 import { changeJokerLevel, getJokerLevelPoints, JOKER_MAX_LEVEL } from "@/lib/jokerScoring";
@@ -828,6 +830,30 @@ export default function GameBoardPage() {
     );
   };
 
+  const awardTrivia = (marks: TriviaMarks, reviewed: string[]) => {
+    if (!activeQuestion || activeQuestion.type !== "trivia" || activeQuestion.answered ||
+      !isTriviaReviewed(activeQuestion, reviewed) || !teams.length) return;
+    const results = getTriviaResults(activeQuestion, teams.map(team => team.id), marks);
+    const createdAt = new Date().toISOString();
+    setTeams(previous => previous.map(team => ({
+      ...team, score: team.score + (results.find(result => result.teamId === team.id)?.points ?? 0),
+    })));
+    setScoreHistory(previous => [...results.map(result => ({
+      id: makeId("score"), teamId: result.teamId,
+      teamName: teams.find(team => team.id === result.teamId)!.name,
+      delta: result.points, questionId: activeQuestion.id, createdAt,
+      reason: `${activeQuestion.category} · Trivia round · ${result.correct}/${activeQuestion.triviaItems?.length} correct`,
+    })), ...previous].slice(0, 100));
+    if (remainingQuestionCount === 1) {
+      setFinaleRevealed(false); setFinaleDrumrollStarted(false);
+      setFinaleDrumrollFinished(false); setFinalePodiumRevealCount(0);
+    }
+    setQuestions(previous => previous.map(question => question.id === activeQuestion.id ? { ...question, answered: true } : question));
+    if (activeTurnOrder.length > 0) advanceBoard();
+    setLastGuessTeamId("");
+    dismissQuestion(true);
+  };
+
   const markAnswered = (correct: boolean, stageResult?: { points: number; distanceKm: number | null }) => {
     if (!activeQuestion) return;
     if (remainingQuestionCount === 1 && isQuestionReady(activeQuestion) && !activeQuestion.answered) {
@@ -1310,6 +1336,9 @@ export default function GameBoardPage() {
           basePoints={activeQuestion.points}
         />
       );
+    }
+    if (activeQuestion.type === "trivia") {
+      return <TriviaModal key={activeQuestion.id} question={modalQuestion} teams={teams} onAward={awardTrivia} />;
     }
     if (activeQuestion.type === "imageReveal") {
       const questionId = activeQuestion.id;

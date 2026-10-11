@@ -34,9 +34,18 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
+
+# Local-only quiz exports and private source material
+/private/
+**/kimquizak-backup-*.json
 
 # vercel
 .vercel
+
+# Supabase local project links and CLI caches
+/supabase/.temp/
+/supabase/.branches/
 
 # typescript
 *.tsbuildinfo

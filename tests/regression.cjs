@@ -24,6 +24,37 @@ function projectLoader(stubs = {}) {
   return load;
 }
 
+test('public demo uses synthetic players, reciprocal mock relationships, and every question type', () => {
+  const demo = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../default_questions.json'), 'utf8'));
+  const players = demo.teams.flatMap(team => team.players);
+  assert.equal(players.length, 9);
+  assert.equal(new Set(players.map(player => player.id)).size, players.length);
+  const kinds = new Set();
+  players.forEach((player, index) => {
+    const number = String(index + 1).padStart(2, '0');
+    assert.equal(player.name, ['Nora', 'Emil', 'Frida', 'Aksel', 'Maja', 'Jonas', 'Ingrid', 'Sander', 'Thea'][index]);
+    assert.equal(player.id, `demo-player-${number}`);
+    assert(Object.keys(player).every(key => ['id', 'name', 'bonds'].includes(key)));
+    for (const bond of player.bonds ?? []) {
+      kinds.add(bond.kind);
+      const target = players.find(candidate => candidate.id === bond.playerId);
+      assert(target?.bonds.some(reverse => reverse.playerId === player.id && reverse.kind === bond.kind));
+    }
+  });
+  assert.deepEqual([...kinds].sort(), ['drinking-buddies', 'engaged', 'married', 'parents', 'sweethearts']);
+  assert.deepEqual([...new Set(demo.questions.map(question => question.type))].sort(),
+    ['audio', 'booby', 'geoguesser', 'imageReveal', 'joker', 'lyrics', 'mcq', 'standard', 'timeline', 'trivia']);
+  const { getQuestionIssues } = projectLoader()('@/lib/questionValidation');
+  for (const question of demo.questions) {
+    assert.deepEqual(getQuestionIssues(question), [], question.id);
+    assert.equal(question.answered, false);
+    assert.equal(question.typeDrafts, undefined, 'No hidden drafts in the public demo');
+  }
+  assert(demo.teams.every(team => team.score === 0));
+  assert.deepEqual(demo.scoreHistory, []);
+  assert.deepEqual(demo.turnState.order, []);
+});
+
 test('removing a reveal image clears all image-specific authoring state but keeps question rules', () => {
   const { clearImageRevealImage, getImageAreaOpeningTiles, getImageRevealAreas } = projectLoader()('@/lib/imageReveal');
   const original = { id:'reset', prompt:'Question', answer:'Answer', imageRevealStyle:'areas',
@@ -47,6 +78,26 @@ test('removing a reveal image clears all image-specific authoring state but keep
   for (const key of ['prompt','answer','imageRevealStyle','imageRevealRotateOnMiss','imageRevealCostsPoints','imageRevealAreaMode']) {
     assert.equal(cleared[key], original[key], key);
   }
+});
+
+test('trivia rewards every team independently and requires all answers reviewed', () => {
+  const { getTriviaResults, isTriviaReviewed } = projectLoader()('@/lib/trivia');
+  const { getQuestionIssues } = projectLoader()('@/lib/questionValidation');
+  const question = { type:'trivia', points:300, triviaItems:[
+    {id:'1',prompt:'First?',answer:'Yes'}, {id:'2',prompt:'Second?',answer:'Yes'}, {id:'3',prompt:'Third?',answer:'Yes'},
+  ] };
+  const marks = {'1':['a','b'], '2':['a','b'], '3':['a']};
+  assert.deepEqual(getTriviaResults(question, ['a','b','c'], marks), [
+    {teamId:'a',correct:3,points:300},{teamId:'b',correct:2,points:200},{teamId:'c',correct:0,points:0},
+  ]);
+  assert.equal(getTriviaResults({...question,points:100}, ['b'], marks)[0].points, 67);
+  assert.equal(getTriviaResults(question,['a','b'],{'1':['a','b'],'2':['a','b'],'3':['a','b']}).reduce((n,r)=>n+r.points,0),600);
+  assert.equal(isTriviaReviewed(question, ['1','2']), false);
+  assert.equal(isTriviaReviewed(question, ['1','2','3']), true);
+  assert.equal(isTriviaReviewed({triviaItems:[]}, []), false);
+  assert.deepEqual(getQuestionIssues(question), []);
+  assert(getQuestionIssues({...question,triviaItems:[]}).length);
+  assert(getQuestionIssues({...question,triviaItems:[{id:'1',prompt:'',answer:''},{id:'1',prompt:'x',answer:'y'}]}).length);
 });
 
 test('finale reveals every tier separately from last to first, keeping ties together', () => {

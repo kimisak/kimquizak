@@ -383,6 +383,7 @@ module.exports = async function imageRevealRegression(page, baseUrl, backup) {
   assert((await areaEditor.locator('.image-reveal-patch-target').nth(hiddenCellIndex).getAttribute('aria-label')).includes('Covered'));
   assert.equal(await areaEditor.locator('clipPath[id$="-patches"] rect').count(), 1, 'Manual edits persist');
   await page.goto(baseUrl + '/game'); await open();
+  await modal.locator('clipPath[id$="-patches"] rect').first().waitFor({ state: 'attached' });
   assert.equal(await modal.locator('clipPath[id$="-patches"] rect').count(), 1, 'Player opening matches host edits');
   assert.equal(await modal.locator('.image-reveal-opening-cover').getAttribute('opacity'), '1', 'Source guide never leaks into live play');
   await modal.getByRole('button', { name: 'Choose area 1', exact: true }).click();

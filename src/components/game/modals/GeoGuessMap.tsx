@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { loadMaps } from "@/components/game/StreetViewPanorama";
+import { GeoguesserSetupInfo } from "@/components/GeoguesserSetupInfo";
 
 export type GeoPoint = { lat: number; lng: number };
 
@@ -141,7 +142,10 @@ export function GeoGuessMap({ answer, guess, locked, revealed, labelsVisible, on
   return (
     <div className="geo-stage-map-wrap">
       <div className="geo-stage-map" ref={canvasRef} aria-label="World map for placing a guess" />
-      {!mapReady && <div className="geo-stage-map-status" role="status">{error || "Loading the world map…"}</div>}
+      {!mapReady && <div className="geo-stage-map-status street-view-setup-status">
+        <p role="status">{error || "Loading the world map…"}</p>
+        {error && <GeoguesserSetupInfo />}
+      </div>}
     </div>
   );
 }

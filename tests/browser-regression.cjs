@@ -67,6 +67,16 @@ const baseUrl = process.env.QUIZ_TEST_URL || 'http://localhost:3012';
   const downloaded=await downloadPromise;
   const backupText=fs.readFileSync(await downloaded.path(),'utf8');
   const backup=JSON.parse(backupText);
+  if (process.env.QUIZ_TEST_MODAL_SIZE_ONLY === '1') {
+    await require('./modal-size-browser.cjs')(page, baseUrl, backup);
+    assert.deepEqual(errors, [], 'Browser runtime errors');
+    return;
+  }
+  if (process.env.QUIZ_TEST_TRIVIA_ONLY === '1') {
+    await require('./trivia-browser.cjs')(page, baseUrl, backup);
+    assert.deepEqual(errors, [], 'Browser runtime errors');
+    return;
+  }
   if (process.env.QUIZ_TEST_FINALE_ONLY === '1') {
     await require('./finale-reveal-browser.cjs')(page, baseUrl, backup);
     assert.deepEqual(errors, [], 'Browser runtime errors');
@@ -98,14 +108,14 @@ const baseUrl = process.env.QUIZ_TEST_URL || 'http://localhost:3012';
   await page.reload();
   await page.locator('.scoreboard-team').first().waitFor();
   await page.getByRole('button',{name:'Hide scores',exact:true}).click();
-  await page.getByRole('button',{name:'Add 100 hidden points to Granbarbanden',exact:true}).click();
+  await page.getByRole('button',{name:'Add 100 hidden points to Granskuddene',exact:true}).click();
   await page.goto(baseUrl+'/config/teams');
   await page.goto(baseUrl+'/game');
   await page.getByRole('button',{name:'Reveal scores',exact:true}).click();
-  assert.equal(await page.getByRole('spinbutton',{name:'Set score for Granbarbanden'}).inputValue(),'100');
+  assert.equal(await page.getByRole('spinbutton',{name:'Set score for Granskuddene'}).inputValue(),'100');
   await page.getByRole('button',{name:/^History/}).click();
   await page.getByRole('button',{name:'Undo',exact:true}).first().click();
-  assert.equal(await page.getByRole('spinbutton',{name:'Set score for Granbarbanden'}).inputValue(),'0');
+  assert.equal(await page.getByRole('spinbutton',{name:'Set score for Granskuddene'}).inputValue(),'0');
   console.log('HIDDEN SCORE / ROUTES / UNDO PASS');
   // The preview button is intentionally development-only; the real finale is tested below in both modes.
   const previewViewports = process.env.QUIZ_TEST_PRODUCTION === '1' ? [] : [{width:1440,height:960},{width:1720,height:720},{width:1920,height:1080}];
@@ -146,7 +156,7 @@ const baseUrl = process.env.QUIZ_TEST_URL || 'http://localhost:3012';
   await page.getByRole('button',{name:'Reset game progress',exact:true}).click();
   await page.goto(baseUrl+'/game');
   await page.getByRole('button',{name:'Spin to begin',exact:true}).waitFor();
-  assert.equal(await page.getByRole('spinbutton',{name:'Set score for Granbarbanden'}).inputValue(),'0');
+  assert.equal(await page.getByRole('spinbutton',{name:'Set score for Granskuddene'}).inputValue(),'0');
   console.log('PASS: board reset');
   await page.goto(baseUrl+'/config/questions');
   // Draft image strings can exceed localStorage's old quota; the archive must use IndexedDB.

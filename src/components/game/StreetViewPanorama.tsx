@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { parseStreetViewSource } from "@/lib/geoguesser";
+import { GeoguesserSetupInfo } from "@/components/GeoguesserSetupInfo";
 
 export type Panorama = {
   setOptions: (options: Record<string, unknown>) => void;
@@ -35,6 +36,7 @@ export function loadMaps(): Promise<MapsApi> {
   if (mapsPromise) return mapsPromise;
   mapsPromise = fetch("/api/maps/config", { cache: "no-store" })
     .then(async (response) => {
+      if (response.status === 401) throw new Error("Sign in through Host to use Street View.");
       if (!response.ok) throw new Error("Google Maps is not configured");
       const data = await response.json() as { apiKey?: string };
       if (!data.apiKey) throw new Error("Google Maps is not configured");
@@ -202,7 +204,10 @@ export function StreetViewPanorama({ sourceUrl, interaction, className = "", onR
       <div className="street-view-panorama-canvas" ref={containerRef} />
       {!source && <div className="street-view-panorama-status">Paste a Google Street View link with coordinates.</div>}
       {source && state === "loading" && <div className="street-view-panorama-status">Loading Street View…</div>}
-      {source && state === "unavailable" && <div className="street-view-panorama-status">{error || "No Street View panorama was found here."}</div>}
+      {source && state === "unavailable" && <div className="street-view-panorama-status street-view-setup-status">
+        <p role="status">{error || "No Street View panorama was found here."}</p>
+        <GeoguesserSetupInfo />
+      </div>}
     </div>
   );
 }
