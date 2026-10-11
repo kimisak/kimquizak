@@ -101,7 +101,9 @@ export type Question = {
   timelineRotateOnMiss?: boolean | null;
   mcqRotateOnMiss?: boolean | null;
   mcqOptions?: string[];
-  mcqCorrectIndex?: number | null;
+  mcqCorrectIndex?: number | null; // Legacy single-answer backups.
+  mcqCorrectIndexes?: number[];
+  mcqRequiredCorrect?: number;
   audioUrl?: string | null;
   audioStopSeconds?: number | null;
   audioStartSeconds?: number | null;
@@ -151,6 +153,15 @@ export type ResolvedHostMessage = {
   }>;
 };
 
+export type McqProgress = {
+  found: number[];
+  eliminated: number[];
+  pointsByTeam: Record<string, number>;
+  teamId?: string;
+  finished: boolean;
+  lastCorrect?: boolean;
+};
+
 export type TurnState = {
   order: string[];
   boardIndex: number;
@@ -161,6 +172,7 @@ export type TurnState = {
   audioPlaybackCounts?: Record<string, number>;
   audioReplayValues?: Record<string, number>;
   imageRevealProgress?: Record<string, ImageRevealProgress>;
+  mcqProgress?: Record<string, McqProgress>;
   scoresHidden?: boolean;
   hiddenScoreOrder?: string[];
 };

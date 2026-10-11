@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { YouTubeClipPreview } from "@/components/config/YouTubeClipPreview";
 import { ImageRevealFields } from "@/components/config/ImageRevealFields";
+import { getMcqEditorOptions, getMcqCorrectIndexes, MCQ_MIN_OPTIONS, MCQ_MAX_OPTIONS } from "@/lib/mcq";
 import { TriviaFields } from "@/components/config/TriviaFields";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { usePersistentQuestions } from "@/hooks/usePersistentQuestions";
@@ -420,34 +421,26 @@ const McqFields = React.memo(function McqFields({
   handleImageChange,
   handleAnswerImageChange,
 }: FieldProps) {
-  const [options, setOptions] = useState<string[]>(() => {
-    const base = q?.mcqOptions && q.mcqOptions.length ? q.mcqOptions : [];
-    return base.slice(0, 4).concat(new Array(Math.max(0, 4 - base.length)).fill(""));
-  });
-  const [correctIndex, setCorrectIndex] = useState<number>(q?.mcqCorrectIndex ?? 0);
-  const [rotateOnMiss, setRotateOnMiss] = useState<boolean>(q?.mcqRotateOnMiss ?? false);
-
-  useEffect(() => {
-    const id = setTimeout(() => {
-      const base = q?.mcqOptions && q.mcqOptions.length ? q.mcqOptions : [];
-      const normalized = base.slice(0, 4).concat(new Array(Math.max(0, 4 - base.length)).fill(""));
-      setOptions(normalized);
-      setCorrectIndex(q?.mcqCorrectIndex ?? 0);
-      setRotateOnMiss(q?.mcqRotateOnMiss ?? false);
-    }, 0);
-    return () => clearTimeout(id);
-  }, [q?.mcqOptions, q?.mcqCorrectIndex, q?.mcqRotateOnMiss]);
+  const options = getMcqEditorOptions(q?.mcqOptions);
+  const correctIndexes = q?.mcqCorrectIndexes !== undefined || q?.mcqCorrectIndex != null
+    ? getMcqCorrectIndexes(q) : [0];
+  const requiredCorrect = q?.mcqRequiredCorrect ?? correctIndexes.length;
+  const rotateOnMiss = q?.mcqRotateOnMiss ?? false;
 
   const persist = (
     opts: string[],
-    correct: number,
+    correct: number[],
     rotateOverride?: boolean,
+    requiredOverride?: number,
   ) => {
-    const trimmed = opts.slice(0, 4).map((o) => o.trim());
-    const boundedCorrect = Math.min(trimmed.length - 1, Math.max(0, correct));
+    const limited = opts.slice(0, MCQ_MAX_OPTIONS);
+    const validCorrect = [...new Set(correct)].filter(index => index >= 0 && index < limited.length).sort((a, b) => a - b);
+    const required = requiredOverride ?? q?.mcqRequiredCorrect;
     upsertQuestion(category, points, {
-      mcqOptions: trimmed,
-      mcqCorrectIndex: boundedCorrect,
+      mcqOptions: limited,
+      mcqCorrectIndex: validCorrect[0] ?? -1,
+      mcqCorrectIndexes: validCorrect,
+      mcqRequiredCorrect: required === undefined ? undefined : Math.max(1, Math.min(required, validCorrect.length)),
       mcqRotateOnMiss: rotateOverride ?? rotateOnMiss,
     });
   };
@@ -555,12 +548,11 @@ const McqFields = React.memo(function McqFields({
           <div key={idx} style={{ display: "grid", gap: "6px" }}>
             <label className="label" style={{ display: "flex", alignItems: "center", gap: "8px" }}>
               <input
-                type="radio"
-                name={`correct-${category}-${points}`}
-                checked={correctIndex === idx}
+                type="checkbox"
+                aria-label={`Option ${idx + 1} is correct`}
+                checked={correctIndexes.includes(idx)}
                 onChange={() => {
-                  setCorrectIndex(idx);
-                  persist(options, idx);
+                  persist(options, correctIndexes.includes(idx) ? correctIndexes.filter(index => index !== idx) : [...correctIndexes, idx]);
                 }}
                 style={{ width: "16px", height: "16px", cursor: "pointer" }}
               />
@@ -572,14 +564,35 @@ const McqFields = React.memo(function McqFields({
               onChange={(e) => {
                 const nextOpts = [...options];
                 nextOpts[idx] = e.target.value;
-                setOptions(nextOpts);
+                persist(nextOpts, correctIndexes);
               }}
-              onBlur={() => persist(options, correctIndex)}
               placeholder={`Option ${idx + 1}`}
+              aria-label={`Option ${idx + 1}`}
             />
+            <button type="button" className="button ghost" disabled={options.length <= MCQ_MIN_OPTIONS}
+              aria-label={`Remove option ${idx + 1}`} onClick={() => {
+                const next = options.filter((_, index) => index !== idx);
+                const nextCorrect = correctIndexes.filter(index => index !== idx).map(index => index > idx ? index - 1 : index);
+                persist(next, nextCorrect);
+              }}>Remove option</button>
           </div>
         ))}
+        <button type="button" className="button secondary" disabled={options.length >= MCQ_MAX_OPTIONS}
+          onClick={() => {
+            const next = [...options, ""];
+            persist(next, correctIndexes);
+          }}>Add option</button>
+        <small>{options.length} of {MCQ_MAX_OPTIONS} options · At least {MCQ_MIN_OPTIONS} required</small>
+        {correctIndexes.length === 0 && <p role="status">Choose the correct option.</p>}
       </div>
+      {correctIndexes.length > 1 && <label className="label" style={{ marginTop: "12px" }}>
+        Correct answers needed to finish
+        <select className="input" aria-label="Correct answers needed to finish" value={requiredCorrect}
+          onChange={event => persist(options, correctIndexes, undefined, Number(event.target.value))}>
+          {correctIndexes.map((_, index) => <option key={index + 1} value={index + 1}>{index + 1}{index + 1 === correctIndexes.length ? " (all)" : ""}</option>)}
+        </select>
+        <small>Split the {points} points across {requiredCorrect} correct picks. A correct pick keeps the same team playing. Teams keep earned points.</small>
+      </label>}
       <div className="mcq-config-rule">
         <label>
           <input
@@ -587,15 +600,14 @@ const McqFields = React.memo(function McqFields({
             checked={rotateOnMiss}
             onChange={(event) => {
               const next = event.target.checked;
-              setRotateOnMiss(next);
-              persist(options, correctIndex, next);
+              persist(options, correctIndexes, next);
             }}
           />
           <span>
             <strong>Rollover after a wrong answer</strong>
             <small>{rotateOnMiss
-              ? "The wrong option disappears and the next team may answer."
-              : "A wrong answer ends the question for 0 points."}</small>
+              ? "The wrong option is disabled and the next team may answer."
+              : "A wrong answer ends the question. Previously earned points are kept."}</small>
           </span>
         </label>
       </div>

@@ -20,7 +20,7 @@ Prod: https://kimquizak.com/
 
 ## Question types (cheat sheet)
 - **Standard**: prompt + answer; optional question/answer images.
-- **MCQ**: exactly 4 options. A wrong answer can optionally disappear and roll play to the next team; otherwise it ends the question for 0 points. Use a Standard question for True/False.
+- **MCQ**: 2–12 options, starting with four. Mark one or more correct answers and choose how many must be found to finish. Points are split across the required correct picks; teams keep their earned points and continue after a correct pick. With rollover enabled, a wrong pick is disabled and passes play to the next team; otherwise it ends the question. Found answers and split scores survive closing/reloading the round, and Reset game progress clears them. Existing single-answer backups still work.
 - **Text grid (lyrics)**: one word/segment per line. Answer video must be a YouTube *embed* URL (not a share link). Red tiles rotate to the next team and shave the pot; “Next team” button available for hosts on wrong guesses.
 - **Geoguesser**: find a place in Google Maps, paste its link, adjust the nearby Street View scene, and save the opening frame. Google Maps share links, Street View URLs, and iframe code are supported. The question starts on a fixed view. A timed choice to look around and move drops the correct-answer payout by one or two board-value levels; the host can freely explore on the answer side. Google's road/address overlays are hidden without cropping.
 - **Timeline**: events with years. Center year/label configurable. Rotation on miss optional.

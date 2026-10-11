@@ -444,3 +444,58 @@ test('host countdowns are not random draws and mixed player draws do not repeat'
   assert.equal(result.randomSelections[1].playerId, 'p1');
   assert.equal(result.randomSelections[2].playerId, 'p2');
 });
+
+test('multiple choice accepts 2–12 complete options and validates the correct answer beyond D', () => {
+  const { getQuestionIssues } = projectLoader()('@/lib/questionValidation');
+  const base = { id: 'mcq', category: 'Test', points: 500, type: 'mcq', prompt: 'Choose one', answer: '' };
+  for (const length of [2, 4, 5, 12]) {
+    const q = { ...base, mcqOptions: Array.from({ length }, (_, i) => `Answer ${i + 1}`), mcqCorrectIndex: length - 1 };
+    assert.deepEqual(getQuestionIssues(q), []);
+    for (const index of [-1, length, 0.5, NaN]) assert(getQuestionIssues({ ...q, mcqCorrectIndex: index }).includes('Choose the correct option'));
+    assert(getQuestionIssues({ ...q, mcqOptions: [...q.mcqOptions.slice(0, -1), ' '] }).length);
+  }
+  for (const length of [0, 1, 13]) assert(getQuestionIssues({ ...base, mcqOptions: Array(length).fill('Answer'), mcqCorrectIndex: 0 }).length);
+});
+
+test('multi-answer MCQ shares an exact point pool and rejects repeat picks', () => {
+  const { pickMcqOption, createMcqProgress } = projectLoader()('@/lib/mcq');
+  const q = { type: 'mcq', points: 500, mcqOptions: Array(12).fill('Option'), mcqCorrectIndexes: [0, 4, 11], mcqRequiredCorrect: 3, mcqRotateOnMiss: true };
+  let result = pickMcqOption(q, createMcqProgress(), 0, 'first');
+  assert.equal(result.points, 166);
+  assert.equal(result.progress.finished, false);
+  assert.equal(pickMcqOption(q, result.progress, 0, 'first'), null);
+  result = pickMcqOption(q, result.progress, 1, 'first');
+  assert.equal(result.points, 0);
+  assert.equal(result.progress.finished, false);
+  assert.deepEqual(result.progress.pointsByTeam, { first: 166 });
+  assert.equal(pickMcqOption(q, result.progress, 1, 'second'), null);
+  result = pickMcqOption(q, result.progress, 4, 'second');
+  result = pickMcqOption(q, result.progress, 11, 'second');
+  assert.equal(result.progress.finished, true);
+  assert.deepEqual(result.progress.pointsByTeam, { first: 166, second: 334 });
+  assert.equal(pickMcqOption(q, result.progress, 2, 'first'), null);
+  let sweep = createMcqProgress();
+  for (const index of [11, 0, 4]) sweep = pickMcqOption(q, sweep, index, 'first').progress;
+  assert.deepEqual(sweep.pointsByTeam, { first: 500 });
+});
+
+test('multi-answer MCQ supports a smaller finish target, retained points on a miss, and legacy answers', () => {
+  const { pickMcqOption, createMcqProgress } = projectLoader()('@/lib/mcq');
+  const { getQuestionIssues } = projectLoader()('@/lib/questionValidation');
+  const q = { type: 'mcq', prompt: 'Which ones?', points: 300, mcqOptions: ['A', 'B', 'C', 'D'], mcqCorrectIndexes: [0, 1, 2], mcqRequiredCorrect: 2, mcqRotateOnMiss: true };
+  assert.deepEqual(getQuestionIssues(q), []);
+  for (const required of [0, 4, 1.5]) assert(getQuestionIssues({ ...q, mcqRequiredCorrect: required }).length);
+  assert(getQuestionIssues({ ...q, mcqCorrectIndexes: [0, 0] }).length);
+  assert(getQuestionIssues({ ...q, mcqCorrectIndexes: [0, 12] }).length);
+  let result = pickMcqOption(q, createMcqProgress(), 0, 'a');
+  const stopped = pickMcqOption({ ...q, mcqRotateOnMiss: false }, result.progress, 3, 'a');
+  assert(stopped.progress.finished);
+  assert.deepEqual(stopped.progress.pointsByTeam, { a: 150 });
+  result = pickMcqOption(q, result.progress, 2, 'b');
+  assert(result.progress.finished);
+  assert.deepEqual(result.progress.pointsByTeam, { a: 150, b: 150 });
+  const legacy = { ...q, mcqCorrectIndexes: undefined, mcqRequiredCorrect: undefined, mcqCorrectIndex: 3 };
+  result = pickMcqOption(legacy, createMcqProgress(), 3, 'a');
+  assert.equal(result.points, 300);
+  assert(result.progress.finished);
+});

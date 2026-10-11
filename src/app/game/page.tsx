@@ -17,6 +17,8 @@ import {
   type JokerProgress,
   type JokerRound,
 } from "@/components/game/modals/JokerModal";
+import { createMcqProgress, pickMcqOption } from "@/lib/mcq";
+import type { McqProgress } from "@/lib/types";
 import { McqModal } from "@/components/game/modals/McqModal";
 import { TimelineModal } from "@/components/game/modals/TimelineModal";
 import { LyricsModal } from "@/components/game/modals/LyricsModal";
@@ -126,13 +128,7 @@ export default function GameBoardPage() {
   const [finaleDrumrollStarted, setFinaleDrumrollStarted] = useState(false);
   const [finaleDrumrollFinished, setFinaleDrumrollFinished] = useState(false);
   const [finalePodiumRevealCount, setFinalePodiumRevealCount] = useState(0);
-  const [mcqEliminated, setMcqEliminated] = useState<number[]>([]);
-  const [mcqResolved, setMcqResolved] = useState(false);
-  const [mcqResolvedInfo, setMcqResolvedInfo] = useState<{
-    teamName: string;
-    points: number;
-    correct: boolean;
-  } | null>(null);
+  const mcqProgressRef = useRef<McqProgress>(createMcqProgress());
   const prevAnsweringTeamRef = useRef<string | null>(null);
   const [slotFaces, setSlotFaces] = useState<Team[]>([]);
   const [slotSpinning, setSlotSpinning] = useState(false);
@@ -481,13 +477,11 @@ export default function GameBoardPage() {
   };
 
   const openQuestion = (question: Question) => {
+    mcqProgressRef.current = turnState.mcqProgress?.[question.id] ?? createMcqProgress();
     questionTriggerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setJokerRound(null);
     setJokerProgress(null);
     resetTimelineState();
-    setMcqEliminated([]);
-    setMcqResolved(false);
-    setMcqResolvedInfo(null);
     let normalized = question;
     if (question.type === "lyrics") {
       const pattern = generateRedPattern(question.lyricsSegments?.length ?? 0);
@@ -587,7 +581,6 @@ export default function GameBoardPage() {
     setGeoTimerUsed(false);
     setGeoCountdown(null);
     setMapLocked(true);
-    setMcqEliminated([]);
     if (normalized.type === "lyrics") {
       const len = normalized.lyricsSegments?.length ?? 0;
       setLyricsRevealed(new Array(len).fill(false));
@@ -615,6 +608,7 @@ export default function GameBoardPage() {
         return { ...previous, imageRevealProgress: progress };
       });
     }
+    mcqProgressRef.current = createMcqProgress();
     setActiveQuestion(null);
     setShowAnswer(false);
     setSelectedTeamId("");
@@ -630,9 +624,6 @@ export default function GameBoardPage() {
     setJokerProgress(null);
     setShowJokerConfetti(false);
     resetTimelineState();
-    setMcqEliminated([]);
-    setMcqResolved(false);
-    setMcqResolvedInfo(null);
   };
   const closeModal = () => dismissQuestion();
 
@@ -1018,76 +1009,38 @@ export default function GameBoardPage() {
   };
 
   const handleMcqSelect = (idx: number) => {
-    if (!activeQuestion || activeQuestion.type !== "mcq") return;
-    const opts = activeQuestion.mcqOptions ?? [];
-    if (!opts.length) return;
-    if (mcqResolved) return;
-    const currentTeamId = lastGuessTeamId || selectedTeamId || getBoardTeamId();
-    if (currentTeamId) {
-      setLastGuessTeamId(currentTeamId);
-    }
-    const correctIdx = activeQuestion.mcqCorrectIndex ?? 0;
-    const isCorrect = idx === correctIdx;
-    if (isCorrect) {
+    if (!activeQuestion || activeQuestion.type !== "mcq" || activeQuestion.answered) return;
+    const currentTeamId = mcqProgressRef.current.teamId || lastGuessTeamId || selectedTeamId || getBoardTeamId();
+    if (!teams.some(team => team.id === currentTeamId)) return;
+    const result = pickMcqOption(activeQuestion, mcqProgressRef.current, idx, currentTeamId);
+    if (!result) return;
+    const { progress, correct, points } = result;
+    // Update the guard before any state writes so duplicate clicks cannot award twice.
+    mcqProgressRef.current = progress;
+    if (correct) {
       playSuccessChime();
-      if (currentTeamId) {
-        const awarded = activeQuestion.points ?? 0;
-        applyScoreChange(
-          currentTeamId,
-          awarded,
-          `${activeQuestion.category} · ${activeQuestion.points} · Multiple choice correct`,
-          activeQuestion.id,
-        );
-        const winnerTeam = teams.find((t) => t.id === currentTeamId);
-        setMcqResolvedInfo({
-          teamName: winnerTeam?.name ?? "Team",
-          points: awarded,
-          correct: true,
-        });
-      }
-      setQuestions((prev) =>
-        prev.map((q) =>
-          q.id === activeQuestion.id ? { ...q, answered: true } : q,
-        ),
-      );
-      if (activeTurnOrder.length > 0) {
-        advanceBoard();
-      }
-      setMcqResolved(true);
+      applyScoreChange(currentTeamId, points,
+        `${activeQuestion.category} · Multiple choice · ${String.fromCharCode(65 + idx)} correct`, activeQuestion.id);
+      setLastGuessTeamId(currentTeamId);
     } else {
       playDownbeat();
-      setMcqEliminated((previous) => previous.includes(idx) ? previous : [...previous, idx]);
-      const rolloverEnabled = activeQuestion.mcqRotateOnMiss === true;
-      if (rolloverEnabled && activeTurnOrder.length > 0) {
-        const nextTeamId = activeTurnOrder[(boardTurnIndex + 1) % activeTurnOrder.length];
-        advanceBoard();
-        setSelectedTeamId(nextTeamId);
+      if (!progress.finished) {
+        const order = activeTurnOrder.length ? activeTurnOrder : teams.map(team => team.id);
+        const nextIndex = (Math.max(0, order.indexOf(currentTeamId)) + 1) % order.length;
+        progress.teamId = order[nextIndex];
+        setSelectedTeamId(progress.teamId);
         setLastGuessTeamId("");
-      } else {
-        const answeringTeam = teams.find((team) => team.id === currentTeamId);
-        setMcqResolvedInfo({
-          teamName: answeringTeam?.name ?? "Team",
-          points: 0,
-          correct: false,
-        });
-        if (currentTeamId && answeringTeam) {
-          setScoreHistory((previous) => previous.some((entry) => entry.questionId === activeQuestion.id)
-            ? previous
-            : [{
-                id: makeId("score"),
-                teamId: answeringTeam.id,
-                teamName: answeringTeam.name,
-                delta: 0,
-                reason: `${activeQuestion.category} · ${activeQuestion.points} · Multiple choice wrong · 0 pts`,
-                createdAt: new Date().toISOString(),
-                questionId: activeQuestion.id,
-              }, ...previous].slice(0, 100));
-        }
-        setQuestions((previous) => previous.map((question) =>
-          question.id === activeQuestion.id ? { ...question, answered: true } : question));
-        if (activeTurnOrder.length > 0) advanceBoard();
-        setMcqResolved(true);
+        if (activeTurnOrder.length) setTurnState(previous => ({ ...previous, boardIndex: nextIndex }));
       }
+    }
+    setTurnState(previous => ({ ...previous, mcqProgress: { ...previous.mcqProgress, [activeQuestion.id]: progress } }));
+    if (progress.finished) {
+      if (remainingQuestionCount === 1) {
+        setFinaleRevealed(false); setFinaleDrumrollStarted(false);
+        setFinaleDrumrollFinished(false); setFinalePodiumRevealCount(0);
+      }
+      setQuestions(previous => previous.map(question => question.id === activeQuestion.id ? { ...question, answered: true } : question));
+      if (activeTurnOrder.length) advanceBoard();
     }
   };
 
@@ -1270,23 +1223,18 @@ export default function GameBoardPage() {
       );
     }
     if (activeQuestion.type === "mcq") {
-      return (
-        <McqModal
-          question={modalQuestion}
-          currentTeamName={currentTeam?.name}
-          currentTeamColor={currentTeamColor}
-          currentTeamEmoji={currentTeamEmoji}
-          answeringTeamName={answeringTeam?.name}
-          answeringTeamColor={answeringTeamColor}
-          answeringTeamEmoji={answeringTeamEmoji}
-          eliminated={mcqEliminated}
-          onSelect={handleMcqSelect}
-          resolved={mcqResolved}
-          correctIndex={activeQuestion.mcqCorrectIndex ?? 0}
-          resolvedInfo={mcqResolvedInfo}
-          onContinue={closeModal}
-        />
-      );
+      const progress = turnState.mcqProgress?.[activeQuestion.id] ?? createMcqProgress();
+      const team = teams.find(team => team.id === progress.teamId) ?? answeringTeam ?? currentTeam;
+      return <McqModal
+        question={modalQuestion}
+        currentTeamName={team?.name}
+        currentTeamColor={team ? getTeamAccent(team).base : currentTeamColor}
+        currentTeamEmoji={team?.badgeEmoji}
+        progress={progress}
+        teams={teams}
+        onSelect={handleMcqSelect}
+        onContinue={closeModal}
+      />;
     }
     if (activeQuestion.type === "joker" && jokerRound && jokerProgress) {
       return (

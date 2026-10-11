@@ -1,3 +1,4 @@
+import { MCQ_MIN_OPTIONS, MCQ_MAX_OPTIONS, getMcqCorrectIndexes, getMcqRequiredCorrect } from "@/lib/mcq";
 import type { Question } from "@/lib/types";
 import { parseStreetViewSource } from "@/lib/geoguesser";
 import { extractYouTubeId } from "@/lib/youtube";
@@ -72,11 +73,13 @@ export function getQuestionIssues(question: Question): string[] {
   if (type === "mcq") {
     if (!hasText(question.prompt) && !question.imageData) issues.push("Add a question or image");
     const options = question.mcqOptions ?? [];
-    if (options.length !== 4 || options.some((option) => !hasText(option))) {
-      issues.push("Complete all four answer options");
+    if (options.length < MCQ_MIN_OPTIONS || options.length > MCQ_MAX_OPTIONS || options.some((option) => !hasText(option))) {
+      issues.push("Complete between 2 and 12 answer options");
     }
-    const correct = question.mcqCorrectIndex ?? -1;
-    if (correct < 0 || correct >= options.length) issues.push("Choose the correct option");
+    const correct = getMcqCorrectIndexes(question);
+    if (!correct.length || new Set(correct).size !== correct.length || correct.some(index => !Number.isInteger(index) || index < 0 || index >= options.length)) issues.push("Choose the correct option");
+    const required = getMcqRequiredCorrect(question);
+    if (!Number.isInteger(required) || required < 1 || required > correct.length) issues.push("Choose how many correct answers must be found");
     return issues;
   }
 
