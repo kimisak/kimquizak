@@ -1,5 +1,6 @@
 'use client';
 
+import { TeamEmoji } from "./TeamEmoji";
 import { useEffect, useState, type CSSProperties } from "react";
 import type { FinaleMusicStatus } from "@/hooks/useFinaleSoundtrack";
 import { TeamPill } from "@/components/game/TeamPill";
@@ -167,7 +168,7 @@ export function FinalCelebration({
               key={player.id}
               style={{ "--player-delay": `${(playerIndex + teamIndex * 2) * -0.31}s` } as CSSProperties}
             >
-              <span className="finale-player-marker" aria-hidden>{marker}</span>
+              <span className="finale-player-marker" aria-hidden><TeamEmoji emoji={marker} color={accent.base} /></span>
               <span className="finale-player-name">{player.name.trim()}</span>
               <span className="finale-player-mood" aria-hidden>{mood}</span>
               <span className="finale-player-cheer" aria-hidden>{cheer}</span>
@@ -445,7 +446,7 @@ export function FinalCelebration({
                 const rank = rankOf(team);
                 return <div className={`finale-encore-team${visible ? " is-place-visible" : " is-place-concealed"}${hasBeenFlushed ? " has-flush-residue" : ""}`} key={team.id} data-team-id={team.id} data-rank={rank}>
                   <div className="finale-encore-content" aria-hidden={!visible} style={visible ? undefined : { visibility: "hidden", opacity: 0, pointerEvents: "none" }}>
-                    <span className="finale-encore-name"><span aria-hidden>{getTeamMarker(team)}</span> {team.name}</span>
+                    <span className="finale-encore-name"><span aria-hidden><TeamEmoji emoji={getTeamMarker(team)} color={getTeamAccent(team).base} /></span> {team.name}</span>
                     <strong className="finale-encore-score">{ordinalPlace(rank)} · {team.score} pts</strong>
                     {renderPlayers(team, index + 3)}
                   </div>

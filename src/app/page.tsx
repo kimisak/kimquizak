@@ -88,6 +88,7 @@ export default function Home() {
           </div>
           <div className="field-block">
             <label className="label" htmlFor="team-theme">Team palette</label>
+            <div className="team-palette-controls">
             <select id="team-theme" className="input" value={activeTheme.id} onChange={(event) => {
               const nextTheme = event.target.value;
               setSettings((previous) => ({ ...previous, themeId: nextTheme }));
@@ -95,6 +96,12 @@ export default function Home() {
             }}>
               {teamThemes.map((theme) => <option key={theme.id} value={theme.id}>{theme.label}</option>)}
             </select>
+            {activeTheme.id === "capra-liflig" && <label className="company-branding-toggle">
+              <input type="checkbox" role="switch" checked={settings.companyBranding === true} onChange={(event) => setSettings((previous) => ({ ...previous, companyBranding: event.target.checked }))} />
+              <span className="company-branding-track" aria-hidden="true" />
+              <span>Brand the site</span>
+            </label>}
+            </div>
             <div className="theme-cast">
               {emojiOptions.map((option: EmojiOption) => <TeamPill key={option.emoji} name={option.label} color={option.base} emoji={option.emoji} />)}
             </div>

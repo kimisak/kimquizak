@@ -646,3 +646,27 @@ test('Connections shuffle changes only unsolved positions and never resets rules
   assert.equal(expired.mistakes, 1, 'Shuffle cannot bypass an expired guess');
   assert.equal(expired.teamId, 'b');
 });
+
+test('Capra and Liflig animal presets keep local SVGs across backup serialization without replacing other themes', () => {
+  const load = projectLoader();
+  const { getThemeById, legacyTeamThemes } = load('@/lib/defaultData');
+  const { getTeamAnimalSrc } = load('@/lib/teamAnimals');
+  const { reconcileTeamTheme } = load('@/lib/teamPresentation');
+  const theme = getThemeById('capra-liflig');
+  assert.equal(theme.options.length, 8);
+  assert.equal(theme.options[0].emoji, '🐐');
+  for (const option of theme.options) {
+    const restored = JSON.parse(JSON.stringify({ badgeEmoji: option.emoji, accentBase: option.base }));
+    const src = getTeamAnimalSrc(restored.badgeEmoji, restored.accentBase);
+    assert(src);
+    const svg = fs.readFileSync(path.resolve(__dirname, '../public' + src), 'utf8');
+    assert.match(svg, /<svg/);
+    assert.doesNotMatch(svg, /<script|<image|<foreignObject|onload=/i);
+    assert.equal(getTeamAnimalSrc(option.emoji, '#123456'), undefined);
+  }
+  assert.equal(getTeamAnimalSrc('🎂', '#d62f68'), undefined);
+  const old = legacyTeamThemes.find(theme => theme.id === 'capra-liflig-preview').options[0];
+  const updated = reconcileTeamTheme({id:'example',name:'Example',players:[],score:0,badgeEmoji:old.emoji,accentBase:old.base}, theme.id);
+  assert.equal(updated.badgeEmoji, '🐐');
+  assert(getTeamAnimalSrc(updated.badgeEmoji, updated.accentBase));
+});

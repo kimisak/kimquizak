@@ -1,6 +1,7 @@
 'use client';
 
 import Link from "next/link";
+import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { useSettings } from "@/hooks/useSettings";
 import { DEFAULT_SETTINGS } from "@/lib/settings";
@@ -11,6 +12,13 @@ export function AppHeader() {
   const isHome = pathname === "/";
   const isGame = pathname === "/game";
   const title = settings.quizTitle || DEFAULT_SETTINGS.quizTitle;
+  const companyBranding = settings.themeId === "capra-liflig" && settings.companyBranding === true;
+
+  useEffect(() => {
+    if (companyBranding) document.documentElement.dataset.siteTheme = "capra-liflig";
+    else delete document.documentElement.dataset.siteTheme;
+    return () => { delete document.documentElement.dataset.siteTheme; };
+  }, [companyBranding]);
 
   const navItems = [
     { href: "/config/teams", number: "01", label: "Teams" },

@@ -20,6 +20,23 @@ export type TeamTheme = {
 
 export const teamThemes: TeamTheme[] = [
   {
+    id: "capra-liflig",
+    label: "Capra × Liflig",
+    description: "Eight Noto animals in Capra mint and Liflig violet, led by the Capra goat.",
+    // https://capragruppen.anti.guide/toolbox-2/colours
+    // Base and glow pairs use only the official Capra and Liflig palettes.
+    options: [
+      { emoji: "🐐", label: "Goat", base: "#004c61", glow: "#defcf5" },
+      { emoji: "🦊", label: "Fox", base: "#4a11b7", glow: "#ffe8fe" },
+      { emoji: "🦦", label: "Otter", base: "#00ca97", glow: "#86ffd9" },
+      { emoji: "🦉", label: "Owl", base: "#bb5ce9", glow: "#ffa2ff" },
+      { emoji: "🐰", label: "Rabbit", base: "#86ffd9", glow: "#defcf5" },
+      { emoji: "🦋", label: "Butterfly", base: "#ffa2ff", glow: "#ffe8fe" },
+      { emoji: "🦌", label: "Deer", base: "#0c1c35", glow: "#86ffd9" },
+      { emoji: "🐙", label: "Octopus", base: "#220038", glow: "#ffa2ff" },
+    ],
+  },
+  {
     id: "birthday",
     label: "Birthday",
     description: "Balloons, ribbons, candles, invitations, and one very good cake.",
@@ -115,6 +132,22 @@ export const teamThemes: TeamTheme[] = [
 ];
 
 export const legacyTeamThemes: TeamTheme[] = [
+  {
+    id: "capra-liflig-preview",
+    label: "Capra × Liflig preview",
+    description: "Legacy palette",
+    options: [
+      { emoji: "🌊", label: "Warm Blue", base: "#004c61", glow: "#defcf5" },
+      { emoji: "🔮", label: "Purple", base: "#4a11b7", glow: "#ffe8fe" },
+      { emoji: "🌿", label: "Fresh Green", base: "#00ca97", glow: "#86ffd9" },
+      { emoji: "🌸", label: "Pink", base: "#bb5ce9", glow: "#ffa2ff" },
+      { emoji: "💎", label: "Spark", base: "#86ffd9", glow: "#defcf5" },
+      { emoji: "🦋", label: "Pink Spark", base: "#ffa2ff", glow: "#ffe8fe" },
+      { emoji: "🌌", label: "Capra Dark", base: "#0c1c35", glow: "#86ffd9" },
+      { emoji: "🍇", label: "Liflig Dark", base: "#220038", glow: "#ffa2ff" },
+    ],
+  },
+
   {
     id: "birthday-v3",
     label: "Birthday",

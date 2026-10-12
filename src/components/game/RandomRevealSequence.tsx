@@ -1,5 +1,6 @@
 'use client';
 
+import { TeamEmoji } from "./TeamEmoji";
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import * as CANNON from "cannon-es";
 import { getTeamAccent, getTeamMarker } from "@/lib/teamPresentation";
@@ -411,7 +412,7 @@ function PhysicsWheelReveal({
             "--readout-color": activeVisual.glow,
           } as CSSProperties}
         >
-          {activeVisual.marker && <b>{activeVisual.marker}</b>}
+          {activeVisual.marker && <b><TeamEmoji emoji={activeVisual.marker} color={activeVisual.base} /></b>}
           <strong>{activeCandidate.value}</strong>
         </span>
       </div>
@@ -456,7 +457,7 @@ function PhysicsWheelReveal({
               >
                 <span className="random-wheel-label" title={candidate.value}>
                   <span className="random-wheel-label-content">
-                    {visual.marker && <span aria-hidden>{visual.marker}</span>}
+                    {visual.marker && <span aria-hidden><TeamEmoji emoji={visual.marker} color={visual.base} /></span>}
                     <strong>{candidate.value}</strong>
                   </span>
                 </span>

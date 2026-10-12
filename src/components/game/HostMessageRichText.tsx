@@ -1,5 +1,6 @@
 'use client';
 
+import { TeamEmoji } from "./TeamEmoji";
 import { Fragment, useEffect, useState, type CSSProperties } from "react";
 import { getTeamAccent, getTeamMarker } from "@/lib/teamPresentation";
 import {
@@ -168,7 +169,7 @@ export function HostMessageRichText({ template, resolution, teams, countdownsAct
                   "--host-entity-tint": accent.tint,
                 } as CSSProperties}
               >
-                <span className="host-message-entity-emoji" aria-hidden>{getTeamMarker(player.team)}</span>
+                <span className="host-message-entity-emoji" aria-hidden><TeamEmoji emoji={getTeamMarker(player.team)} color={getTeamAccent(player.team).base} /></span>
                 <span className="host-message-entity-name">{player.name}</span>
               </span>
             );
@@ -194,7 +195,7 @@ export function HostMessageRichText({ template, resolution, teams, countdownsAct
           "--host-entity-tint": accent.tint,
         } as CSSProperties}
       >
-        <span className="host-message-entity-emoji" aria-hidden>{getTeamMarker(part.team)}</span>
+        <span className="host-message-entity-emoji" aria-hidden><TeamEmoji emoji={getTeamMarker(part.team)} color={getTeamAccent(part.team).base} /></span>
         <span className="host-message-entity-name">{part.value}</span>
       </span>
     );

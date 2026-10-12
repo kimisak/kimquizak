@@ -1,0 +1,11 @@
+Animal artwork: Noto Emoji v2.047
+Copyright 2013 Google, Inc. All Rights Reserved.
+Licensed under Apache License 2.0: https://www.apache.org/licenses/LICENSE-2.0
+Source: https://github.com/googlefonts/noto-emoji/tree/v2.047/svg
+Files: emoji_u1f410.svg, emoji_u1f98a.svg, emoji_u1f9a6.svg, emoji_u1f989.svg,
+emoji_u1f430.svg, emoji_u1f98b.svg, emoji_u1f98c.svg, emoji_u1f419.svg.
+
+Modifications by KimQuizak: original color values mapped by luminance onto
+Capra (goat, otter, rabbit, deer) and Liflig (fox, owl, butterfly, octopus)
+palettes, with interpolation to retain shading. SVG geometry is unchanged.
+Brand color source: https://capragruppen.anti.guide/toolbox-2/colours

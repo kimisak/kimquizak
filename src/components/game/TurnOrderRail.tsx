@@ -1,5 +1,6 @@
 'use client';
 
+import { TeamEmoji } from "./TeamEmoji";
 import type { CSSProperties } from "react";
 import type { Team } from "@/lib/types";
 import { getTeamAccent, getTeamMarker } from "@/lib/teamPresentation";
@@ -32,7 +33,7 @@ export function TurnOrderRail({ teams }: Props) {
       >
         <span className="turn-order-status">NOW</span>
         <span className="turn-order-identity">
-          <span className="turn-order-emoji team-identity-emoji"><span aria-hidden>{getTeamMarker(current)}</span></span>
+          <span className="turn-order-emoji team-identity-emoji"><span aria-hidden><TeamEmoji emoji={getTeamMarker(current)} color={currentAccent.base} /></span></span>
           <span className="turn-order-name">{current.name}</span>
         </span>
       </div>
@@ -59,7 +60,7 @@ export function TurnOrderRail({ teams }: Props) {
           >
             <span className="turn-order-status">{status}</span>
             <span className="turn-order-identity">
-              <span className="turn-order-emoji team-identity-emoji"><span aria-hidden>{getTeamMarker(team)}</span></span>
+              <span className="turn-order-emoji team-identity-emoji"><span aria-hidden><TeamEmoji emoji={getTeamMarker(team)} color={accent.base} /></span></span>
               <span className="turn-order-name">{team.name}</span>
             </span>
             {queueIndex < namedQueue.length - 1 && <span className="turn-order-arrow" aria-hidden>›</span>}
@@ -90,7 +91,7 @@ export function TurnOrderRail({ teams }: Props) {
                     "--turn-team-tint": accent.tint,
                   } as CSSProperties}
                 >
-                  <span aria-hidden>{getTeamMarker(team)}</span>
+                  <span aria-hidden><TeamEmoji emoji={getTeamMarker(team)} color={accent.base} /></span>
                 </span>
               );
             })}

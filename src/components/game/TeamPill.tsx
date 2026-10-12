@@ -1,5 +1,6 @@
 'use client';
 
+import { TeamEmoji } from "./TeamEmoji";
 import type { CSSProperties } from "react";
 import { getEmojiSurface } from "@/lib/teamPresentation";
 
@@ -32,7 +33,7 @@ export function TeamPill({ name, color = "#f2c14f", emoji = "⭐️", label }: P
           "--team-color": color,
         } as CSSProperties}
       >
-        <span className="team-pill-emoji team-identity-emoji" aria-hidden>{emoji}</span>
+        <span className="team-pill-emoji team-identity-emoji" aria-hidden><TeamEmoji emoji={emoji} color={color} /></span>
         <span className="team-pill-name">{name}</span>
       </span>
     </span>
@@ -59,7 +60,7 @@ export function EditableTeamPill({
         } as CSSProperties}
       >
         <span className="team-pill-emoji-editor team-identity-emoji">
-          <span aria-hidden>{emoji}</span>
+          <span aria-hidden><TeamEmoji emoji={emoji} color={color} /></span>
           <select
             value={emoji ?? ""}
             onChange={(event) => onEmojiChange(event.target.value)}

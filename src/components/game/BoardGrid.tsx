@@ -1,5 +1,6 @@
 'use client';
 
+import { TeamEmoji } from "./TeamEmoji";
 import type { CSSProperties } from "react";
 import { POINT_STEP, type Question, type ScoreTransaction, type Team } from "@/lib/types";
 import { isQuestionReady } from "@/lib/questionValidation";
@@ -129,7 +130,7 @@ export function BoardGrid({
                             <span className="tile-result-identity"><TeamPill name={result.teamName} color={resultAccent?.base} emoji={getTeamMarker(resultTeam)} /></span>
                           ) : (
                             <strong className="tile-result-team">
-                              {resultTeam && <span aria-hidden="true">{getTeamMarker(resultTeam)}</span>}
+                              {resultTeam && <span aria-hidden="true"><TeamEmoji emoji={getTeamMarker(resultTeam)} color={resultAccent?.base} /></span>}
                               <span>{result.teamName}</span>
                             </strong>
                           )}

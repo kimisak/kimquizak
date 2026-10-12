@@ -22,6 +22,7 @@ export type BoardRevealRules = {
 export type AppSettings = {
   quizTitle: string;
   themeId: string;
+  companyBranding: boolean;
   hideCategoryHeadersAtStart: boolean;
   finaleMusicEnabled: boolean;
   finaleMusicUrl: string;
@@ -39,6 +40,7 @@ export const SETTINGS_STORAGE_KEY = "kimquizak_settings_v1";
 export const DEFAULT_SETTINGS: AppSettings = {
   quizTitle: "Quiz Night",
   themeId: DEFAULT_THEME_ID,
+  companyBranding: false,
   hideCategoryHeadersAtStart: true,
   finaleMusicEnabled: true,
   finaleMusicUrl: "https://youtu.be/9QS0q3mGPGg?t=84",

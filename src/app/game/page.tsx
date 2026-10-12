@@ -1,5 +1,6 @@
 'use client';
 
+import { TeamEmoji } from "@/components/game/TeamEmoji";
 import {
   useCallback,
   useEffect,
@@ -1561,7 +1562,7 @@ export default function GameBoardPage() {
                         } as React.CSSProperties}
                       >
                         <span className="turn-reel-token-emoji team-identity-emoji">
-                          <span aria-hidden>{team?.badgeEmoji ?? "❔"}</span>
+                          <span aria-hidden><TeamEmoji emoji={team?.badgeEmoji ?? "❔"} color={accent?.base} /></span>
                         </span>
                         <span className="turn-reel-token-name">{team?.name ?? "Team"}</span>
                       </div>

@@ -1,5 +1,6 @@
 'use client';
 
+import { TeamEmoji } from "./TeamEmoji";
 import { useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 import type { PlayerBondKind, ScoreTransaction, Team } from "@/lib/types";
 import { getTeamAccent, getTeamMarker } from "@/lib/teamPresentation";
@@ -1007,7 +1008,7 @@ export function Leaderboard({ teams, onAdjust, onSet, history = [], onUndo, comp
                       boxShadow: `0 1px 6px ${accent.base}44`,
                     }}
                   >
-                    <span className="scoreboard-team-emoji team-identity-emoji" aria-hidden>{marker}</span>
+                    <span className="scoreboard-team-emoji team-identity-emoji" aria-hidden><TeamEmoji emoji={marker} color={accent.base} /></span>
                     <span className="scoreboard-team-name">{team.name}</span>
                     {isCurrentTurn && <span className="turn-badge">TURN</span>}
                   </span>
@@ -1083,7 +1084,7 @@ export function Leaderboard({ teams, onAdjust, onSet, history = [], onUndo, comp
                               } as CSSProperties}
                               onPointerDown={(event) => startPlayerDrag(event, player.id, team.id)}
                             >
-                              <span className="scoreboard-player-marker" aria-hidden>{marker}</span>
+                              <span className="scoreboard-player-marker" aria-hidden><TeamEmoji emoji={marker} color={accent.base} /></span>
                               <span className="scoreboard-player-name">{player.name.trim()}</span>
                               <span className="scoreboard-player-mood" aria-hidden>{moodEmoji}</span>
                               {teamEffect && (

@@ -1,0 +1,104 @@
+/* Optional company branding. Team colors and semantic game states stay independent. */
+.team-palette-controls { display:flex; align-items:center; flex-wrap:wrap; gap:12px; }
+.team-palette-controls > select.input { width:auto; flex:1 1 150px; min-width:0; max-width:240px; }
+.company-branding-toggle { display:inline-flex; align-items:center; gap:8px; position:relative; min-height:44px; cursor:pointer; color:var(--cocoa); font-size:.78rem; font-weight:750; white-space:nowrap; }
+.company-branding-toggle input { position:absolute; width:1px; height:1px; opacity:0; }
+.company-branding-track { display:block; width:38px; height:23px; border:1px solid #758078; border-radius:99px; background:#d9ded9; flex-shrink:0; }
+.company-branding-track::after { content:""; display:block; width:17px; height:17px; margin:2px; border-radius:50%; background:#fff; box-shadow:0 1px 3px #0003; transition:transform 150ms ease; }
+.company-branding-toggle input:checked + .company-branding-track { background:#004c61; border-color:#004c61; }
+.company-branding-toggle input:checked + .company-branding-track::after { transform:translateX(15px); background:#86ffd9; }
+.company-branding-toggle input:focus-visible + .company-branding-track { outline:3px solid #4a11b7; outline-offset:3px; }
+@media (prefers-reduced-motion:reduce) { .company-branding-track::after { transition:none; } }
+
+html[data-site-theme="capra-liflig"] {
+  --night:#0c1c35;
+  --pine-deep:#12263c;
+  --pine:#004c61;
+  --pine-raised:#166477;
+  --velvet:#220038;
+  --cranberry:#4a11b7;
+  --cranberry-soft:#bb5ce9;
+  --cream:#f8fbfa;
+  --paper:#eef7f4;
+  --parchment:#defcf5;
+  --walnut:#21374b;
+  --cocoa:#0c1c35;
+  --muted:#536777;
+  --line:1px solid #004c6133;
+  /* Brass remains a game/reward accent, separate from company identity. */
+}
+html[data-site-theme="capra-liflig"] body {
+  background:radial-gradient(ellipse at 8% 0,#004c6166,transparent 40rem),radial-gradient(ellipse at 95% 30%,#4a11b730,transparent 40rem),#0c1c35;
+}
+html[data-site-theme="capra-liflig"] .site-header { background:#f8fbfa; border-color:#86ffd94d; }
+html[data-site-theme="capra-liflig"] .site-header .brand-wordmark strong { color:#0c1c35; }
+html[data-site-theme="capra-liflig"] .brand-stamp { background:#220038; border-color:#bb5ce9; }
+html[data-site-theme="capra-liflig"] .site-header::after { color:#86ffd9; }
+html[data-site-theme="capra-liflig"] .brand-wordmark small,
+html[data-site-theme="capra-liflig"] .site-nav a,
+html[data-site-theme="capra-liflig"] .label { color:#536777; }
+html[data-site-theme="capra-liflig"] .site-nav a:hover { background:#defcf5; }
+html[data-site-theme="capra-liflig"] .site-nav a.active { background:#004c61; color:#fff; box-shadow:inset 0 -3px #00ca97; }
+html[data-site-theme="capra-liflig"] .site-nav a.active span { color:#86ffd9; }
+html[data-site-theme="capra-liflig"] .button.primary { background:#86ffd9; border-color:#00ca97; color:#0c1c35; }
+html[data-site-theme="capra-liflig"] .button.ghost { background:#f8fbfa; }
+html[data-site-theme="capra-liflig"] .input,
+html[data-site-theme="capra-liflig"] textarea { background-color:#fff; border-color:#004c6155; }
+html[data-site-theme="capra-liflig"] .input:focus,
+html[data-site-theme="capra-liflig"] textarea:focus { border-color:#004c61; box-shadow:0 0 0 3px #00ca9733; }
+html[data-site-theme="capra-liflig"] .home-hero { background:radial-gradient(ellipse at 85% 20%,#bb5ce926,transparent 60%),linear-gradient(125deg,#004c61,#0c1c35 60%,#220038); border-color:#86ffd94d; }
+html[data-site-theme="capra-liflig"] .home-hero::before { color:#ffa2ff66; }
+html[data-site-theme="capra-liflig"] .home-hero .eyebrow { color:#86ffd9; }
+html[data-site-theme="capra-liflig"] .home-hero p,
+html[data-site-theme="capra-liflig"] .home-monitor-caption { color:#c8dae2; }
+html[data-site-theme="capra-liflig"] .home-monitor { background:#0c1c35; border-color:#21374b; box-shadow:0 18px 30px #0005,inset 0 0 0 2px #86ffd9; }
+html[data-site-theme="capra-liflig"] .mini-board { background:#081426; }
+html[data-site-theme="capra-liflig"] .mini-board-category.concealed { background:#21374b; color:#defcf5; border-color:#86ffd980; }
+html[data-site-theme="capra-liflig"] .mini-board-cell:not(.empty) { background:#004c61; color:#defcf5; }
+html[data-site-theme="capra-liflig"] .workflow-strip { background:linear-gradient(100deg,#220038,#4a11b7); border-color:#bb5ce966; }
+html[data-site-theme="capra-liflig"] .workflow-strip span { color:#ffa2ff; }
+html[data-site-theme="capra-liflig"] .workflow-strip small { color:#ffe8fe; }
+html[data-site-theme="capra-liflig"] .section-heading { background:linear-gradient(150deg,#defcf5,#f8fbfa 70%,#ffe8fe); }
+html[data-site-theme="capra-liflig"] .home-route-grid { background:#f8fbfa; }
+html[data-site-theme="capra-liflig"] .route-card:hover { background:#defcf5; }
+html[data-site-theme="capra-liflig"] .backup-drawer { background:#12263c; border-color:#86ffd94d; }
+html[data-site-theme="capra-liflig"] .question-card { background:#fff; }
+html[data-site-theme="capra-liflig"] .question-editor { background:#eef7f4; }
+html[data-site-theme="capra-liflig"] .question-editor :is(textarea,input.input,select.input) { background-color:#fff !important; }
+html[data-site-theme="capra-liflig"] .game-board-panel.board-viewport-panel { background:radial-gradient(ellipse at 85% 0,#4a11b72b,transparent 60%),#0c1c35 !important; border-color:#86ffd94d !important; }
+html[data-site-theme="capra-liflig"] .quiz-board-scroll { background:#081426; border-color:#86ffd94d; }
+html[data-site-theme="capra-liflig"] .quiz-board-header { background:linear-gradient(160deg,#4a11b7,#220038) !important; border-bottom-color:#bb5ce9 !important; }
+html[data-site-theme="capra-liflig"] .quiz-board-header.concealed { background:#21374b !important; color:#defcf5; }
+html[data-site-theme="capra-liflig"] .quiz-board-header.concealed:hover { background:#004c61 !important; }
+html[data-site-theme="capra-liflig"] .quiz-board-tile:not(:disabled):not(.needs-setup):not(.scored) { background:linear-gradient(145deg,#166477,#004c61) !important; }
+html[data-site-theme="capra-liflig"] .quiz-board-tile:not(:disabled):not(.needs-setup):not(.scored):hover { background:linear-gradient(145deg,#277c8b,#166477) !important; }
+html[data-site-theme="capra-liflig"] .quiz-board-tile:disabled,
+html[data-site-theme="capra-liflig"] .quiz-board-tile.scored { background:#172b40 !important; }
+html[data-site-theme="capra-liflig"] .quiz-board-tile.needs-setup { background-image:repeating-linear-gradient(135deg,#172b40 0 10px,#21374b 10px 20px) !important; }
+html[data-site-theme="capra-liflig"] .game-modal-overlay { background:radial-gradient(ellipse at 80% 0,#4a11b72b,transparent 60%),#0c1c35f5 !important; }
+html[data-site-theme="capra-liflig"] .game-modal-shell:not(.type-timeline) .card { background:radial-gradient(ellipse at 90% 0,#bb5ce914,transparent 70%),#12263c !important; border-color:#86ffd959 !important; }
+html[data-site-theme="capra-liflig"] .question-modal-header { background:linear-gradient(90deg,#004c6155,transparent); border-bottom-color:#86ffd933; }
+html[data-site-theme="capra-liflig"] .question-modal-actions { background:linear-gradient(180deg,#12263c,#0c1c35); border-top-color:#86ffd933; }
+html[data-site-theme="capra-liflig"] .question-reveal-answer { background:linear-gradient(180deg,#defcf5,#86ffd9) !important; border-color:#00ca97 !important; }
+html[data-site-theme="capra-liflig"] .final-score-overlay { background:#0c1c35; }
+
+/* Opening draw and podium surfaces use the company stage, not the lodge colors. */
+html[data-site-theme="capra-liflig"] .board-opening-slate { background:radial-gradient(ellipse at 15% 20%,#00ca971f,transparent 60%),linear-gradient(125deg,#004c61,#0c1c35 65%,#220038); border-color:#86ffd959; }
+html[data-site-theme="capra-liflig"] .board-opening-slate::before,
+html[data-site-theme="capra-liflig"] .board-opening-slate::after { color:#ffa2ff40; }
+html[data-site-theme="capra-liflig"] .board-opening-kicker { color:#86ffd9; }
+html[data-site-theme="capra-liflig"] .board-opening-slate p,
+html[data-site-theme="capra-liflig"] .turn-draw-copy small { color:#c8dae2; }
+html[data-site-theme="capra-liflig"] .turn-draw,
+html[data-site-theme="capra-liflig"] .turn-order-overflow { background:#12263c; border-color:#86ffd959; }
+html[data-site-theme="capra-liflig"] .turn-reel { background:linear-gradient(180deg,#defcf5,#f8fbfa 48%,#d2ece6); border-color:#004c6155; }
+html[data-site-theme="capra-liflig"] .turn-spin-button { background:linear-gradient(180deg,#4a11b7,#220038); border-color:#bb5ce9; }
+html[data-site-theme="capra-liflig"] .turn-spin-button span { color:#ffa2ff; }
+html[data-site-theme="capra-liflig"] .game-leaderboard-panel > section { background:radial-gradient(ellipse at 85% 0,#bb5ce91f,transparent 65%),linear-gradient(145deg,#12263c,#0c1c35 65%,#220038) !important; border-color:#86ffd94d !important; }
+html[data-site-theme="capra-liflig"] .game-leaderboard-panel .scoreboard-header .button { background:#21374b; color:#f8fbfa; border-color:#86ffd966; }
+html[data-site-theme="capra-liflig"] .game-leaderboard-panel .scoreboard-header .button:hover:not(:disabled) { background:#004c61; }
+html[data-site-theme="capra-liflig"] .game-leaderboard-panel .scoreboard-header .scoreboard-visibility-toggle.active { background:#4a11b7; color:#fff; border-color:#ffa2ff; box-shadow:0 0 0 2px #bb5ce922; }
+html[data-site-theme="capra-liflig"] .final-score-overlay.finale-overlay,
+html[data-site-theme="capra-liflig"] .finale-stage,
+html[data-site-theme="capra-liflig"] .final-score-overlay.finale-suspense-overlay { background:radial-gradient(ellipse at 20% 15%,#004c6180,transparent 60%),radial-gradient(ellipse at 85% 30%,#4a11b740,transparent 60%),#0c1c35; }
+html[data-site-theme="capra-liflig"] .finale-suspense-stage { background:linear-gradient(145deg,#21374b,#0c1c35); border-color:#86ffd959; }
