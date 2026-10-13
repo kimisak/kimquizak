@@ -12,13 +12,48 @@ type MapInstance = {
   setMapTypeId: (mapTypeId: "satellite" | "hybrid") => void;
 };
 type MarkerInstance = { setMap: (map: MapInstance | null) => void };
+type OverlayInstance = MarkerInstance & {
+  onAdd: () => void;
+  onRemove: () => void;
+  draw: () => void;
+  getPanes: () => { markerLayer: HTMLElement } | null;
+  getProjection: () => { fromLatLngToDivPixel: (point: unknown) => { x: number; y: number } | null };
+};
 type PolylineInstance = { setMap: (map: MapInstance | null) => void };
 type MapConstructors = {
   Map: new (element: HTMLElement, options: Record<string, unknown>) => MapInstance;
-  Marker: new (options: Record<string, unknown>) => MarkerInstance;
+  OverlayView: new () => OverlayInstance;
+  LatLng: new (point: GeoPoint) => unknown;
   Polyline: new (options: Record<string, unknown>) => PolylineInstance;
   LatLngBounds: new () => { extend: (point: GeoPoint) => void };
 };
+
+// Pixel-sized dots follow the map projection without requiring a cloud Map ID.
+function createMapDot(constructors: MapConstructors, map: MapInstance, position: GeoPoint, answer: boolean): MarkerInstance {
+  const overlay = new constructors.OverlayView();
+  const point = new constructors.LatLng(position);
+  const dot = document.createElement("span");
+  dot.setAttribute("role", "img");
+  dot.setAttribute("aria-label", answer ? "Correct location" : "Player guess");
+  Object.assign(dot.style, {
+    position: "absolute", width: "21px", height: "21px", boxSizing: "border-box",
+    borderRadius: "50%", border: `3px solid ${answer ? "#142a22" : "#fff8e8"}`,
+    background: answer ? "#e7ba57" : "#c53c61", transform: "translate(-50%, -50%)",
+    pointerEvents: "none",
+  });
+  overlay.onAdd = () => { overlay.getPanes()?.markerLayer.appendChild(dot); };
+  overlay.draw = () => {
+    const pixel = overlay.getProjection().fromLatLngToDivPixel(point);
+    dot.hidden = !pixel;
+    if (pixel) {
+      dot.style.left = `${pixel.x}px`;
+      dot.style.top = `${pixel.y}px`;
+    }
+  };
+  overlay.onRemove = () => dot.remove();
+  overlay.setMap(map);
+  return overlay;
+}
 
 type Props = {
   answer: GeoPoint;
@@ -58,7 +93,7 @@ export function GeoGuessMap({ answer, guess, locked, revealed, labelsVisible, on
       await maps.importLibrary?.("maps");
       if (cancelled) return;
       const constructors = maps as unknown as MapConstructors;
-      if (!constructors.Map || !constructors.Marker || !constructors.Polyline) throw new Error("The guess map could not be loaded.");
+      if (!constructors.Map || !constructors.OverlayView || !constructors.LatLng || !constructors.Polyline) throw new Error("The guess map could not be loaded.");
       constructorsRef.current = constructors;
       const worldZoom = Math.max(1, Math.log2(Math.max(canvas.clientWidth * 1.06, 512) / 256));
       const map = new constructors.Map(canvas, {
@@ -110,17 +145,11 @@ export function GeoGuessMap({ answer, guess, locked, revealed, labelsVisible, on
     const map = mapRef.current;
     const constructors = constructorsRef.current;
     if (!mapReady || !map || !constructors) return;
-    const guessPin = guess ? new constructors.Marker({
-      map, position: guess, title: "Player guess", clickable: false,
-      icon: { path: "M -9,0 A 9,9 0 1,0 9,0 A 9,9 0 1,0 -9,0 Z", fillColor: "#c53c61", fillOpacity: 1, strokeColor: "#fff8e8", strokeWeight: 3 },
-    }) : null;
+    const guessPin = guess ? createMapDot(constructors, map, guess, false) : null;
     let answerPin: MarkerInstance | null = null;
     let line: PolylineInstance | null = null;
     if (revealed) {
-      answerPin = new constructors.Marker({
-        map, position: answer, title: "Correct location", clickable: false,
-        icon: { path: "M -9,0 A 9,9 0 1,0 9,0 A 9,9 0 1,0 -9,0 Z", fillColor: "#e7ba57", fillOpacity: 1, strokeColor: "#142a22", strokeWeight: 3 },
-      });
+      answerPin = createMapDot(constructors, map, answer, true);
       if (guess) {
         line = new constructors.Polyline({
           map, path: [guess, answer], geodesic: true, strokeColor: "#fff0bd",

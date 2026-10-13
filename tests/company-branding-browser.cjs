@@ -79,16 +79,64 @@ const demo = require('../default_questions.json');
     await page.screenshot({path:'/tmp/company-branding-opening.png',fullPage:true});
 
     await page.getByRole('link',{name:/KimQuizak home/}).click();
-    await theme.selectOption('birthday');
-    await page.waitForFunction(()=>!document.documentElement.dataset.siteTheme);
-    assert.equal(await toggle.count(),0);
-    await theme.selectOption('capra-liflig');
-    await page.waitForFunction(()=>document.documentElement.dataset.siteTheme === 'capra-liflig');
+    await theme.waitFor();
+    const palettes = await theme.locator('option').evaluateAll(options=>options.map(option=>option.value));
+    assert.equal(palettes.length,7,'Review every available palette');
+    const backgrounds = new Set();
+    for (const palette of palettes) {
+      await theme.selectOption(palette);
+      await page.waitForFunction(id=>document.documentElement.dataset.siteTheme === id,palette);
+      assert(await toggle.isChecked(), 'Branding follows the selected palette');
+      backgrounds.add(await page.locator('.home-hero').evaluate(element=>getComputedStyle(element).backgroundImage));
+      await page.screenshot({path:`/tmp/branding-${palette}-home.png`,fullPage:true});
+      await page.setViewportSize({width:390,height:844});
+      assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,`${palette} fits mobile width`);
+      await page.locator('.home-control-panel').screenshot({path:`/tmp/branding-${palette}-mobile.png`});
+      await page.setViewportSize({width:1440,height:1000});
+      await page.getByRole('link',{name:'01 Teams',exact:true}).click();
+      await page.locator('.teams-page').waitFor();
+      await page.screenshot({path:`/tmp/branding-${palette}-teams.png`,fullPage:true});
+      await page.getByRole('link',{name:'02 Questions',exact:true}).click();
+      await page.locator('.question-studio-header').waitFor();
+      await page.screenshot({path:`/tmp/branding-${palette}-config.png`,fullPage:true});
+      await page.goto(base+'/login');
+      await page.locator('input[type=password]').waitFor();
+      await page.screenshot({path:`/tmp/branding-${palette}-login.png`,fullPage:true});
+      await page.getByRole('link',{name:'03 Play',exact:true}).click();
+      await page.getByRole('button',{name:'Spin to begin',exact:true}).waitFor();
+      await checkButtonContrast(page.getByRole('button',{name:'Spin to begin',exact:true}));
+      await checkButtonContrast(scoreToggle);
+      await scoreToggle.hover();
+      await checkButtonContrast(scoreToggle);
+      await scoreToggle.click();
+      await checkButtonContrast(page.getByRole('button',{name:'Reveal scores',exact:true}));
+      await page.getByRole('button',{name:'Reveal scores',exact:true}).click();
+      await checkButtonContrast(history);
+      await page.screenshot({path:`/tmp/branding-${palette}-game.png`,fullPage:true});
+      // Production omits this host preview; browser-regression covers the real finale.
+      if (process.env.QUIZ_TEST_PRODUCTION !== '1') {
+        await page.getByRole('button',{name:'Preview finale',exact:true}).click();
+        await page.locator('.finale-suspense-start').click();
+        if (await page.locator('.finale-suspense-skip').isVisible()) await page.locator('.finale-suspense-skip').click();
+        await page.locator('.finale-stage').waitFor();
+        await page.screenshot({path:`/tmp/branding-${palette}-finale.png`});
+      }
+      await page.goto(base);
+      await page.waitForFunction(id=>document.documentElement.dataset.siteTheme === id,palette);
+      await toggle.uncheck();
+      await page.waitForFunction(()=>!document.documentElement.dataset.siteTheme);
+      await page.reload();
+      await page.getByRole('heading',{name:'Branding preview',exact:true}).waitFor();
+      assert.equal(await toggle.isChecked(),false,'Disabled branding survives reload');
+      await toggle.check();
+      await page.waitForFunction(id=>document.documentElement.dataset.siteTheme === id,palette);
+    }
+    assert.equal(backgrounds.size,palettes.length,'Every palette has a distinct site treatment');
     await page.setViewportSize({width:390,height:844});
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
     await page.locator('.home-control-panel').screenshot({path:'/tmp/company-branding-mobile.png'});
     await toggle.uncheck();
     await page.waitForFunction(()=>!document.documentElement.dataset.siteTheme);
-    console.log('PASS: company branding toggle, persistence, export, navigation, palette scope, and mobile layout');
+    console.log('PASS: all palette branding, control contrast, persistence, export, navigation, finale, and mobile layout');
   } finally { await browser.close(); }
 })().catch(error=>{console.error(error);process.exitCode=1;});

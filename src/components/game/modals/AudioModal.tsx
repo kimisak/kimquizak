@@ -212,7 +212,7 @@ export function AudioModal({
             },
           },
         });
-        playerRef.current = player;
+        // Playback methods are available only after onReady publishes the player.
       })
       .catch(() => {
         if (!cancelled) setPlayerError("Could not prepare the YouTube player.");

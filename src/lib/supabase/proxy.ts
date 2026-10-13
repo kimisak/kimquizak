@@ -5,9 +5,15 @@ import { getSupabaseConfig } from "./config";
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
   const config = getSupabaseConfig();
-  // Keep the existing local/demo app usable without cloud configuration.
-  // Private routes must enforce their own verified owner checks when added.
-  if (!config) return response;
+  const isAccount = request.nextUrl.pathname === "/account" || request.nextUrl.pathname.startsWith("/account/");
+  const loginRedirect = () => {
+    const result = NextResponse.redirect(new URL("/login", request.url));
+    response.cookies.getAll().forEach(cookie => result.cookies.set(cookie));
+    result.headers.set("Cache-Control", "private, no-store");
+    return result;
+  };
+  // Public/local play remains available without cloud configuration.
+  if (!config) return isAccount ? loginRedirect() : response;
 
   const supabase = createServerClient(config.url, config.publishableKey, {
     cookieOptions: { secure: process.env.NODE_ENV === "production" },
@@ -30,8 +36,14 @@ export async function updateSession(request: NextRequest) {
     },
   });
 
-  // Verify/refresh tokens; constructing a client or reading getSession() alone
-  // does not provide verified identity. This helper is not an access guard.
-  await supabase.auth.getClaims();
+  // Redirect before rendering AccountPage: React's development performance tracks
+  // can fail on aborted async components. Page and API owner checks remain in place.
+  if (isAccount) {
+    const ownerId = process.env.KIMQUIZAK_OWNER_USER_ID?.trim();
+    const { data, error } = await supabase.auth.getUser();
+    if (error || !ownerId || !data.user || data.user.id !== ownerId) return loginRedirect();
+  } else {
+    await supabase.auth.getClaims();
+  }
   return response;
 }

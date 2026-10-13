@@ -1,24 +1,33 @@
 'use client';
 
 import Link from "next/link";
-import { useEffect } from "react";
+import { useLayoutEffect } from "react";
 import { usePathname } from "next/navigation";
 import { useSettings } from "@/hooks/useSettings";
-import { DEFAULT_SETTINGS } from "@/lib/settings";
+import { getThemeById } from "@/lib/defaultData";
+import { DEFAULT_SETTINGS, SETTINGS_STORAGE_KEY } from "@/lib/settings";
 
 export function AppHeader() {
   const pathname = usePathname();
-  const [settings] = useSettings();
+  const [settings, , settingsHydrated] = useSettings();
   const isHome = pathname === "/";
   const isGame = pathname === "/game";
   const title = settings.quizTitle || DEFAULT_SETTINGS.quizTitle;
-  const companyBranding = settings.themeId === "capra-liflig" && settings.companyBranding === true;
+  const siteTheme = settings.companyBranding === true ? getThemeById(settings.themeId).id : undefined;
 
-  useEffect(() => {
-    if (companyBranding) document.documentElement.dataset.siteTheme = "capra-liflig";
+  useLayoutEffect(() => {
+    let theme = siteTheme;
+    // Preserve the early script's choice until settings load. Reapply it before
+    // paint if development Strict Mode resets the document's attributes.
+    if (!settingsHydrated) {
+      try {
+        const stored = JSON.parse(localStorage.getItem(SETTINGS_STORAGE_KEY) || "null");
+        theme = stored?.companyBranding === true ? getThemeById(stored.themeId).id : undefined;
+      } catch { /* Keep the default when browser storage is unavailable. */ }
+    }
+    if (theme) document.documentElement.dataset.siteTheme = theme;
     else delete document.documentElement.dataset.siteTheme;
-    return () => { delete document.documentElement.dataset.siteTheme; };
-  }, [companyBranding]);
+  }, [siteTheme, settingsHydrated]);
 
   const navItems = [
     { href: "/config/teams", number: "01", label: "Teams" },

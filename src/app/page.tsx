@@ -96,11 +96,11 @@ export default function Home() {
             }}>
               {teamThemes.map((theme) => <option key={theme.id} value={theme.id}>{theme.label}</option>)}
             </select>
-            {activeTheme.id === "capra-liflig" && <label className="company-branding-toggle">
+            <label className="company-branding-toggle">
               <input type="checkbox" role="switch" checked={settings.companyBranding === true} onChange={(event) => setSettings((previous) => ({ ...previous, companyBranding: event.target.checked }))} />
               <span className="company-branding-track" aria-hidden="true" />
               <span>Brand the site</span>
-            </label>}
+            </label>
             </div>
             <div className="theme-cast">
               {emojiOptions.map((option: EmojiOption) => <TeamPill key={option.emoji} name={option.label} color={option.base} emoji={option.emoji} />)}

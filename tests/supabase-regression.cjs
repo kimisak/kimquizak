@@ -285,3 +285,39 @@ test('all Supabase clients use Secure cookies in production and allow local HTTP
     else process.env.NODE_ENV = original;
   }
 });
+
+test('account requests redirect before rendering unless the current user is the configured owner', async () => {
+  const previousOwner = process.env.KIMQUIZAK_OWNER_USER_ID;
+  process.env.KIMQUIZAK_OWNER_USER_ID = 'test-owner';
+  try {
+    for (const [user, error, allowed] of [
+      [null, null, false], [{ id: 'other-user' }, null, false],
+      [{ id: 'test-owner' }, new Error('Revoked'), false], [{ id: 'test-owner' }, null, true],
+    ]) {
+      const { updateSession } = load('src/lib/supabase/proxy.ts', {
+        './config': { getSupabaseConfig: () => config },
+        '@supabase/ssr': { createServerClient: (_url, _key, { cookies }) => ({ auth: {
+          getUser: async () => {
+            cookies.setAll([{ name: 'session', value: 'updated', options: { path: '/', httpOnly: true } }], {});
+            return { data: { user }, error };
+          },
+        } }) },
+      });
+      const response = await updateSession(new NextRequest('https://example.com/account'));
+      assert.equal(response.status, allowed ? 200 : 307);
+      assert.equal(response.cookies.get('session').value, 'updated');
+      assert.equal(response.cookies.get('session').httpOnly, true);
+      if (!allowed) {
+        assert.equal(response.headers.get('location'), 'https://example.com/login');
+        assert.match(response.headers.get('cache-control'), /private.*no-store/);
+      }
+    }
+    const { updateSession } = load('src/lib/supabase/proxy.ts', {
+      './config': { getSupabaseConfig: () => null },
+    });
+    assert.equal((await updateSession(new NextRequest('https://example.com/account'))).status, 307);
+  } finally {
+    if (previousOwner === undefined) delete process.env.KIMQUIZAK_OWNER_USER_ID;
+    else process.env.KIMQUIZAK_OWNER_USER_ID = previousOwner;
+  }
+});

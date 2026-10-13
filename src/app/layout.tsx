@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import "./company-theme.css";
 import { AppHeader } from "@/components/AppHeader";
+import { SITE_THEME_BOOTSTRAP } from "@/lib/siteTheme";
 
 export const metadata: Metadata = {
   title: "KimQuizak — host the room",
@@ -14,7 +15,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <script id="site-theme-bootstrap" dangerouslySetInnerHTML={{ __html: SITE_THEME_BOOTSTRAP }} />
+      </head>
       <body>
         <div className="app-shell">
           <AppHeader />

@@ -411,7 +411,7 @@ export const legacyTeamThemes: TeamTheme[] = [
 
 export const DEFAULT_THEME_ID = "jul";
 
-const LEGACY_THEME_REPLACEMENTS: Record<string, string> = {
+export const LEGACY_THEME_REPLACEMENTS: Record<string, string> = {
   studio: "birthday",
   coast: "easter",
   arcade: "party",

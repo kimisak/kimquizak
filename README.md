@@ -16,7 +16,7 @@ Open http://localhost:3000 and use the config pages to add teams and questions. 
 Prod: https://kimquizak.com/
 
 ## Main flows
-- `Home / Team palette`: choose **Capra × Liflig** for eight locally bundled Noto animal icons. The optional **Brand the site** switch applies matching company colors across the app while preserving team identities and game-state colors. The preference is included in backups and only applies while this palette is selected. Artwork attribution is in `public/team-animals/NOTICE.txt`.
+- `Home / Team palette`: choose **Capra × Liflig** for eight locally bundled Noto animal icons. For every team palette, the optional **Brand the site** switch applies matching colors across the app while preserving team identities and game-state colors. The preference is included in backups and follows the selected palette. Artwork attribution is in `public/team-animals/NOTICE.txt`.
 - `Config / Teams`: set team names, colors/emojis and players; shuffle players; reset the turn order.
 - `Config / Questions`: add and reorder categories, add or remove questions within each category in 100-point steps, configure whether category titles start concealed, and build question types (standard, text grid, geoguesser, joker, timeline, MCQ, audio). Question editors start collapsed to protect answers during live hosting, and can be opened independently or as a category. Drag questions within a category to reorder point slots. Categories can have different lengths; missing board positions remain empty.
 - `Game`: draw the complete board-turn order with sleigh bells, reveal concealed category titles, play tiles, and track scores/answers. A glockenspiel confirms the selected opening team. Board turn advances after each resolved question.
