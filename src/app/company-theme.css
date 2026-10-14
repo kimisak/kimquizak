@@ -445,8 +445,33 @@ html[data-site-theme="jul"] .mini-board-category { background:var(--christmas-ad
 html[data-site-theme="jul"] .mini-board-cell:not(.empty) { background:#165c36; color:#fff0bc; }
 
 
+/* Kim Quizak: a year-round quiz club, with brass inlay and question medallions. */
+html:not([data-site-theme]) :is(.home-hero,.board-opening-slate,.question-studio-header) {
+  background:linear-gradient(90deg,transparent,#ead08d88,transparent) center 10px / calc(100% - 40px) 1px no-repeat,
+    linear-gradient(90deg,transparent,#ead08d88,transparent) center calc(100% - 10px) / calc(100% - 40px) 1px no-repeat,
+    radial-gradient(ellipse at 80% 15%,#ead08d16,transparent 60%),linear-gradient(125deg,#173d30,#0b211b);
+  border-color:#c5a45e;
+  box-shadow:inset 0 0 0 5px #0b211b,inset 0 0 0 6px #ead08d33,var(--shadow);
+}
+html:not([data-site-theme]) .home-monitor {
+  border:2px solid #c5a45e;
+  box-shadow:0 0 0 5px #0b211b,0 0 0 6px #ead08d66,0 18px 30px #0005;
+}
+html:not([data-site-theme]) .game-board-panel.board-viewport-panel {
+  background:radial-gradient(ellipse at 50% 0,#ead08d12,transparent 60%),linear-gradient(145deg,#173d30,#0b211b) !important;
+  border-color:#c5a45e !important;
+  box-shadow:inset 0 0 0 5px #0b211b,inset 0 0 0 6px #ead08d33,var(--shadow) !important;
+}
+html:not([data-site-theme]) .workflow-strip {
+  border-block:3px double #c5a45e;
+}
+html:not([data-site-theme]) .game-leaderboard-panel > section {
+  border-color:#c5a45e !important;
+  box-shadow:inset 0 0 0 4px #0b211b,inset 0 0 0 5px #ead08d33,var(--shadow-small);
+}
+
 /* Decorative SVG masks inherit each palette's ink; no platform emoji colours. */
-:root { --site-motif:url('/theme-motifs/snowflake.svg'); }
+:root { --site-motif:url('/theme-motifs/quiz.svg'); }
 html[data-site-theme="capra-liflig"] { --site-motif:url('/team-animals/goat.svg'); }
 html[data-site-theme="birthday"] { --site-motif:url('/theme-motifs/cake.svg'); }
 html[data-site-theme="party"] { --site-motif:url('/theme-motifs/cocktail.svg'); }
@@ -492,7 +517,7 @@ html:root .finale-kicker::after {
 /* Navigation stays clear; each board gets its own full-width decorative edge. */
 html:root .site-header::after { content:none; display:none; }
 :root {
-  --board-trim:repeating-linear-gradient(135deg,#ce2636 0 14px,#fff8e8 14px 21px,#ce2636 21px 35px,#f6d783 35px 38px) center top / 100% 10px no-repeat;
+  --board-trim:url('/theme-motifs/quiz-border.svg') center top / 160px 22px repeat-x;
 }
 html:root .game-board-panel.board-viewport-panel::before {
   content:"";
@@ -595,10 +620,11 @@ html[data-site-theme="birthday"] {
 html[data-site-theme="birthday"] .home-monitor { border:3px solid #ffc1d8; border-radius:22px; box-shadow:6px 6px 0 #235b93,10px 10px 0 #afdfff; }
 html[data-site-theme="birthday"] .workflow-strip { border:3px dotted #ffc1d8; box-shadow:0 4px 0 #ad75df,var(--shadow-small); }
 html[data-site-theme="birthday"] .quiz-board-scroll { border:2px solid #ffc1d8; background:#25162f; }
+html[data-site-theme="birthday"] .game-board-panel > div:first-child { border-bottom:0; }
 html[data-site-theme="birthday"] .quiz-board-header { border-bottom:3px dotted #afdfff !important; }
 html[data-site-theme="birthday"] .section-heading { border-left:6px dotted #96305b; }
 
-/* Pregame: a neon bar sign, ticket edges and a quiet equalizer trim. */
+/* Pregame: sound bars beneath stages; a fine neon frame above the game board. */
 html[data-site-theme="party"] {
   --festival-stage:url('/theme-motifs/party-equalizer.svg') center bottom / 120px 20px repeat-x,radial-gradient(ellipse at 5% 5%,#306e6655,transparent 55%),linear-gradient(135deg,#27223b,#17152b 65%,#36182c);
   --festival-board:linear-gradient(130deg,#306e6633,transparent 50%,#8d305733),#17152b;
@@ -671,14 +697,77 @@ html[data-site-theme="mardi-gras"] {
 html[data-site-theme="birthday"] {
   --board-trim:url('/theme-motifs/birthday-bunting.svg') center top / 144px 26px repeat-x;
 }
-html[data-site-theme="party"] {
-  --board-trim:url('/theme-motifs/party-equalizer.svg') center top / 120px 22px repeat-x;
-}
 html[data-site-theme="halloween"] {
-  --board-trim:url('/theme-motifs/halloween-border.svg') center top / 180px 26px repeat-x;
+  --board-trim:url('/theme-motifs/halloween-bat.svg') right 24px top 6px / 48px 23px no-repeat;
 }
-html[data-site-theme="capra-liflig"] {
-  --board-trim:url('/theme-motifs/capra-liflig-border.svg') center top / 160px 22px repeat-x;
+
+/* Broad diagonal color bands drift continuously through both stationary frames. */
+@property --capra-border-phase {
+  syntax:"<percentage>";
+  inherits:true;
+  initial-value:0%;
+}
+html:root[data-site-theme="capra-liflig"] .game-board-panel.board-viewport-panel {
+  --capra-flow:repeating-linear-gradient(135deg,
+    #86ffd9 calc(var(--capra-border-phase) + 0%),
+    #00ca97 calc(var(--capra-border-phase) + 20%),
+    #bb5ce9 calc(var(--capra-border-phase) + 50%),
+    #ffa2ff calc(var(--capra-border-phase) + 70%),
+    #86ffd9 calc(var(--capra-border-phase) + 100%));
+  border-color:transparent !important;
+  background:linear-gradient(135deg,#12344a,#0c1c35 65%) padding-box,var(--capra-flow) border-box !important;
+  box-shadow:inset 0 0 0 4px #0c1c35,0 12px 30px #0004 !important;
+  animation:capra-liflig-border-flow 18s linear infinite;
+}
+html[data-site-theme="capra-liflig"] .quiz-board-scroll {
+  border-color:transparent;
+  background:linear-gradient(#081426,#081426) padding-box,var(--capra-flow) border-box;
+}
+@keyframes capra-liflig-border-flow {
+  from { --capra-border-phase:0%; }
+  to { --capra-border-phase:100%; }
+}
+
+/* Quiet stage watermarks sit behind the controls, never over the playable tiles. */
+html:root:is([data-site-theme="party"],[data-site-theme="capra-liflig"]) .game-board-panel.board-viewport-panel {
+  isolation:isolate;
+}
+html:root:is([data-site-theme="party"],[data-site-theme="capra-liflig"]) .game-board-panel.board-viewport-panel::before {
+  content:none;
+}
+html:root:is([data-site-theme="party"],[data-site-theme="capra-liflig"]) .game-board-panel.board-viewport-panel::after {
+  content:"";
+  position:absolute;
+  inset:0;
+  z-index:-1;
+  border-radius:18px;
+  opacity:.14;
+  pointer-events:none;
+}
+html:root[data-site-theme="party"] .game-board-panel.board-viewport-panel::after {
+  background:linear-gradient(100deg,#72d4c2,#e6a3d2,#ffdfa0);
+  mask:url('/theme-motifs/party-popper.svg') 38% 8px / 120px 120px no-repeat,
+    url('/theme-motifs/party-glasses.svg') right 24px top 2px / 140px 140px no-repeat;
+}
+html:root[data-site-theme="capra-liflig"] .game-board-panel.board-viewport-panel::after {
+  background:linear-gradient(110deg,#86ffd9 0%,#00ca97 25%,#bb5ce9 60%,#ffa2ff 80%,#86ffd9 100%) 0% 0% / 250% 100%;
+  mask:url('/team-animals/goat.svg') 65% 0 / 150px 150px no-repeat;
+  animation:capra-liflig-watermark-flow 14s ease-in-out infinite alternate;
+}
+@keyframes capra-liflig-watermark-flow {
+  from { background-position:0% 0%; }
+  to { background-position:100% 0%; }
+}
+@media (prefers-reduced-motion:reduce) {
+  /* Keep the requested color-only fade, overriding the global instant-animation rule. */
+  html:root[data-site-theme="capra-liflig"] .game-board-panel.board-viewport-panel {
+    animation-duration:18s !important;
+    animation-iteration-count:infinite !important;
+  }
+  html:root[data-site-theme="capra-liflig"] .game-board-panel.board-viewport-panel::after {
+    animation:none;
+    background-size:100% 100%;
+  }
 }
 html[data-site-theme="jul"] .turn-spin-button {
   background:linear-gradient(180deg,#66358a,var(--christmas-advent));

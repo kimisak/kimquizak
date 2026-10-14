@@ -1,0 +1,7 @@
+party-popper.svg and party-glasses.svg: Noto Emoji v2.047
+Copyright 2013 Google, Inc. All Rights Reserved.
+Licensed under Apache License 2.0; see APACHE-2.0.txt.
+Source: https://github.com/googlefonts/noto-emoji/tree/v2.047/svg
+Original files: emoji_u1f389.svg and emoji_u1f942.svg.
+SVG geometry and colors are unchanged; whitespace has been normalized. KimQuizak uses CSS masks to apply theme colors.
+Other SVGs in this directory are original KimQuizak artwork.

@@ -16,6 +16,7 @@ Open http://localhost:3000 and use the config pages to add teams and questions. 
 Prod: https://kimquizak.com/
 
 ## Main flows
+- With **Brand the site** off, Kim Quizak uses its own year-round quiz-club style: deep green, brass details, and question-mark medallions. Seasonal decorations appear only with the matching site branding enabled.
 - `Home / Team palette`: choose **Capra × Liflig** for eight locally bundled Noto animal icons. For every team palette, the optional **Brand the site** switch applies matching colors across the app while preserving team identities and game-state colors. The preference is included in backups and follows the selected palette. Artwork attribution is in `public/team-animals/NOTICE.txt`.
 - `Config / Teams`: set team names, colors/emojis and players; shuffle players; reset the turn order.
 - `Config / Questions`: add and reorder categories, add or remove questions within each category in 100-point steps, configure whether category titles start concealed, and build question types (standard, text grid, geoguesser, joker, timeline, MCQ, audio). Question editors start collapsed to protect answers during live hosting, and can be opened independently or as a category. Drag questions within a category to reorder point slots. Categories can have different lengths; missing board positions remain empty.
