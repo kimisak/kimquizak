@@ -21,6 +21,13 @@ export type Player = {
   bond?: PlayerBond | null;
 };
 
+export type HostProfile = {
+  id: string;
+  name: string;
+  emoji: string;
+  bonds?: PlayerBond[];
+};
+
 export type Team = {
   id: string;
   name: string;

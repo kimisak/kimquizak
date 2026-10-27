@@ -2,6 +2,7 @@ import {
   LEGACY_QUESTION_STORAGE_KEY,
   LEGACY_TEAM_STORAGE_KEY,
   LEGACY_TURN_STATE_STORAGE_KEY,
+  HOST_PROFILE_STORAGE_KEY,
   SCORE_HISTORY_STORAGE_KEY,
   TEAM_STORAGE_KEY,
   TURN_STATE_STORAGE_KEY,
@@ -11,17 +12,19 @@ import {
   SETTINGS_STORAGE_KEY,
   type AppSettings,
 } from "@/lib/settings";
-import type { Question, ScoreTransaction, Team, TurnState } from "@/lib/types";
+import { DEFAULT_HOST_PROFILE, normalizeHostProfile } from "@/lib/hostProfile";
+import type { HostProfile, Question, ScoreTransaction, Team, TurnState } from "@/lib/types";
 import { readQuestions, writeQuestions } from "@/lib/questionStorage";
 
 export type BackupPayload = {
-  version: 2;
+  version: 3;
   exportedAt: string;
   teams: Team[];
   questions: Question[];
   turnState: TurnState;
   settings: AppSettings;
   scoreHistory: ScoreTransaction[];
+  hostProfile: HostProfile;
 };
 
 const fallbackTurnState: TurnState = {
@@ -76,7 +79,7 @@ export async function buildBackupPayload(): Promise<BackupPayload> {
   );
 
   return {
-    version: 2,
+    version: 3,
     exportedAt: new Date().toISOString(),
     teams,
     questions,
@@ -85,6 +88,10 @@ export async function buildBackupPayload(): Promise<BackupPayload> {
       readLocalStorage<Partial<AppSettings>>(SETTINGS_STORAGE_KEY, DEFAULT_SETTINGS),
     ),
     scoreHistory: readLocalStorage<ScoreTransaction[]>(SCORE_HISTORY_STORAGE_KEY, []),
+    hostProfile: normalizeHostProfile(
+      readLocalStorage<HostProfile>(HOST_PROFILE_STORAGE_KEY, DEFAULT_HOST_PROFILE),
+      new Set(teams.flatMap((team) => team.players.map((player) => player.id))),
+    ),
   };
 }
 
@@ -115,7 +122,7 @@ export function parseBackupPayload(raw: string): BackupPayload {
       : fallbackTurnState;
 
   return {
-    version: 2,
+    version: 3,
     exportedAt: payload.exportedAt ?? new Date().toISOString(),
     teams: payload.teams,
     questions: payload.questions,
@@ -125,6 +132,10 @@ export function parseBackupPayload(raw: string): BackupPayload {
         ? withSettingsDefaults(payload.settings)
         : DEFAULT_SETTINGS,
     scoreHistory: Array.isArray(payload.scoreHistory) ? payload.scoreHistory : [],
+    hostProfile: normalizeHostProfile(
+      payload.hostProfile,
+      new Set(payload.teams.flatMap((team) => team.players.map((player) => player.id))),
+    ),
   };
 }
 
@@ -143,6 +154,13 @@ export async function persistBackupToLocalStorage(payload: BackupPayload) {
   window.localStorage.setItem(
     SCORE_HISTORY_STORAGE_KEY,
     JSON.stringify(payload.scoreHistory ?? []),
+  );
+  window.localStorage.setItem(
+    HOST_PROFILE_STORAGE_KEY,
+    JSON.stringify(normalizeHostProfile(
+      payload.hostProfile,
+      new Set((payload.teams ?? []).flatMap((team) => team.players.map((player) => player.id))),
+    )),
   );
   window.localStorage.removeItem(LEGACY_TEAM_STORAGE_KEY);
   window.localStorage.removeItem(LEGACY_QUESTION_STORAGE_KEY);

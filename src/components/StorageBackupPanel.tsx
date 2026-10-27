@@ -11,6 +11,7 @@ import {
   LEGACY_QUESTION_STORAGE_KEY,
   LEGACY_TEAM_STORAGE_KEY,
   LEGACY_TURN_STATE_STORAGE_KEY,
+  HOST_PROFILE_STORAGE_KEY,
   SCORE_HISTORY_STORAGE_KEY,
   TEAM_STORAGE_KEY,
   TURN_STATE_STORAGE_KEY,
@@ -119,6 +120,10 @@ export function StorageBackupPanel() {
       const payload = await buildBackupPayload();
       await writeQuestions(payload.questions.map((question) => ({ ...question, answered: false })));
       window.localStorage.removeItem(TEAM_STORAGE_KEY);
+      window.localStorage.setItem(
+        HOST_PROFILE_STORAGE_KEY,
+        JSON.stringify({ ...payload.hostProfile, bonds: undefined }),
+      );
       window.localStorage.removeItem(LEGACY_TEAM_STORAGE_KEY);
       clearGameProgressStorage();
       reloadAfterClear("Teams and players cleared. The board was kept.");
@@ -138,6 +143,7 @@ export function StorageBackupPanel() {
       await clearQuestions();
       window.localStorage.removeItem(TEAM_STORAGE_KEY);
       window.localStorage.removeItem(SETTINGS_STORAGE_KEY);
+      window.localStorage.removeItem(HOST_PROFILE_STORAGE_KEY);
       window.localStorage.removeItem(LEGACY_TEAM_STORAGE_KEY);
       window.localStorage.removeItem(LEGACY_QUESTION_STORAGE_KEY);
       clearGameProgressStorage();

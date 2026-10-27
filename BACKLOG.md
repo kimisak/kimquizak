@@ -14,6 +14,13 @@ Shared requirements: host-authored puzzles, readable shared-screen presentation,
 
 Connections was selected as the first implementation. Wordle and Hangman rules and priority remain to be agreed. Hosts control evening pacing; there is no restriction on the number of game rounds on a board.
 
+## Podium playground experiments — requested 2026-10-27
+
+These are optional host-led entertainment ideas, separate from quiz rules and scoring.
+
+- **Reconsider Host Booth cutscenes:** the current prerecorded scenes are a starting point, but their purpose and entertainment value are still unclear to the host. Explore what makes a scene worth interrupting play for, and improve the dialogue, pacing and presentation only if that purpose holds up. Removing the cutscenes is an equally valid outcome; do not treat further development as decided.
+- **Explore free player placement and throwing:** let the host place player pills anywhere within the podium, with throws coming to rest where they land. Position must remain purely visual: moving a player near another team must never change team membership, turn order or scoring. Possible uses include separating a player from their team for a joke or staging interactions, but discuss the purpose with the host before implementing. Decide boundaries, collisions, reset/return-to-team controls, persistence and behavior when the podium resizes.
+
 ## Regression follow-up
 
 The September regression pass and repeatable checks are documented in `docs/regression-review.md`.

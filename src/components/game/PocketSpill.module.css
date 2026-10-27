@@ -5,18 +5,19 @@
   user-select: none;
   font-size: 22px;
   line-height: 1;
-  animation: pocket-fall 1.8s ease-in both;
+  /* Deliberately triggered feedback must survive the global motion reset. */
+  animation: pocket-fall 1.3s linear both !important;
 }
 @keyframes pocket-fall {
-  0% { transform: translate(-50%, -50%) rotate(0deg); opacity: 0; }
-  8% { opacity: 1; }
-  75% { opacity: 1; }
-  100% { transform: translate(calc(-50% + var(--pocket-drift)), 260px) rotate(var(--pocket-turn)); opacity: 0; }
+  0% { transform: translate(-50%, -50%) rotate(0deg) scale(.65); opacity: 1; }
+  15% { transform: translate(calc(-50% + var(--pocket-drift) * .15), calc(-50% - 27px)) rotate(calc(var(--pocket-turn) * .15)) scale(1); opacity: 1; }
+  30% { transform: translate(calc(-50% + var(--pocket-drift) * .3), calc(-50% - 18px)) rotate(calc(var(--pocket-turn) * .3)); opacity: 1; }
+  50% { transform: translate(calc(-50% + var(--pocket-drift) * .5), calc(-50% + 50px)) rotate(calc(var(--pocket-turn) * .5)); opacity: 1; }
+  75% { transform: translate(calc(-50% + var(--pocket-drift) * .75), calc(-50% + 225px)) rotate(calc(var(--pocket-turn) * .75)); opacity: 1; }
+  90% { opacity: 1; }
+  100% { transform: translate(calc(-50% + var(--pocket-drift)), calc(-50% + 500px)) rotate(var(--pocket-turn)); opacity: 0; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .particle { animation: pocket-fade 1s ease-out both; }
-  @keyframes pocket-fade {
-    from { opacity: 1; }
-    to { opacity: 0; }
-  }
+  /* Retain the falling cue, with no tumbling. */
+  .particle { --pocket-turn: 0deg !important; }
 }

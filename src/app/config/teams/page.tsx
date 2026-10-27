@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState, type CSSProperties, type DragEvent } from "react";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { useSettings } from "@/hooks/useSettings";
+import { useHostProfile } from "@/hooks/useHostProfile";
 import {
   LEGACY_TEAM_STORAGE_KEY,
   TEAM_STORAGE_KEY,
@@ -17,6 +18,13 @@ import {
 import { EditableTeamPill } from "@/components/game/TeamPill";
 import { getTeamAccent, reconcileTeamTheme } from "@/lib/teamPresentation";
 import { normalizePlayerBondKind, PLAYER_BOND_OPTIONS } from "@/lib/playerBonds";
+import {
+  HOST_EMOJI_OPTIONS,
+  HOST_PROFILE_ID,
+  normalizeHostProfile,
+  withHostBond,
+  withoutHostBond,
+} from "@/lib/hostProfile";
 
 const getDefaultPlayerNumber = (player: Player) => {
   const match = /^Player\s+(\d+)$/i.exec(
@@ -238,6 +246,7 @@ const withoutPlayerBond = (player: Player, partnerId: string): Player => {
 
 export default function TeamConfigPage() {
   const [settings] = useSettings();
+  const [hostProfile, setHostProfile, hostHydrated] = useHostProfile();
   const [teams, setTeams, teamsHydrated] = usePersistentState<Team[]>(
     TEAM_STORAGE_KEY,
     [],
@@ -287,6 +296,25 @@ export default function TeamConfigPage() {
       return changed || sanitized !== reconciled ? sanitized : previous;
     });
   }, [teamsHydrated, settings.themeId, setTeams, teams.length]);
+
+  useEffect(() => {
+    if (!teamsHydrated || !hostHydrated) return;
+    const validPlayerIds = new Set(teams.flatMap((team) => team.players.map((player) => player.id)));
+    setHostProfile((previous) => {
+      const normalized = normalizeHostProfile(previous, validPlayerIds);
+      const previousBonds = previous.bonds ?? [];
+      const normalizedBonds = normalized.bonds ?? [];
+      const unchanged = previous.id === normalized.id
+        && previous.name === normalized.name
+        && previous.emoji === normalized.emoji
+        && previousBonds.length === normalizedBonds.length
+        && previousBonds.every((bond, index) => (
+          bond.playerId === normalizedBonds[index]?.playerId
+          && bond.kind === normalizedBonds[index]?.kind
+        ));
+      return unchanged ? previous : normalized;
+    });
+  }, [hostHydrated, setHostProfile, teams, teamsHydrated]);
 
   const shufflePlayersAcrossTeams = useCallback(() => {
     setTeams((prev) => {
@@ -345,7 +373,7 @@ export default function TeamConfigPage() {
     return `Shuffling… ${seconds.toFixed(1)}s`;
   };
 
-  if (!teamsHydrated) {
+  if (!teamsHydrated || !hostHydrated) {
     return (
       <main className="admin-page teams-page">
         <h1 style={{ margin: 0 }}>Teams & Players</h1>
@@ -651,6 +679,13 @@ export default function TeamConfigPage() {
 
   const setConnection = () => {
     if (!connectionFromId || !connectionToId || connectionFromId === connectionToId) return;
+    if (connectionFromId === HOST_PROFILE_ID || connectionToId === HOST_PROFILE_ID) {
+      const playerId = connectionFromId === HOST_PROFILE_ID ? connectionToId : connectionFromId;
+      setHostProfile((previous) => withHostBond(previous, playerId, connectionKind));
+      setConnectionFromId("");
+      setConnectionToId("");
+      return;
+    }
     setTeams((previous) => previous.map((team) => ({
       ...team,
       players: team.players.map((player) => {
@@ -668,6 +703,11 @@ export default function TeamConfigPage() {
   };
 
   const removeConnection = (firstPlayerId: string, secondPlayerId: string) => {
+    if (firstPlayerId === HOST_PROFILE_ID || secondPlayerId === HOST_PROFILE_ID) {
+      const playerId = firstPlayerId === HOST_PROFILE_ID ? secondPlayerId : firstPlayerId;
+      setHostProfile((previous) => withoutHostBond(previous, playerId));
+      return;
+    }
     setTeams((previous) => previous.map((team) => ({
       ...team,
       players: team.players.map((player) => {
@@ -680,7 +720,7 @@ export default function TeamConfigPage() {
 
   const activeTheme = getThemeById(settings.themeId);
   const emojiOptions = activeTheme.options;
-  const connectionPlayers = teams.flatMap((team) => team.players
+  const teamConnectionPlayers = teams.flatMap((team) => team.players
     .filter((player) => player.name.trim())
     .map((player) => ({
       id: player.id,
@@ -688,12 +728,20 @@ export default function TeamConfigPage() {
       bonds: getPlayerBonds(player),
     })))
     .sort((first, second) => first.name.localeCompare(second.name, "nb", { sensitivity: "base" }));
+  const connectionPlayers = [
+    ...(hostProfile.name.trim() ? [{
+      id: HOST_PROFILE_ID,
+      name: `${hostProfile.name.trim()} (host)`,
+      bonds: hostProfile.bonds ?? [],
+    }] : []),
+    ...teamConnectionPlayers,
+  ];
   const playerById = new Map(connectionPlayers.map((player) => [player.id, player]));
   const connections = connectionPlayers.flatMap((player) => {
     return player.bonds.flatMap((bond) => {
       const kind = normalizePlayerBondKind(bond.kind);
       if (!kind) return [];
-      if (player.id > bond.playerId) return [];
+      if (player.id !== HOST_PROFILE_ID && player.id > bond.playerId) return [];
       const partner = playerById.get(bond.playerId);
       return partner ? [{ first: player, second: partner, kind }] : [];
     });
@@ -780,6 +828,40 @@ export default function TeamConfigPage() {
         </section>
       </div>
 
+      <section className="card host-profile-editor" aria-labelledby="host-profile-title">
+        <div className="host-profile-copy">
+          <span className="host-profile-kicker">Host booth</span>
+          <h2 id="host-profile-title">Give the host a podium presence</h2>
+          <p>The host stays outside teams, scores and draws, but can have connections with players.</p>
+        </div>
+        <div className="host-profile-fields">
+          <div className="host-config-pill" style={{ "--team-base": "#c99c4a" } as CSSProperties}>
+            <span className="host-config-pill-emoji" aria-hidden>{hostProfile.emoji}</span>
+            <input
+              className="host-config-pill-name"
+              value={hostProfile.name}
+              onChange={(event) => setHostProfile((previous) => ({ ...previous, name: event.target.value }))}
+              placeholder="Host name"
+              aria-label="Host name"
+            />
+          </div>
+          <div className="host-emoji-options" role="group" aria-label="Host emoji">
+            {HOST_EMOJI_OPTIONS.map((emoji) => (
+              <button
+                key={emoji}
+                type="button"
+                className={hostProfile.emoji === emoji ? "is-selected" : ""}
+                aria-pressed={hostProfile.emoji === emoji}
+                aria-label={`Use ${emoji} for the host`}
+                onClick={() => setHostProfile((previous) => ({ ...previous, emoji }))}
+              >
+                {emoji}
+              </button>
+            ))}
+          </div>
+        </div>
+      </section>
+
       <section
         className={`card connections-accordion${connectionsOpen ? " is-open" : ""}`}
         aria-labelledby="connections-title"
@@ -793,7 +875,7 @@ export default function TeamConfigPage() {
         >
           <span className="connections-accordion-heading">
             <strong id="connections-title">Connections</strong>
-            <small>Optional podium-only relationships</small>
+            <small>Optional podium relationships, including the host</small>
           </span>
           <span className="connections-accordion-meta">
             <span>{connections.length} {connections.length === 1 ? "relationship" : "relationships"}</span>
@@ -802,12 +884,12 @@ export default function TeamConfigPage() {
         </button>
         {connectionsOpen && (
           <div id="connections-accordion-content" className="connections-accordion-content">
-            <p>Players can have several connections.</p>
+            <p>Players and the host can have several connections.</p>
             <div className="connections-accordion-fields">
               <label className="label">
-                Player
+                Person
                 <select className="input" value={connectionFromId} onChange={(event) => setConnectionFromId(event.target.value)}>
-                  <option value="">Choose player…</option>
+                  <option value="">Choose person…</option>
                   {connectionPlayers.map((player) => (
                     <option key={player.id} value={player.id}>{player.name}</option>
                   ))}
@@ -824,7 +906,7 @@ export default function TeamConfigPage() {
               <label className="label">
                 With
                 <select className="input" value={connectionToId} onChange={(event) => setConnectionToId(event.target.value)}>
-                  <option value="">Choose player…</option>
+                  <option value="">Choose person…</option>
                   {connectionPlayers.filter((player) => player.id !== connectionFromId).map((player) => (
                     <option key={player.id} value={player.id}>{player.name}</option>
                   ))}

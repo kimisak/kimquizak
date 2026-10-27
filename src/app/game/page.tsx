@@ -35,6 +35,7 @@ import { useFinaleSoundtrack } from "@/hooks/useFinaleSoundtrack";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { usePersistentQuestions } from "@/hooks/usePersistentQuestions";
 import { useSettings } from "@/hooks/useSettings";
+import { useHostProfile } from "@/hooks/useHostProfile";
 import { useTurnState } from "@/hooks/useTurnState";
 import { generateRedPattern, shuffle } from "@/lib/redPattern";
 import {
@@ -75,6 +76,7 @@ type TimelineScoreResult = {
 
 export default function GameBoardPage() {
   const [settings] = useSettings();
+  const [hostProfile] = useHostProfile();
   const {
     playSadBlip,
     playCountdownBeep,
@@ -1630,6 +1632,7 @@ export default function GameBoardPage() {
 
       <div className="game-leaderboard-panel" id="game-podium">
         <Leaderboard
+          hostProfile={hostProfile}
           teams={scoresHidden ? hiddenScoreTeams : sortedTeams}
           onAdjust={adjustScore}
           onSet={setScore}

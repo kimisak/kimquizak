@@ -394,6 +394,40 @@ test('backup retains pre-spin category and host-message progress instead of stal
   } finally { delete global.window; }
 });
 
+test('host profile keeps valid player relationships and discards stale ones', () => {
+  const { HOST_PROFILE_ID, normalizeHostProfile, withHostBond, withoutHostBond } = projectLoader()('@/lib/hostProfile');
+  const connected = withHostBond(
+    { id: 'old-host-id', name: 'Kim', emoji: '🎩' },
+    'player-1',
+    'married',
+  );
+  assert.equal(connected.id, HOST_PROFILE_ID);
+  assert.deepEqual(connected.bonds, [{ playerId: 'player-1', kind: 'married' }]);
+  assert.deepEqual(normalizeHostProfile({
+    ...connected,
+    bonds: [...connected.bonds, { playerId: 'gone', kind: 'sweethearts' }],
+  }, new Set(['player-1'])).bonds, [{ playerId: 'player-1', kind: 'married' }]);
+  assert.equal(withoutHostBond(connected, 'player-1').bonds, undefined);
+});
+
+test('backup imports older files with a default host and exports the configured host', async () => {
+  const teams = [{ id: 'team-1', name: 'A', score: 0, players: [{ id: 'player-1', name: 'Ada' }] }];
+  const configuredHost = { id: 'kimquizak-host', name: 'Kim', emoji: '🎤', bonds: [{ playerId: 'player-1', kind: 'sweethearts' }] };
+  const data = new Map([
+    ['kimquizak_teams_v1', JSON.stringify(teams)],
+    ['kimquizak_host_profile_v1', JSON.stringify(configuredHost)],
+  ]);
+  global.window = { localStorage: { getItem: key => data.get(key) ?? null } };
+  try {
+    const load = projectLoader({ '@/lib/questionStorage': { readQuestions: async () => [] } });
+    const { buildBackupPayload, parseBackupPayload } = load('@/lib/backup');
+    const backup = await buildBackupPayload();
+    assert.equal(backup.version, 3);
+    assert.deepEqual(backup.hostProfile, configuredHost);
+    assert.equal(parseBackupPayload(JSON.stringify({ teams, questions: [] })).hostProfile.name, '');
+  } finally { delete global.window; }
+});
+
 test('backup import/export preserves inactive image drafts', () => {
   const { parseBackupPayload } = projectLoader({ '@/lib/questionStorage': {} })('@/lib/backup');
   const questions = [{ id: 'q', category: 'A', points: 100, type: 'audio', prompt: 'Listen', answer: 'Song', answered: false,
