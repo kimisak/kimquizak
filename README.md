@@ -2,6 +2,30 @@
 
 Lightweight quiz game board built with Next.js 16 (App Router + TypeScript). Configure teams and categories, then run the game with a slot-machine turn order picker, question modals, timelines, audio clips, text grids, and more. State is stored locally in the browser.
 
+## How to play
+
+The host runs KimQuizak on a shared TV or projector. Teams answer in the room; the host controls the pace, judges answers, and awards points.
+
+```mermaid
+sequenceDiagram
+    actor Host
+    participant TV as TV screen
+    actor Audience as Audience / teams
+
+    Host->>Host: Create teams and a quiz for the audience
+    Host->>TV: Open the game board on the shared screen
+    loop Each question or challenge
+        Audience->>Host: Choose a category and point value
+        Host->>TV: Show the question and explain the rules
+        Audience->>Host: Answer or complete the challenge
+        Host->>Host: Evaluate the answer and adjust the pace
+        Host->>TV: Reveal the answer and award points
+        TV-->>Audience: Show the updated scores
+    end
+    Host->>TV: Reveal the final podium
+    TV-->>Audience: Celebrate the winners!
+```
+
 ## Quick start
 Use Node.js 22 (also configure Vercel to use Node.js 22). The Supabase SDK requires Node.js 22 or newer; this project targets 22.x.
 
