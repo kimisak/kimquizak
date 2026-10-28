@@ -1,5 +1,10 @@
 # Public demo privacy review
 
+## Demo image update — 2026-10-27
+
+The current zoom-reveal demo now embeds one reviewed CC0 tortilla photograph instead of the generated house drawing described in the original review below. Source, license, dimensions and the SHA-256 of the metadata-free Wikimedia thumbnail are recorded in [demo image provenance](demo-image-source.md). The privacy audit permits only those exact decoded JPEG bytes; other raster uploads remain flagged. The historical findings below describe the September review and are unchanged.
+
+
 Reviewed 2026-10-11. Deployment remains on hold.
 
 ## Changes made

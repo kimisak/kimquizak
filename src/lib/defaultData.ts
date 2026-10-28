@@ -509,7 +509,7 @@ export function buildDefaultQuestions(): Question[] {
       prompt: "Hvilken norsk julesang skjuler seg i rutene?",
       answer: "På låven sitter nissen.",
       lyricsInfoText: "Velg en rute. En rød rute sender turen videre uten å endre poengsummen.",
-      lyricsSegments: ["På låven", "sitter nissen", "med sin julegrøt", "så god", "og så søt"],
+      lyricsSegments: ["På", "låven", "sitter", "nissen"],
       answerVideoAutoplay: false,
     },
     {
@@ -605,8 +605,8 @@ export function buildDefaultQuestions(): Question[] {
     {
       ...base("JUL VERDEN RUNDT", 300),
       type: "booby",
-      prompt: "Mime tre juletradisjoner uten ord: pynte treet, pakke inn en gave og gå rundt juletreet. Laget må gjette alle tre.",
-      answer: "Alle tre tradisjonene ble gjettet innen tiden.",
+      prompt: "Flipp en kopp 3 ganger på rad før tiden er ute.",
+      answer: "Koppen ble flippet 3 ganger på rad før tiden var ute.",
       challengeTimerSeconds: 60,
       challengeTimerMode: "countdown",
       challengeTimerShowTime: false,

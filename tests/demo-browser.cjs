@@ -27,6 +27,6 @@ const assert = require('node:assert/strict');
     assert(payload.questions.some(question => question.type === 'trivia' && question.triviaItems.length === 3));
     assert.deepEqual(payload.scoreHistory, []);
     assert.deepEqual(errors, []);
-    console.log('PASS: fictional demo import/export, mock bonds, and generated image render');
+    console.log('PASS: fictional demo import/export, mock bonds, and public-domain zoom image render');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

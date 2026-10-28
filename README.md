@@ -1,6 +1,8 @@
-# kimquizak
+# KimQuizak
 
-Lightweight quiz game board built with Next.js 16 (App Router + TypeScript). Configure teams and categories, then run the game with a slot-machine turn order picker, question modals, timelines, audio clips, text grids, and more. State is stored locally in the browser.
+A host-led quiz and games board for teams playing together in a room. Create the quiz, show it on a shared screen, and let the host run questions, challenges, scoring, and the final podium. Try it at [kimquizak.com](https://kimquizak.com/).
+
+Quiz data is saved in the browser by default. File import/export works without an account; host login enables optional cloud snapshots and interactive Geoguesser when those services are configured.
 
 ## How to play
 
@@ -27,42 +29,55 @@ sequenceDiagram
 ```
 
 ## Quick start
-Use Node.js 22 (also configure Vercel to use Node.js 22). The Supabase SDK requires Node.js 22 or newer; this project targets 22.x.
+
+Use Node.js **22.23.4 or newer within 22.x**, as specified in [`package.json`](package.json). [`.nvmrc`](.nvmrc) pins the development version. The minimum includes [Node.js security fixes released in October 2026](https://nodejs.org/en/blog/vulnerability/october-2026-security-releases).
+
+If you use nvm, run `nvm use` first. Otherwise, install a compatible Node.js version before continuing.
 
 ```bash
 npm install
 npm run dev
 ```
 
-Development uses Webpack, matching the production build, to avoid a Turbopack hot-reload panic. After changing the dev command, stop the existing server with Ctrl+C and run `npm run dev` again.
+The app uses Next.js 16 (App Router and TypeScript). `npm run dev` uses Turbopack; if development fails with a Turbopack error, stop the server and try `npm run dev:webpack`. The production build uses Webpack, as configured in [`package.json`](package.json).
 
-Open http://localhost:3000 and use the config pages to add teams and questions. The game starts empty (no default categories/questions), so add your own before playing.
-Prod: https://kimquizak.com/
+Open http://localhost:3000. A fresh browser starts without questions. Create your own in **Questions**, or use **Questions → Local archive → Add example data**. Loading examples replaces the current browser quiz, so download a backup first if you want to keep it. Supabase and Google Maps configuration are optional for local quiz editing and play.
 
 ## Main flows
-- With **Brand the site** off, Kim Quizak uses its own year-round quiz-club style: deep green, brass details, and question-mark medallions. Seasonal decorations appear only with the matching site branding enabled.
-- `Home / Team palette`: choose **Capra × Liflig** for eight locally bundled Noto animal icons. For every team palette, the optional **Brand the site** switch applies matching colors across the app while preserving team identities and game-state colors. The preference is included in backups and follows the selected palette. Artwork attribution is in `public/team-animals/NOTICE.txt`.
-- `Config / Teams`: set team names, colors/emojis and players; shuffle players; reset the turn order.
-- `Config / Questions`: add and reorder categories, add or remove questions within each category in 100-point steps, configure whether category titles start concealed, and build question types (standard, text grid, geoguesser, joker, timeline, MCQ, audio). Question editors start collapsed to protect answers during live hosting, and can be opened independently or as a category. Drag questions within a category to reorder point slots. Categories can have different lengths; missing board positions remain empty.
-- `Game`: draw the complete board-turn order with sleigh bells, reveal concealed category titles, play tiles, and track scores/answers. A glockenspiel confirms the selected opening team. Board turn advances after each resolved question.
 
-## Question types (cheat sheet)
+- **Home → Team palette**: choose themes for parties, birthdays, Halloween, Christmas, Easter, and more. Enable **Brand the site** to apply the selected theme’s colors and decorations across the site; leave it off to use the default site appearance. Theme choices are included in backups.
+- **Teams**: set team names, colors/emojis, and players; shuffle players and reset the turn order. The optional host profile adds the host to the podium without making them a team.
+- **Questions**: create categories and questions, choose question types, and reorder the board. Categories can have different numbers of questions. Configure whether category names start concealed.
+- **Play**: draw the team order, open questions, reveal answers, and award points. Use score history to review recent changes or undo them.
+- **Host**: sign in to explicitly save or restore a private cloud snapshot, if you have configured your own host account and archive.
 
-- **Connections**: four hidden groups of four tiles. The host chooses how many connections (1–4) must be found to finish; points are split across that target. Shuffle unsolved tiles during play; near misses briefly show “Three are correct”. Points per solved group, configurable rollover, a per-guess timer (default 120 seconds), and shared mistakes (default 4). The host can end early; remaining solutions reveal one by one on the answer screen. [Setup, pacing, and rules](docs/connections.md).
-- **Standard**: prompt + answer; optional question/answer images.
-- **MCQ**: 2–12 options, starting with four. Mark one or more correct answers and choose how many must be found to finish. Points are split across the required correct picks; teams keep their earned points and continue after a correct pick. With rollover enabled, a wrong pick is disabled and passes play to the next team; otherwise it ends the question. Found answers and split scores survive closing/reloading the round, and Reset game progress clears them. Existing single-answer backups still work.
-- **Text grid (lyrics)**: one word/segment per line. Answer video must be a YouTube *embed* URL (not a share link). Red tiles rotate to the next team and shave the pot; “Next team” button available for hosts on wrong guesses.
-- **Geoguesser**: find a place in Google Maps, paste its link, adjust the nearby Street View scene, and save the opening frame. Google Maps share links, Street View URLs, and iframe code are supported. The question starts on a fixed view. A timed choice to look around and move drops the correct-answer payout by one or two board-value levels; the host can freely explore on the answer side. Google's road/address overlays are hidden without cropping.
-- **Timeline**: events with years. Center year/label configurable. Rotation on miss optional.
-- **Audio**: paste any regular YouTube URL, configure start time and clip length, and preview the source. Optionally allow one replay that lowers a correct answer to the next lower board-value tier.
-- **Challenge**: write a task with an optional picture and optional host-started countdown or count-up clock. The clock can show exact time or only an animated progress bar. The tile keeps its normal point value; after the reveal, the host marks the challenge completed for full points or not completed for 0 points. Reaching the time limit never scores automatically. Existing saved booby-trap tiles use this new behavior.
-- **Joker high/low**: configurable count, min/max, rotation on miss, and a six-level prize ladder worth 20%, 25%, 33%, 44%, 72%, or 100% of the question's total points. Players start at level 1, move exactly one level up or down after each guess, and jump directly to level 6 when the hidden Joker is found.
+## Question types
+
+| Type | How it plays |
+| --- | --- |
+| **Standard** | A question and answer, with optional images. The host judges the answer. |
+| **MCQ** | 2–12 choices, with one or more correct answers. The host sets how many correct picks finish the question. Points are split across that target; with rollover enabled, a wrong pick passes play to the next team. |
+| **Text grid** | One word or segment per line becomes one tile. Teams uncover the text to identify the answer. Red tiles pass the turn without reducing the question's value; the host can also pass after a wrong guess. An optional YouTube answer video accepts supported watch, share, or embed links. |
+| **Image reveal** | Reveal an image by zooming out, clearing blur, or selecting areas. The host configures reveal stages or areas and whether extra reveals cost points. |
+| **Geoguesser** | Start from a saved Street View location. Choose a fixed view with paid timed exploration, look-and-zoom without movement, free exploration, or a two-phase stage challenge: timed exploration followed by a timed map guess scored by distance. Requires host login and Google Maps setup. |
+| **Timeline** | Place events in chronological order around a configured starting event. The host decides whether misses pass to the next team. |
+| **Audio** | Identify a YouTube audio clip. Set the start time and clip length; an optional replay lowers the available points to the next lower board tier. |
+| **Trivia** | A sequence of questions, followed by host review of the teams' answers. Each team can earn up to the full tile value, based on its number of correct answers. |
+| **Challenge** | A host-authored task with an optional image and countdown or count-up timer. The host marks it completed for full points or not completed for zero. The timer does not award points automatically. |
+| **Joker high/low** | Guess higher or lower on configurable number columns. Correct and wrong guesses move the reward up or down a six-level ladder; finding the hidden Joker jumps to the top level. |
+| **Connections** | Find groups of four among 16 tiles. The host chooses a target of 1–4 solved groups, with points split across it. Wrong guesses can pass play to the next team. Defaults are 120 seconds per guess and four shared mistakes; both limits are configurable. [Rules and setup](docs/connections.md). |
 
 ## Self-hosting guide
 
-Run your own copy with **your own Google Cloud project, Supabase project, and Vercel deployment**. This repository contains no working credentials. The bundled players and relationships are fictional; personal quizzes belong in browser storage, private backups, or your Supabase archive.
+You can run the local quiz without cloud accounts. For an online copy with host login, Street View, and private cloud snapshots, this guide uses:
 
-Local editing, file backups, and the other question types work without cloud setup. **Interactive Geoguesser requires a configured Google Maps key and a signed-in host. There is no offline or image fallback.** Players watching the host's shared screen do not need accounts. Cloud saves are a convenience; Supabase Auth provides login independently of the archive.
+- **Google Cloud** for the Maps JavaScript API used by Street View and map guesses.
+- **Supabase Auth** for the configured host account, and its Postgres database for optional private snapshots.
+- **Vercel** to build and serve your copy of the Next.js app.
+
+Use your own projects and configuration values. The blank [`.env.example`](.env.example) lists the required variable names. The bundled players and relationships are fictional.
+
+**Interactive Geoguesser requires a configured Google Maps key and a signed-in host. There is no offline or image fallback.** Players watching the shared screen do not need accounts. YouTube questions still need access to YouTube; browser-local quiz storage does not make external media available offline.
 
 ```mermaid
 flowchart TD
@@ -78,17 +93,16 @@ flowchart TD
 
 ### 1. Clone and run locally
 
-Use Node.js 22. Fork the repository into your own GitHub account if you want Vercel to deploy your changes, then clone that fork. For a local evaluation:
+Use Node.js 22.23.4 or newer within the 22.x release line. Fork the repository into your own GitHub account if you want Vercel to deploy your changes, then clone that fork. For a local evaluation:
 
 ```bash
 git clone https://github.com/kimisak/kimquizak.git
 cd kimquizak
 npm install
-cp .env.example .env
 npm run dev
 ```
 
-Open `http://localhost:3000`. Only copy the environment template when you do not already have an `.env`; keep your existing values otherwise. **Questions & board → Local archive → Add example data** loads the fictional demo and replaces the current browser quiz.
+Open `http://localhost:3000` to try the local app. For the optional services below, copy `.env.example` to `.env` only if you do not already have that file, then fill in your own values. Keep existing environment files intact.
 
 ### 2. Create Google Cloud credentials
 
@@ -102,7 +116,7 @@ Open `http://localhost:3000`. Only copy the environment template when you do not
 
 The key identifies the Google project billed for Maps usage. It is sent to the signed-in browser to load interactive Street View. Storing it in Vercel keeps it out of Git, but does not make it invisible in browser developer tools. Host login and Google's website/API restrictions serve different purposes; use both. Signing in alone does not load Street View.
 
-See [Google's API setup](https://developers.google.com/maps/documentation/javascript/get-api-key), [security guidance](https://developers.google.com/maps/api-security-best-practices), and [usage and billing](https://developers.google.com/maps/documentation/javascript/usage-and-billing), and [budget alerts](https://cloud.google.com/billing/docs/how-to/budgets).
+See [Google's API setup](https://developers.google.com/maps/documentation/javascript/get-api-key), [security guidance](https://developers.google.com/maps/api-security-best-practices), [usage and billing](https://developers.google.com/maps/documentation/javascript/usage-and-billing), and [budget alerts](https://cloud.google.com/billing/docs/how-to/budgets).
 
 ### 3. Create Supabase and your host account
 
@@ -135,7 +149,7 @@ npx supabase db query --linked "insert into private.quiz_owners (user_id) values
 
 Use that same UUID in `KIMQUIZAK_OWNER_USER_ID`. **The UI says Host; existing environment variables, function names, and database identifiers retain `owner` for compatibility.** No schema rename is required.
 
-The CLI login is an administrative connection used for migrations. It is separate from your app email/password session. Keep CLI credentials local; they are not needed in the Vercel runtime. For future schema changes, add migration files and run `db push`. If you already executed SQL manually, inspect the schema and reconcile migration history before pushing; do not blindly replay the initial setup, which resets table grants. Never use a remote database reset to apply routine updates. See [Supabase migrations](https://supabase.com/docs/guides/deployment/database-migrations).
+CLI login is for project administration and migrations; app login is for the host session. Do not put CLI credentials in Vercel. For future schema changes, add migration files and run `db push`. If you applied SQL manually, reconcile migration history first. Re-running the initial migration resets table grants, and a remote `db reset` can remove data. See [Supabase migrations](https://supabase.com/docs/guides/deployment/database-migrations).
 
 ### 5. Configure environment variables
 
@@ -157,7 +171,7 @@ Restart local development after changing `.env`. Redeploy after changing Vercel 
 ### 6. Deploy to Vercel
 
 1. Import your own repository into Vercel and select the Next.js framework preset.
-2. Use Node.js **22.x**, the repository root, and the existing `npm run build` build command.
+2. Use Node.js **22.x**, the repository root, and the existing `npm run build` build command. Vercel manages minor and patch updates within the selected major version; see its [runtime version policy](https://vercel.com/docs/functions/runtimes/node-js/node-js-versions).
 3. Add the production variables above before deploying. Do not include a database password, Supabase administration token, or service-role key in the app's public variables.
 4. Deploy, then add your custom domain if desired. Follow the DNS records Vercel provides for your domain registrar.
 5. Ensure the final domain is allowed on the production Maps key and configured as your Supabase Site URL.
@@ -213,26 +227,39 @@ flowchart LR
 For troubleshooting and the migration workflow, see [host setup notes](docs/owner-setup.md). An infobox after login can indicate a missing key, incorrect domain/API restrictions, disabled billing, a network failure, or unavailable panorama imagery; check the displayed error and browser console.
 
 ## Persistence
-Supabase session plumbing is available in `src/lib/supabase`: `client.ts` for Client Components and the async `createClient()` in `server.ts` for Server Components, Server Actions, and Route Handlers. `src/proxy.ts` verifies/refreshes auth claims and forwards refreshed cookies to both the request and response. It excludes static assets and marks refreshed responses as non-cacheable.
 
-Set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` in your existing `.env`, or use the blank `.env.example` template. No `.env.local` is required. Set the same names in Vercel before building; public variables are embedded at build time. Never use a Supabase secret/service-role key for these values.
+Quiz edits stay in this browser unless you export a file or deliberately save a cloud snapshot.
 
-Host login is available at `/login`, with a private snapshot archive at `/account`. Set `KIMQUIZAK_OWNER_USER_ID` and run the database setup in [host setup](docs/owner-setup.md). Private endpoints verify your user ID; database RLS also restricts access to enrolled owners. The public local demo remains available without authentication. The project does not use the tutorial's `todos` table.
+| Data | Default storage |
+| --- | --- |
+| Questions and their uploaded images | IndexedDB, in the browser |
+| Teams, host profile, scores, settings, turn order, and supported round progress | localStorage, in the browser |
+| Downloaded backups | JSON files saved to your device, including images |
+| Explicitly saved private snapshots | Supabase, accessible through the configured host account |
 
-- Local-only: question content and images are saved in IndexedDB; teams (`kimquizak_teams_v1`), turn state (`kimquizak_turn_state_v1`), score history (`kimquizak_score_history_v1`), and settings (`kimquizak_settings_v1`) are saved in `localStorage`. Existing localStorage questions migrate automatically.
-- Automatic scores, direct score edits, and host bonuses are recorded in the leaderboard history and can be undone individually.
-- Reset turn order from the Teams config if you need a fresh spin.
-- Example data: click “Add example data” in the Local archive panel on the Questions & board page to load `default_questions.json` (bundled) into local browser storage. Its named demo characters and relationships are fictional, and it covers every question type. Loading examples replaces the current quiz; download a private backup first if you want to keep it.
-- Keep personal quiz exports outside the repository or in the ignored `private/` directory. Files named `kimquizak-backup-*.json` are also ignored. Never replace the bundled demo with a personal export.
+The local storage implementation is in [`questionStorage.ts`](src/lib/questionStorage.ts) and [`usePersistentState.ts`](src/hooks/usePersistentState.ts). Existing questions stored in localStorage are migrated to IndexedDB when read.
+
+Cloud snapshots are separate copies, not automatic synchronization. **Host → Save this browser’s quiz privately** uploads a snapshot. Opening one asks before replacing the browser's quiz. Deleting one removes the cloud copy, not the local working quiz. The API accepts snapshots up to 3 MB and lists the latest 100; larger quizzes can use file backups.
+
+Signing out does not erase browser-local quiz data. On a shared device, use **Clear everything** in the local archive when finished. Clearing browser storage also removes local quizzes, so export a backup if you need to keep them.
+
+**Add example data** replaces the current browser quiz with [`default_questions.json`](default_questions.json). Its players and relationships are fictional. It includes examples of ten question types; Connections is supported by the app but is not included in this fixture. The zoom-reveal image is a CC0 photograph; its [source and license](docs/demo-image-source.md) are recorded separately.
+
+Keep personal exports out of Git. The ignored `private/` directory and `kimquizak-backup-*.json` filenames help prevent accidental commits; they do not encrypt or password-protect files.
 
 ## Scripts
-- `npm run dev` – start dev server
+
+- `npm run dev` – start the Turbopack dev server
+- `npm run dev:webpack` – start the Webpack dev server as a fallback
 - `npm run build` – production build
+- `npm start` – serve the production build locally
+- `npm test` – regression checks for quiz rules, persistence, audio, and host access
+- `npm run test:browser` – Playwright browser regression suite (see [`docs/regression-review.md`](docs/regression-review.md) for setup)
 - `npm run lint` – lint with Next/ESLint defaults
 - `npm run audit:privacy -- --history` – scan public files and local Git history for selected credential patterns, private file paths, and raster pictures (including those embedded in quiz JSON); see [privacy review](docs/privacy-review.md) for findings and limits.
 
 ## Notes
-- Quiz editing stays in browser storage. Hosts can explicitly save private cloud snapshots, open them directly in the editor on another device, or download backups. Open in editor asks before replacing the current browser quiz. Signing out does not erase local quiz data. Interactive Street View requires host login and a restricted Google Maps key.
-- Images are kept with questions in IndexedDB, avoiding the small `localStorage` quota. Backups include the images.
-- Built by Codex as the developer, with a human acting as product owner and QA lead.
-- Tested in Microsoft Edge; iframes may behave differently in other browsers (e.g., embed autoplay quirks).
+
+- Animal artwork credits and modifications are recorded in [`public/team-animals/NOTICE.txt`](public/team-animals/NOTICE.txt).
+- Built by Kim Isak with Codex.
+- Automated browser checks use Playwright/Chromium; manual testing has included Microsoft Edge. Browser autoplay settings can require a click before media plays.
