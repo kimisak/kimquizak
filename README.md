@@ -46,20 +46,24 @@ Open http://localhost:3000. A fresh browser starts without questions. Create you
 ## Main flows
 
 - **Home → Team palette**: choose themes for parties, birthdays, Halloween, Christmas, Easter, and more. Enable **Brand the site** to apply the selected theme’s colors and decorations across the site; leave it off to use the default site appearance. Theme choices are included in backups.
-- **Teams**: set team names, colors/emojis, and players; shuffle players and reset the turn order. The optional host profile adds the host to the podium without making them a team.
+- **Teams**: set team names, colors/emojis, and players; shuffle players and reset the turn order. Shuffling pools all players and redistributes them so team sizes differ by at most one, with optional M/F balancing. The optional host profile adds the host to the podium without making them a team.
 - **Questions**: create categories and questions, choose question types, and reorder the board. Categories can have different numbers of questions. Configure whether category names start concealed.
 - **Play**: draw the team order, open questions, reveal answers, and award points. Use score history to review recent changes or undo them.
 - **Host**: sign in to explicitly save or restore a private cloud snapshot, if you have configured your own host account and archive.
+
+On the podium, drag a player into the Host Booth to join the host. Drag them out to
+send them home; teammates make space as they leave and return. These interactions
+are visual and do not change team membership or scores.
 
 ## Question types
 
 | Type | How it plays |
 | --- | --- |
-| **Standard** | A question and answer, with optional images. The host judges the answer and can split points across several required answers, such as song and artist. |
-| **MCQ** | 2–12 choices, with one or more correct answers. The host sets how many correct picks finish the question. Points are split across that target; with rollover enabled, a wrong pick passes play to the next team. |
+| **Standard** | A question and answer, with optional images. Set **Answers that earn points** from 1–12 to allow partial credit, such as song and artist. The host selects how many answers were correct and confirms the award; one-answer questions keep Wrong/Correct controls. |
+| **MCQ** | 2–12 choices, with one or more correct answers. The host sets how many correct picks finish the question. Points are split across that target; with rollover enabled, a wrong pick passes play to the next team. Optional answer shuffling stays stable through team changes and reloads. With an image, drag the divider to adjust its width; the split is saved per question. |
 | **Text grid** | One word or segment per line becomes one tile. Teams uncover the text to identify the answer. Red tiles pass the turn without reducing the question's value; the host can also pass after a wrong guess. An optional YouTube answer video accepts supported watch, share, or embed links. |
 | **Image reveal** | Reveal an image by zooming out, clearing blur, or selecting areas. The host configures reveal stages or areas and whether extra reveals cost points. |
-| **Geoguesser** | Start from a saved Street View location. Choose a fixed view with paid timed exploration, look-and-zoom without movement, free exploration, or a two-phase stage challenge: timed exploration followed by a timed map guess scored by distance. Requires host login and Google Maps setup. |
+| **Geoguesser** | Start from a saved Street View location. Choose a fixed view with paid timed exploration, look-and-zoom without movement, free exploration, or a two-phase stage challenge: timed exploration followed by a timed map guess scored by distance. Street View can expand to full screen; stage exploration opens expanded automatically. Missing access or setup appears as a visible message. Requires host login and Google Maps setup. |
 | **Timeline** | Place events in chronological order around a configured starting event. The host decides whether misses pass to the next team. |
 | **Audio** | Identify a YouTube audio clip. Set the start time and clip length; an optional replay lowers the available points to the next lower board tier. |
 | **Trivia** | A sequence of questions for all teams or one selected team, followed by host review. Each participating team can earn up to the full tile value, based on its number of correct answers. |
@@ -225,6 +229,13 @@ flowchart LR
 ```
 
 For troubleshooting and the migration workflow, see [host setup notes](docs/owner-setup.md). An infobox after login can indicate a missing key, incorrect domain/API restrictions, disabled billing, a network failure, or unavailable panorama imagery; check the displayed error and browser console.
+
+Home, Teams, Questions, and Play do not wait for Supabase authentication. A paused
+or unreachable Supabase project leaves local editing and play available; host
+login, cloud snapshots, and authenticated Street View still require the service.
+If logs show `AuthRetryableFetchError` and long `proxy.ts` times on Host, check the
+Supabase project's status and the configured project URL. Restore a paused project
+in its dashboard before retrying Host.
 
 ## Persistence
 
