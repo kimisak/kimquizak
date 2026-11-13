@@ -1,5 +1,37 @@
 # Regression review — September 2026
 
+## Maintenance verification — November 2026
+
+The accumulated gameplay refinements were checked against an isolated production
+build in `.next-regression`, served on `http://127.0.0.1:3017`. Browser checks use
+synthetic quizzes and fresh browser contexts, without changing the host's saved quiz.
+
+Validation includes the production build, repository-wide ESLint, `npm test`, the
+public-data audit, and the full browser regression suite. Additional browser scripts
+cover Standard partial scoring, MCQ editing/multiple answers/responsive layouts,
+Connections, one-team Trivia, Host Booth interactions, Play startup, Street View
+access failures/full-screen controls, and anonymous private-API denial. For example:
+
+```bash
+QUIZ_TEST_DIST_DIR=.next-regression npm run build
+QUIZ_TEST_DIST_DIR=.next-regression npm run start -- --hostname 127.0.0.1 --port 3017
+# In another terminal:
+QUIZ_TEST_URL=http://127.0.0.1:3017 QUIZ_TEST_PRODUCTION=1 npm run test:browser
+QUIZ_TEST_URL=http://127.0.0.1:3017 QUIZ_TEST_PRODUCTION=1 QUIZ_TEST_TRIVIA_ONLY=1 npm run test:browser
+QUIZ_TEST_URL=http://127.0.0.1:3017 node tests/standard-scoring-browser.cjs
+QUIZ_TEST_URL=http://127.0.0.1:3017 node tests/mcq-layout-browser.cjs
+QUIZ_TEST_URL=http://127.0.0.1:3017 node tests/host-booth-browser.cjs
+```
+
+The draft-switch test now waits for the selected type to render before editing its
+fields. The Host Booth stacking assertion follows the later-pill-in-front rule for
+wrapped podium rows. Team shuffling was also checked in Chromium with uneven
+rosters and fewer players than teams, with M/F balancing both on and off.
+
+These checks do not replace physical-device/Edge testing or a live authenticated
+cloud-save smoke test. Saving indicators and navigation guards remain optional
+backlog work.
+
 ## Running the checks
 
 - `npm test` runs deterministic backup, board-reveal, host-variable, and replay-economy checks.

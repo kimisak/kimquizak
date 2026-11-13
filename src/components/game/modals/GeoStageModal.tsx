@@ -6,6 +6,7 @@ import { distanceBetweenKm, getGeoStageBands, getGeoStageScore, parseStreetViewS
 import { StreetViewPanorama } from "@/components/game/StreetViewPanorama";
 import { GeoGuessMap, type GeoPoint } from "./GeoGuessMap";
 import { QuestionModalHeader } from "./QuestionModalHeader";
+import { GeoPanoramaFrame } from "./GeoPanoramaFrame";
 
 type Phase = "waiting" | "exploring" | "map-loading" | "guessing" | "locked";
 
@@ -40,6 +41,7 @@ export function GeoStageModal({
 }: Props) {
   const [phase, setPhase] = useState<Phase>("waiting");
   const [panoramaReady, setPanoramaReady] = useState(false);
+  const [panoramaError, setPanoramaError] = useState<string | null>(null);
   const [remaining, setRemaining] = useState<number | null>(null);
   const [guess, setGuess] = useState<GeoPoint | null>(null);
   const [labelsVisible, setLabelsVisible] = useState(false);
@@ -130,10 +132,15 @@ export function GeoStageModal({
           </div>}
         </div>
         <div className="geo-stage-visual">
-          {!showingMap && <div className={`geo-stage-street${phase === "waiting" ? " preparing" : ""}`}>
-            <StreetViewPanorama sourceUrl={question.mapEmbedUrl ?? ""} interaction={phase === "exploring" ? "explore" : "fixed"} allowZoom className="geo-stage-panorama" onReadyChange={setPanoramaReady} />
+          {!showingMap && <div className={`geo-stage-street${phase === "waiting" && !panoramaError ? " preparing" : ""}`}>
+            <GeoPanoramaFrame autoFullscreen={phase === "exploring"} status={<>
+              <strong>{phase === "exploring" ? "Explore the street" : "Starting view"}</strong>
+              {phase === "exploring" && remaining !== null && <b>{remaining}s</b>}
+            </>}>
+              <StreetViewPanorama sourceUrl={question.mapEmbedUrl ?? ""} interaction={phase === "exploring" ? "explore" : "fixed"} allowZoom className="geo-stage-panorama" onReadyChange={setPanoramaReady} onErrorChange={setPanoramaError} />
+            </GeoPanoramaFrame>
           </div>}
-          {phase === "waiting" && <div className="geo-stage-curtain">
+          {phase === "waiting" && !panoramaError && <div className="geo-stage-curtain">
             <div className="geo-stage-intro">
               <strong>One player. <em>One place.</em></strong>
               <p>Invite one teammate to the screen. Press Start only when they are ready.</p>
@@ -178,7 +185,7 @@ export function GeoStageModal({
         </div>}
       </div>
       <footer className="question-modal-actions geo-stage-actions">
-        <span className="geo-stage-step-note" role="status">{phase === "waiting" ? panoramaReady ? "Street View is ready" : "Preparing Street View…" : showAnswer ? "The line shows straight-line distance, not driving distance." : phase === "locked" ? "The host controls the reveal." : `${exploreSeconds}s to explore · ${guessSeconds}s to guess`}</span>
+        <span className="geo-stage-step-note" role="status">{panoramaError || (phase === "waiting" ? panoramaReady ? "Street View is ready" : "Preparing Street View…" : showAnswer ? "The line shows straight-line distance, not driving distance." : phase === "locked" ? "The host controls the reveal." : `${exploreSeconds}s to explore · ${guessSeconds}s to guess`)}</span>
         {phase === "waiting" && <button className="button question-reveal-answer" type="button" disabled={!panoramaReady} onClick={startExploring}>Start exploring</button>}
         {phase === "locked" && !showAnswer && <button className="button question-reveal-answer" type="button" onClick={onRevealAnswer}>Reveal location & distance</button>}
         {showAnswer && <button className="button question-score-correct" type="button" disabled={disableActions} onClick={() => onFinish(points, distanceKm)}>{points > 0 ? `Award ${points} pts & finish` : "Finish · 0 pts"}</button>}

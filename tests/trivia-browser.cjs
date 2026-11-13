@@ -12,9 +12,29 @@ module.exports = async (page, baseUrl, backup) => {
   const card=page.locator('.question-card[data-question-points="300"]');
   await card.click();
   assert.equal(await card.locator('.trivia-config-item').count(),3);
+  const audience=card.locator('label').filter({hasText:'Who plays?'}).locator('select');
+  assert.equal(await audience.inputValue(),'all','Legacy trivia rounds default to all teams');
+  await audience.selectOption('single');
+  assert.equal(await audience.inputValue(),'single','Trivia can target one team');
+  await audience.selectOption('all');
   await card.getByRole('button',{name:'Move question 2 up',exact:true}).click();
   assert.equal(await card.locator('.trivia-config-item').first().getByLabel('Question',{exact:true}).inputValue(),'Second question?');
   await card.getByRole('button',{name:'Move question 1 down',exact:true}).click();
+  // This is a persistence check, so reload only after the asynchronous write.
+  await page.waitForFunction(() => new Promise(resolve => {
+    const open = indexedDB.open('kimquizak-content', 1);
+    open.onsuccess = () => {
+      const db = open.result;
+      const request = db.transaction('quiz', 'readonly').objectStore('quiz').get('questions');
+      request.onsuccess = () => {
+        const question = request.result?.find(question => question.id === 'trivia-test');
+        resolve(question?.triviaItems?.[0]?.id === 'a' && question.triviaMode === 'all');
+        db.close();
+      };
+      request.onerror = () => { resolve(false); db.close(); };
+    };
+    open.onerror = () => resolve(false);
+  }));
   await page.reload();await card.click();
   assert.equal(await card.locator('.trivia-config-item').first().getByLabel('Question',{exact:true}).inputValue(),'First question?');
   await card.locator('.trivia-config-item').first().locator('input[type=file]').setInputFiles({
@@ -22,7 +42,11 @@ module.exports = async (page, baseUrl, backup) => {
   });
   await card.locator('.trivia-config-image img').waitFor();
   await page.goto(baseUrl+'/game');
-  const open=()=>page.getByRole('button',{name:'ROUND, 300 points',exact:true}).click();
+  const sharedTriviaTile=page.getByRole('button',{name:'ROUND, 300 points',exact:true});
+  await sharedTriviaTile.waitFor();
+  assert.equal(await sharedTriviaTile.locator('.tile-shared-round').count(),0,'All-team trivia does not disclose participation on the board');
+  assert.equal(await page.getByRole('button',{name:'ROUND, 100 points',exact:true}).locator('.tile-shared-round').count(),0,'Single-team questions have no shared marker');
+  const open=()=>page.getByRole('button',{name:/^ROUND, 300 points/}).click();
   const modal=page.locator('.trivia-modal');
   await open();
   const assertControlsRight = async () => {
@@ -92,5 +116,35 @@ module.exports = async (page, baseUrl, backup) => {
   assert.equal(saved.questions.find(q=>q.id==='trivia-test').answered,true);
   assert(saved.questions.find(q=>q.id==='trivia-test').triviaItems[0].imageData.startsWith('data:image/'),'Nested image survives backup');
   assert.equal(saved.scoreHistory.filter(h=>h.questionId==='trivia-test').length,fixture.teams.length,'Single award per team, including zero');
-  console.log('PASS: trivia config, reorder, persistence, concealed answers/category, close reset, all-team awards and double-click guard');
+
+  const singleFixture={...fixture,teams:fixture.teams.map(team=>({...team,score:0})),scoreHistory:[],questions:fixture.questions.map(question=>question.id==='trivia-test'?{...question,triviaMode:'single',answered:false}:question)};
+  await Promise.all([page.waitForEvent('load'),page.locator('.archive-panel input[type=file]').setInputFiles({name:'single-trivia.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(singleFixture))})]);
+  await page.goto(baseUrl+'/game');
+  const singleTriviaTile=page.getByRole('button',{name:'ROUND, 300 points',exact:true});
+  await singleTriviaTile.waitFor();
+  assert.equal(await singleTriviaTile.locator('.tile-shared-round').count(),0,'One-team trivia has no shared marker');
+  await open();
+  const picker=modal.locator('.trivia-team-picker select');
+  assert.equal(await picker.inputValue(),singleFixture.teams[0].id,'Single-team trivia defaults to the current team');
+  await picker.selectOption(singleFixture.teams[1].id);
+  await modal.getByRole('button',{name:'Next',exact:true}).click();
+  await modal.getByRole('button',{name:'Next',exact:true}).click();
+  await modal.getByRole('button',{name:'Review answers',exact:true}).click();
+  for(let i=0;i<3;i++) {
+    assert.equal(await modal.locator('.trivia-team-mark').count(),1,'Only the selected team is marked');
+    if(i<2) await modal.getByRole('button',{name:singleFixture.teams[1].name+' correct',exact:true}).click();
+    await modal.getByRole('button',{name:i===2?'Finish review':'Next',exact:true}).click();
+  }
+  assert.equal(await modal.locator('.trivia-results > div').count(),1,'Only the selected team has a result');
+  assert.equal(await modal.locator('.trivia-results').getByText('200 pts',{exact:true}).count(),1);
+  await modal.getByRole('button',{name:'Award points & finish',exact:true}).click();
+  await modal.waitFor({state:'detached'});
+  await page.goto(baseUrl+'/config/questions');
+  const singleDownload=page.waitForEvent('download');
+  await page.getByRole('button',{name:/Download backup/}).click();
+  const singleSaved=JSON.parse(fs.readFileSync(await (await singleDownload).path(),'utf8'));
+  assert.equal(singleSaved.teams[0].score,0);
+  assert.equal(singleSaved.teams[1].score,200);
+  assert.equal(singleSaved.scoreHistory.filter(entry=>entry.questionId==='trivia-test').length,1,'Single-team trivia creates one score transaction');
+  console.log('PASS: trivia config, persistence, all-team awards, single-team targeting and proportional scoring');
 };

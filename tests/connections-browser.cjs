@@ -44,7 +44,7 @@ const demo = require('../default_questions.json');
         const nodes = [root, ...root.querySelectorAll('.connections-body,.connections-play-grid,.connections-tile,.connections-group,.connections-actions')];
         return nodes.flatMap(node => {
           const rect = node.getBoundingClientRect();
-          return rect.bottom > box.bottom + 1 || rect.right > box.right + 1 || node.scrollHeight > node.clientHeight + 2 ? [node.className] : [];
+          return rect.bottom > box.bottom + 1 || rect.right > box.right + 1 || node.scrollHeight > node.clientHeight + 2 ? [{ className:node.className, viewport:innerWidth, height:node.clientHeight, scrollHeight:node.scrollHeight }] : [];
         });
       });
       assert.deepEqual(issues, [], 'Connections fits the card');

@@ -1,5 +1,7 @@
 'use client';
 
+/* eslint-disable @next/next/no-img-element -- Uploaded data URLs have unknown dimensions and cannot benefit from Next image optimization. */
+
 import React, { useEffect, useMemo, useState } from "react";
 import { YouTubeClipPreview } from "@/components/config/YouTubeClipPreview";
 import { ImageRevealFields } from "@/components/config/ImageRevealFields";
@@ -46,6 +48,7 @@ import { StreetViewPicker } from "@/components/config/StreetViewPicker";
 import { GeoguesserSetupInfo } from "@/components/GeoguesserSetupInfo";
 import { StorageBackupPanel } from "@/components/StorageBackupPanel";
 import { getQuestionIssues, isQuestionReady } from "@/lib/questionValidation";
+import { getStandardAnswerCount, getStandardPoints, STANDARD_MAX_ANSWERS } from "@/lib/standardScoring";
 
 type FieldProps = {
   category: string;
@@ -599,6 +602,17 @@ const McqFields = React.memo(function McqFields({
         <label>
           <input
             type="checkbox"
+            checked={q?.mcqShuffleOptions === true}
+            onChange={(event) => upsertQuestion(category, points, { mcqShuffleOptions: event.target.checked })}
+          />
+          <span>
+            <strong>Shuffle answers when opened</strong>
+            <small>The saved answer order stays easy to edit. Players see a stable randomized order for the entire attempt.</small>
+          </span>
+        </label>
+        <label>
+          <input
+            type="checkbox"
             checked={rotateOnMiss}
             onChange={(event) => {
               const next = event.target.checked;
@@ -705,6 +719,12 @@ const StandardFields = React.memo(function StandardFields({
 }: FieldProps) {
   const [prompt, setPrompt] = useState(q?.prompt ?? "");
   const [answer, setAnswer] = useState(q?.answer ?? "");
+  const [answerCountInput, setAnswerCountInput] = useState(String(getStandardAnswerCount(q ?? {})));
+  const answerCountId = React.useId();
+
+  React.useEffect(() => {
+    setAnswerCountInput(String(getStandardAnswerCount({ standardAnswerCount: q?.standardAnswerCount })));
+  }, [q?.standardAnswerCount]);
 
   React.useEffect(() => {
     setPrompt(q?.prompt ?? "");
@@ -755,6 +775,27 @@ const StandardFields = React.memo(function StandardFields({
         }}
         placeholder="Write the expected answer"
       />
+      <div className="standard-scoring-config">
+        <label className="label" htmlFor={answerCountId}>Answers that earn points</label>
+        <input className="input" id={answerCountId} type="number" inputMode="numeric" min={1} max={STANDARD_MAX_ANSWERS} step={1}
+          value={answerCountInput}
+          onChange={event => {
+            const value = event.target.value;
+            setAnswerCountInput(value);
+            const count = Number(value);
+            if (Number.isInteger(count) && count >= 1 && count <= STANDARD_MAX_ANSWERS) {
+              upsertQuestion(category, points, { standardAnswerCount: count });
+            }
+          }}
+          onBlur={() => {
+            const count = Math.max(1, Math.min(STANDARD_MAX_ANSWERS, Math.trunc(Number(answerCountInput)) || 1));
+            setAnswerCountInput(String(count));
+            if (count !== getStandardAnswerCount(q ?? {})) upsertQuestion(category, points, { standardAnswerCount: count });
+          }} />
+        <p>{getStandardAnswerCount(q ?? {}) === 1
+          ? "Use split points for questions such as song and artist. Describe the required answers in your question."
+          : `On the answer page, choose how many answers were correct. 1 of ${getStandardAnswerCount(q ?? {})} earns ${getStandardPoints({ points, standardAnswerCount: q?.standardAnswerCount }, 1)} pts; all answers earn ${points} pts.`}</p>
+      </div>
       <label className="label" style={{ marginTop: "8px" }}>
         Image (optional)
       </label>
@@ -1769,7 +1810,13 @@ const TimelineFields = React.memo(function TimelineFields({
         })
         .join("\n"),
     );
-  }, [q?.timelineCenterYear, q?.timelineEvents]);
+  }, [
+    q?.timelineCenterLabel,
+    q?.timelineCenterYear,
+    q?.timelineEvents,
+    q?.timelineRotateOnMiss,
+    q?.timelineTitle,
+  ]);
 
   const persistCenterYear = () => {
     const safe = Number.isFinite(centerYear) ? Math.round(centerYear) : 2000;
@@ -2874,7 +2921,7 @@ export default function QuestionConfigPage() {
                 const isExpanded = expandedQuestions.has(questionKey);
                 const questionType = (q?.type ?? "standard") as QuestionType;
                 const typeMeta = QUESTION_TYPE_META[questionType];
-                const summary = questionType === "connections" ? `${q?.connectionsGroups?.length ?? 0} connections · 16 tiles` : questionType === "trivia" ? `${q?.triviaItems?.length ?? 0} questions · all teams` : questionType === "timeline"
+                const summary = questionType === "connections" ? `${q?.connectionsGroups?.length ?? 0} connections · 16 tiles` : questionType === "trivia" ? `${q?.triviaItems?.length ?? 0} questions · ${q?.triviaMode === "single" ? "one team" : "all teams"}` : questionType === "timeline"
                   ? `${q?.timelineEvents?.length ?? 0} timeline events`
                   : questionType === "lyrics"
                     ? `${q?.lyricsSegments?.filter((line) => line.trim()).length ?? 0} reveal lines`

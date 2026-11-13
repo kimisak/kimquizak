@@ -44,7 +44,10 @@ function harness({ confirm = true, status = 200, invalid = false, storageFailure
   }).outputText;
   const window = {
     confirm: message => { calls.push('confirm'); assert.match(message, /Synthetic saved quiz/); assert.match(message, /replaces.*teams, questions, settings, scores, and game progress/); return confirm; },
-    location: { assign: url => { assert.equal(url, '/config/questions'); calls.push('navigate'); } },
+    location: {
+      href: 'https://kimquizak.test/account',
+      assign: url => { assert.equal(url, 'https://kimquizak.test/config/questions'); calls.push('navigate'); },
+    },
   };
   const fetch = async (url, options) => {
     calls.push('fetch');

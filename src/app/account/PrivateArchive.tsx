@@ -86,7 +86,7 @@ export function PrivateArchive() {
       const payload = parseBackupPayload(JSON.stringify(data));
       await persistBackupToLocalStorage(payload);
       // Reload the app so mounted settings/header state reads the restored quiz.
-      window.location.assign("/config/questions");
+      window.location.assign(new URL("/config/questions", window.location.href).href);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not open quiz.");
       setBusy(false);

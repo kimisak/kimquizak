@@ -1,7 +1,10 @@
 # Trivia Round
 
-One board tile contains at least two questions. Every team answers on paper.
-The tile's points are available independently to each team; they are not a shared pool.
+One board tile contains at least two questions. Choose **All teams** (the default)
+or **One team** in the question configuration. In one-team mode, the host selects
+the playing team before advancing past the first question; only that team is marked
+and awarded points. All-team rounds let every team answer on paper.
+The tile's points are available independently to each participating team; they are not a shared pool.
 Each correct answer has equal weight. Final team awards are rounded once:
 `round(tile points × correct answers / question count)`.
 

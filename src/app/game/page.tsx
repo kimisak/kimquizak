@@ -21,12 +21,13 @@ import {
 import { ConnectionsModal } from "@/components/game/modals/ConnectionsModal";
 import { advanceConnections, createConnectionsProgress, type ConnectionsAction } from "@/lib/connections";
 import type { ConnectionsProgress } from "@/lib/types";
-import { createMcqProgress, pickMcqOption } from "@/lib/mcq";
+import { createMcqProgress, pickMcqOption, prepareMcqProgress } from "@/lib/mcq";
 import type { McqProgress } from "@/lib/types";
 import { McqModal } from "@/components/game/modals/McqModal";
 import { TimelineModal } from "@/components/game/modals/TimelineModal";
 import { LyricsModal } from "@/components/game/modals/LyricsModal";
 import { StandardModal } from "@/components/game/modals/StandardModal";
+import { getStandardAnswerCount, getStandardPoints } from "@/lib/standardScoring";
 import { AudioModal } from "@/components/game/modals/AudioModal";
 import { BoobyModal } from "@/components/game/modals/BoobyModal";
 import { TurnOrderRail } from "@/components/game/TurnOrderRail";
@@ -55,7 +56,7 @@ import { getImageRevealLevels, getImageRevealPoints, getImageAreaRewards, choose
 import { getFinaleRevealPlan } from "@/lib/finaleReveal";
 import { ImageRevealModal } from "@/components/game/modals/ImageRevealModal";
 import { TriviaModal } from "@/components/game/modals/TriviaModal";
-import { getTriviaResults, isTriviaReviewed, type TriviaMarks } from "@/lib/trivia";
+import { getTriviaResults, getTriviaTeamIds, isTriviaReviewed, type TriviaMarks } from "@/lib/trivia";
 import { getGeoExploreValue } from "@/lib/geoguesser";
 import { getVisibleBoardQuestions } from "@/lib/boardReveal";
 import { changeJokerLevel, getJokerLevelPoints, JOKER_MAX_LEVEL } from "@/lib/jokerScoring";
@@ -75,8 +76,8 @@ type TimelineScoreResult = {
 };
 
 export default function GameBoardPage() {
-  const [settings] = useSettings();
-  const [hostProfile] = useHostProfile();
+  const [settings, , settingsHydrated] = useSettings();
+  const [hostProfile, , hostHydrated] = useHostProfile();
   const {
     playSadBlip,
     playCountdownBeep,
@@ -92,13 +93,21 @@ export default function GameBoardPage() {
     stopFinaleDrumroll,
     playPodiumReveal,
   } = useAudioCue();
-  const [teams, setTeams] = usePersistentState<Team[]>(
+  const [storedTeams, setTeams, teamsHydrated] = usePersistentState<Team[]>(
     TEAM_STORAGE_KEY,
     [],
     [LEGACY_TEAM_STORAGE_KEY],
   );
-  const [questions, setQuestions] = usePersistentQuestions();
-  const [scoreHistory, setScoreHistory] = usePersistentState<ScoreTransaction[]>(
+  const teamPaletteReady = settingsHydrated && teamsHydrated;
+  // Resolve saved team identities before rendering; an effect alone paints the
+  // previous palette for one frame and can create defaults before storage loads.
+  const teams = useMemo(() => {
+    if (!teamPaletteReady) return [];
+    if (storedTeams.length === 0) return buildDefaultTeams(settings.themeId);
+    return storedTeams.map(team => reconcileTeamTheme(team, settings.themeId));
+  }, [storedTeams, settings.themeId, teamPaletteReady]);
+  const [questions, setQuestions, questionsHydrated] = usePersistentQuestions();
+  const [scoreHistory, setScoreHistory, scoresHydrated] = usePersistentState<ScoreTransaction[]>(
     SCORE_HISTORY_STORAGE_KEY,
     [],
   );
@@ -136,12 +145,12 @@ export default function GameBoardPage() {
   const [finalePodiumRevealCount, setFinalePodiumRevealCount] = useState(0);
   const connectionsProgressRef = useRef<ConnectionsProgress | null>(null);
   const mcqProgressRef = useRef<McqProgress>(createMcqProgress());
+  const markingQuestionRef = useRef<string | null>(null);
   const prevAnsweringTeamRef = useRef<string | null>(null);
   const [slotFaces, setSlotFaces] = useState<Team[]>([]);
   const [slotSpinning, setSlotSpinning] = useState(false);
   const slotIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const slotTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [slotCollapsed, setSlotCollapsed] = useState(false);
   const slotSpinStopRef = useRef<(() => void) | null>(null);
   const gameModalRef = useRef<HTMLDivElement | null>(null);
   const questionTriggerRef = useRef<HTMLElement | null>(null);
@@ -153,19 +162,11 @@ export default function GameBoardPage() {
   }, []);
 
   useEffect(() => {
-    setTeams((prev) => {
-      if (prev.length === 0) return buildDefaultTeams(settings.themeId);
-      let changed = false;
-      const reconciled = prev.map((team) => {
-        const next = reconcileTeamTheme(team, settings.themeId);
-        if (next !== team) changed = true;
-        return next;
-      });
-      return changed ? reconciled : prev;
-    });
-  }, [setTeams, setQuestions, settings.themeId]);
+    if (!teamPaletteReady || (teams.length === storedTeams.length && teams.every((team, index) => team === storedTeams[index]))) return;
+    setTeams(teams);
+  }, [setTeams, storedTeams, teams, teamPaletteReady]);
 
-  const { turnState, setOrder, advanceBoard, advanceLyrics, setTurnState } = useTurnState();
+  const { turnState, setOrder, advanceBoard, advanceLyrics, setTurnState, hydrated: turnHydrated } = useTurnState();
   const turnOrder = turnState.order;
   const boardTurnIndex = turnState.boardIndex;
   const lyricsTurnIndex = turnState.lyricsIndex;
@@ -303,6 +304,8 @@ export default function GameBoardPage() {
     [turnOrder, teams],
   );
 
+  const slotCollapsed = !slotSpinning && activeTurnOrder.length > 0;
+
   const orderTeamsById = useCallback(
     (ids: string[]) =>
       ids
@@ -374,7 +377,6 @@ export default function GameBoardPage() {
     if (slotSpinning) return;
     if (!teams.length) {
       setSlotFaces([]);
-      setSlotCollapsed(false);
       return;
     }
     const orderedTeams =
@@ -382,7 +384,6 @@ export default function GameBoardPage() {
         ? rotateTeams(orderTeamsById(activeTurnOrder), boardTurnIndex)
         : [...teams];
     setSlotFaces(orderedTeams);
-    setSlotCollapsed(activeTurnOrder.length > 0);
   }, [teams, activeTurnOrder, slotSpinning, orderTeamsById, rotateTeams, boardTurnIndex]);
 
   useEffect(() => {
@@ -403,7 +404,6 @@ export default function GameBoardPage() {
   const startTurnOrder = () => {
     if (teams.length === 0 || slotSpinning) return;
     setSlotSpinning(true);
-    setSlotCollapsed(false);
     if (slotSpinStopRef.current) {
       slotSpinStopRef.current();
       slotSpinStopRef.current = null;
@@ -432,7 +432,6 @@ export default function GameBoardPage() {
       const orderedTeams = orderTeamsById(shuffled);
       setSlotFaces(orderedTeams);
       setSlotSpinning(false);
-      setSlotCollapsed(true);
       if (slotSpinStopRef.current) {
         slotSpinStopRef.current();
         slotSpinStopRef.current = null;
@@ -489,7 +488,17 @@ export default function GameBoardPage() {
       connectionsProgressRef.current = progress;
       setTurnState(previous => ({ ...previous, connectionsProgress: { ...previous.connectionsProgress, [question.id]: progress } }));
     }
-    mcqProgressRef.current = turnState.mcqProgress?.[question.id] ?? createMcqProgress();
+    const storedMcqProgress = turnState.mcqProgress?.[question.id] ?? createMcqProgress();
+    const mcqProgress = question.type === "mcq"
+      ? prepareMcqProgress(question, storedMcqProgress)
+      : storedMcqProgress;
+    mcqProgressRef.current = mcqProgress;
+    if (question.type === "mcq") {
+      setTurnState(previous => ({
+        ...previous,
+        mcqProgress: { ...previous.mcqProgress, [question.id]: mcqProgress },
+      }));
+    }
     questionTriggerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setJokerRound(null);
     setJokerProgress(null);
@@ -588,6 +597,7 @@ export default function GameBoardPage() {
       const duration = Math.max(1, question.audioStopSeconds ?? 10);
       normalized = { ...question, audioStopSeconds: duration };
     }
+    markingQuestionRef.current = null;
     setActiveQuestion(normalized);
     setShowAnswer(false);
     setGeoTimerUsed(false);
@@ -719,7 +729,7 @@ export default function GameBoardPage() {
       setGeoCountdown((prev) => (prev !== null ? prev - 1 : prev));
     }, 1000);
     return () => clearTimeout(id);
-  }, [geoCountdown, mapLocked, activeQuestion]);
+  }, [geoCountdown, mapLocked, activeQuestion, playCountdownBeep, showAnswer]);
 
   useEffect(() => {
     if (!activeQuestion || activeQuestion.type !== "geoguesser") return;
@@ -731,19 +741,17 @@ export default function GameBoardPage() {
       setMapLocked(true);
       setGeoCountdown(null);
     }
-  }, [geoCountdown, mapLocked, activeQuestion, activeTurnOrder, boardTurnIndex, advanceBoard]);
+  }, [geoCountdown, mapLocked, activeQuestion, activeTurnOrder, boardTurnIndex, advanceBoard, playFinalAlarm, showAnswer]);
 
   useEffect(() => {
     // reset tracking when question changes
-    prevAnsweringTeamRef.current = answeringTeamId ?? null;
     setGeoTimerUsed(false);
     setGeoCountdown(null);
     setMapLocked(true);
   }, [activeQuestion?.id]);
 
   useEffect(() => {
-    if (!activeQuestion) return;
-    if (activeQuestion.type === "geoguesser" && showAnswer) {
+    if (activeQuestion?.type === "geoguesser" && showAnswer) {
       setGeoCountdown(null);
       setMapLocked(true);
     }
@@ -833,10 +841,11 @@ export default function GameBoardPage() {
     );
   };
 
-  const awardTrivia = (marks: TriviaMarks, reviewed: string[]) => {
+  const awardTrivia = (marks: TriviaMarks, reviewed: string[], selectedTeamId?: string) => {
     if (!activeQuestion || activeQuestion.type !== "trivia" || activeQuestion.answered ||
       !isTriviaReviewed(activeQuestion, reviewed) || !teams.length) return;
-    const results = getTriviaResults(activeQuestion, teams.map(team => team.id), marks);
+    const triviaTeamIds = getTriviaTeamIds(activeQuestion, teams.map(team => team.id), selectedTeamId);
+    const results = getTriviaResults(activeQuestion, triviaTeamIds, marks);
     const createdAt = new Date().toISOString();
     setTeams(previous => previous.map(team => ({
       ...team, score: team.score + (results.find(result => result.teamId === team.id)?.points ?? 0),
@@ -857,8 +866,11 @@ export default function GameBoardPage() {
     dismissQuestion(true);
   };
 
-  const markAnswered = (correct: boolean, stageResult?: { points: number; distanceKm: number | null }) => {
-    if (!activeQuestion) return;
+  const markAnswered = (correct: boolean, stageResult?: { points: number; distanceKm: number | null }, standardCorrectCount?: number) => {
+    if (!activeQuestion || activeQuestion.answered || markingQuestionRef.current === activeQuestion.id) return;
+    if (standardCorrectCount !== undefined && ((activeQuestion.type ?? "standard") !== "standard"
+      || !Number.isInteger(standardCorrectCount) || standardCorrectCount < 0 || standardCorrectCount > getStandardAnswerCount(activeQuestion))) return;
+    markingQuestionRef.current = activeQuestion.id;
     if (remainingQuestionCount === 1 && isQuestionReady(activeQuestion) && !activeQuestion.answered) {
       setFinaleRevealed(false);
       setFinaleDrumrollStarted(false);
@@ -899,13 +911,13 @@ export default function GameBoardPage() {
           )
         : activeQuestion.type === "imageReveal"
           ? turnState.imageRevealProgress?.[activeQuestion.id]?.points ?? basePoints
-          : basePoints;
+          : standardCorrectCount !== undefined ? getStandardPoints(activeQuestion, standardCorrectCount) : basePoints;
 
     if (teamIdToScore && correct && rewardPoints > 0) {
       applyScoreChange(
         teamIdToScore,
         rewardPoints,
-        `${activeQuestion.category} · ${activeQuestion.points} · ${stageResult ? `Pin the Globe · ${stageResult.distanceKm === null ? "No pin" : `${stageResult.distanceKm.toFixed(1)} km away`}` : activeQuestion.type === "booby" ? "Challenge completed" : "Correct"}${activeQuestion.type === "audio" && rewardPoints < basePoints ? ` after replay (${rewardPoints} awarded)` : ""}`,
+        `${activeQuestion.category} · ${activeQuestion.points} · ${standardCorrectCount !== undefined ? `${standardCorrectCount}/${getStandardAnswerCount(activeQuestion)} correct answers` : stageResult ? `Pin the Globe · ${stageResult.distanceKm === null ? "No pin" : `${stageResult.distanceKm.toFixed(1)} km away`}` : activeQuestion.type === "booby" ? "Challenge completed" : "Correct"}${activeQuestion.type === "audio" && rewardPoints < basePoints ? ` after replay (${rewardPoints} awarded)` : ""}`,
         activeQuestion.id,
       );
     }
@@ -1269,6 +1281,7 @@ export default function GameBoardPage() {
       const progress = turnState.mcqProgress?.[activeQuestion.id] ?? createMcqProgress();
       const team = teams.find(team => team.id === progress.teamId) ?? answeringTeam ?? currentTeam;
       return <McqModal
+        key={activeQuestion.id}
         question={modalQuestion}
         currentTeamName={team?.name}
         currentTeamColor={team ? getTeamAccent(team).base : currentTeamColor}
@@ -1277,6 +1290,11 @@ export default function GameBoardPage() {
         teams={teams}
         onSelect={handleMcqSelect}
         onContinue={closeModal}
+        onMediaWidthChange={width => {
+          const id = activeQuestion.id;
+          setQuestions(previous => previous.map(question => question.id === id ? { ...question, mcqImageWidthPercent: width } : question));
+          setActiveQuestion(previous => previous?.id === id ? { ...previous, mcqImageWidthPercent: width } : previous);
+        }}
       />;
     }
     if (activeQuestion.type === "joker" && jokerRound && jokerProgress) {
@@ -1329,7 +1347,7 @@ export default function GameBoardPage() {
       );
     }
     if (activeQuestion.type === "trivia") {
-      return <TriviaModal key={activeQuestion.id} question={modalQuestion} teams={teams} onAward={awardTrivia} />;
+      return <TriviaModal key={activeQuestion.id} question={modalQuestion} teams={teams} defaultTeamId={getBoardTeamId()} onAward={awardTrivia} />;
     }
     if (activeQuestion.type === "imageReveal") {
       const questionId = activeQuestion.id;
@@ -1445,6 +1463,7 @@ export default function GameBoardPage() {
     }
     return (
       <StandardModal
+        key={activeQuestion.id}
         question={modalQuestion}
         currentTeamName={currentTeam?.name}
         currentTeamColor={currentTeamColor}
@@ -1456,10 +1475,21 @@ export default function GameBoardPage() {
         showAnswer={showAnswer}
         onCorrect={() => markAnswered(true)}
         onWrong={() => markAnswered(false)}
+        onMarkAnswers={count => markAnswered(count > 0, undefined, count)}
         disableActions={!answeringTeam}
       />
     );
   };
+
+  if (!teamPaletteReady || !hostHydrated || !questionsHydrated || !scoresHydrated || !turnHydrated) {
+    return (
+      <main className="game-page" aria-busy="true">
+        <section className="game-board-panel board-viewport-panel game-board-loading">
+          <p role="status">Loading game…</p>
+        </section>
+      </main>
+    );
+  }
 
   return (
     <main className="game-page" style={{ display: "grid", gap: "14px" }}>
@@ -1548,7 +1578,7 @@ export default function GameBoardPage() {
                 <TurnOrderRail teams={boardTurnOrderTeams} />
               ) : (
                 <div className="turn-reel-window" aria-label="Teams in the turn draw">
-                  {(slotFaces.length > 0 ? slotFaces : teams).map((team, idx) => {
+                  {(slotSpinning && slotFaces.length > 0 ? slotFaces : teams).map((team, idx) => {
                     const accent = team ? getTeamAccent(team) : undefined;
                     return (
                       <div
@@ -1632,8 +1662,8 @@ export default function GameBoardPage() {
 
       <div className="game-leaderboard-panel" id="game-podium">
         <Leaderboard
-          hostProfile={hostProfile}
           teams={scoresHidden ? hiddenScoreTeams : sortedTeams}
+          hostProfile={hostProfile}
           onAdjust={adjustScore}
           onSet={setScore}
           history={scoreHistory}

@@ -8,7 +8,7 @@ import {
 import type { TurnState } from "@/lib/types";
 
 export function useTurnState() {
-  const [turnState, setTurnState] = usePersistentState<TurnState>(
+  const [turnState, setTurnState, hydrated] = usePersistentState<TurnState>(
     TURN_STATE_STORAGE_KEY,
     {
       order: [],
@@ -67,5 +67,5 @@ export function useTurnState() {
       hiddenScoreOrder: [],
     });
 
-  return { turnState, setTurnState, setOrder, advanceBoard, advanceLyrics, reset };
+  return { turnState, setTurnState, setOrder, advanceBoard, advanceLyrics, reset, hydrated };
 }

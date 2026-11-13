@@ -33,13 +33,19 @@ const baseUrl = process.env.QUIZ_TEST_URL || 'http://localhost:3012';
   await card.locator('input[type=file]').first().setInputFiles({name:'draft.png',mimeType:'image/png',buffer:png});
   await card.locator('img').first().waitFor();
   const types=['Multiple choice','Guess the audio','Challenge','Text grid','Geoguesser','Joker high/low','Timeline'];
+  const selectQuestionType = async type => {
+    const button = card.locator('.question-type-picker').getByRole('button', { name:type, exact:true });
+    await button.click();
+    // A click can finish before React commits the replacement editor.
+    await page.waitForFunction(element => element.getAttribute('aria-pressed') === 'true', await button.elementHandle());
+  };
   for (const type of types) {
-    await card.locator('.question-type-picker').getByRole('button',{name:type,exact:true}).click();
+    await selectQuestionType(type);
     const input=type==='Timeline'?card.getByPlaceholder('Timeline',{exact:true}):card.locator('textarea').first();
     assert(!(await input.inputValue()).includes('Draft test standard'), type+' leaks standard text');
     await input.fill('Independent '+type);
   }
-  await card.locator('.question-type-picker').getByRole('button',{name:'Standard',exact:true}).click();
+  await selectQuestionType('Standard');
   assert.equal(await card.locator('textarea').first().inputValue(),'Draft test standard');
   // IndexedDB saves asynchronously: verify the write completed before a hard reload.
   await page.waitForFunction(() => new Promise(resolve => {
@@ -57,11 +63,11 @@ const baseUrl = process.env.QUIZ_TEST_URL || 'http://localhost:3012';
   assert.equal(await page.locator('.question-card').first().locator('textarea').first().inputValue(),'Draft test standard');
   assert.equal(await card.locator('img').first().getAttribute('src'),'data:image/png;base64,'+png.toString('base64'));
   for (const type of types) {
-    await card.locator('.question-type-picker').getByRole('button',{name:type,exact:true}).click();
+    await selectQuestionType(type);
     const input=type==='Timeline'?card.getByPlaceholder('Timeline',{exact:true}):card.locator('textarea').first();
     assert.equal(await input.inputValue(),'Independent '+type);
   }
-  await card.locator('.question-type-picker').getByRole('button',{name:'Standard',exact:true}).click();
+  await selectQuestionType('Standard');
   const downloadPromise=page.waitForEvent('download');
   await page.getByRole('button',{name:/Download backup/}).click();
   const downloaded=await downloadPromise;

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 
 const SPIN_CUE_VOLUME = 0.68;
 const SELECTION_CUE_FALLBACK_VOLUME = 0.32;
@@ -120,7 +120,7 @@ export function useAudioCue() {
     };
   }, []);
 
-  const ensureCtx = () => {
+  const ensureCtx = useCallback(() => {
     try {
       if (!audioCtxRef.current) {
         audioCtxRef.current = new AudioContext();
@@ -129,7 +129,7 @@ export function useAudioCue() {
       console.error("Audio error", e);
     }
     return audioCtxRef.current;
-  };
+  }, []);
 
   const playSadBlip = () => {
     const ctx = ensureCtx();
@@ -148,7 +148,7 @@ export function useAudioCue() {
     osc.stop(now + 0.45);
   };
 
-  const playCountdownBeep = (frequency = 900) => {
+  const playCountdownBeep = useCallback((frequency = 900) => {
     const ctx = ensureCtx();
     if (!ctx) return;
     const now = ctx.currentTime;
@@ -163,9 +163,9 @@ export function useAudioCue() {
     osc.start(now);
     gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.28);
     osc.stop(now + 0.3);
-  };
+  }, [ensureCtx]);
 
-  const playFinalAlarm = () => {
+  const playFinalAlarm = useCallback(() => {
     const ctx = ensureCtx();
     if (!ctx) return;
     const now = ctx.currentTime;
@@ -180,7 +180,7 @@ export function useAudioCue() {
     osc.start(now);
     gain.gain.exponentialRampToValueAtTime(0.0001, now + 1.05);
     osc.stop(now + 1.1);
-  };
+  }, [ensureCtx]);
 
   const playSuccessChime = () => {
     const ctx = ensureCtx();

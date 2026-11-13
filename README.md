@@ -55,14 +55,14 @@ Open http://localhost:3000. A fresh browser starts without questions. Create you
 
 | Type | How it plays |
 | --- | --- |
-| **Standard** | A question and answer, with optional images. The host judges the answer. |
+| **Standard** | A question and answer, with optional images. The host judges the answer and can split points across several required answers, such as song and artist. |
 | **MCQ** | 2–12 choices, with one or more correct answers. The host sets how many correct picks finish the question. Points are split across that target; with rollover enabled, a wrong pick passes play to the next team. |
 | **Text grid** | One word or segment per line becomes one tile. Teams uncover the text to identify the answer. Red tiles pass the turn without reducing the question's value; the host can also pass after a wrong guess. An optional YouTube answer video accepts supported watch, share, or embed links. |
 | **Image reveal** | Reveal an image by zooming out, clearing blur, or selecting areas. The host configures reveal stages or areas and whether extra reveals cost points. |
 | **Geoguesser** | Start from a saved Street View location. Choose a fixed view with paid timed exploration, look-and-zoom without movement, free exploration, or a two-phase stage challenge: timed exploration followed by a timed map guess scored by distance. Requires host login and Google Maps setup. |
 | **Timeline** | Place events in chronological order around a configured starting event. The host decides whether misses pass to the next team. |
 | **Audio** | Identify a YouTube audio clip. Set the start time and clip length; an optional replay lowers the available points to the next lower board tier. |
-| **Trivia** | A sequence of questions, followed by host review of the teams' answers. Each team can earn up to the full tile value, based on its number of correct answers. |
+| **Trivia** | A sequence of questions for all teams or one selected team, followed by host review. Each participating team can earn up to the full tile value, based on its number of correct answers. |
 | **Challenge** | A host-authored task with an optional image and countdown or count-up timer. The host marks it completed for full points or not completed for zero. The timer does not award points automatically. |
 | **Joker high/low** | Guess higher or lower on configurable number columns. Correct and wrong guesses move the reward up or down a six-level ladder; finding the hidden Joker jumps to the top level. |
 | **Connections** | Find groups of four among 16 tiles. The host chooses a target of 1–4 solved groups, with points split across it. Wrong guesses can pass play to the next team. Defaults are 120 seconds per guess and four shared mistakes; both limits are configurable. [Rules and setup](docs/connections.md). |

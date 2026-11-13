@@ -20,6 +20,7 @@ function mount(fetch, decoderAvailable = true) {
     require: () => ({
       useRef: current => ({ current }),
       useEffect: effect => { cleanup = effect(); },
+      useCallback: callback => callback,
     }),
     Audio: class {
       constructor() { audio.push(this); }

@@ -56,8 +56,10 @@ export type Question = {
   answerImageName?: string | null;
   type?: QuestionKind;
   typeDrafts?: Partial<Record<QuestionKind, QuestionTypeDraft>>;
+  standardAnswerCount?: number;
   imageRevealStyle?: ImageRevealStyle;
   triviaItems?: TriviaItem[];
+  triviaMode?: "all" | "single";
   connectionsGroups?: ConnectionsGroup[];
   connectionsText?: string;
   connectionsRequired?: number;
@@ -114,6 +116,8 @@ export type Question = {
   jokerRotateOnMiss?: boolean | null;
   timelineRotateOnMiss?: boolean | null;
   mcqRotateOnMiss?: boolean | null;
+  mcqShuffleOptions?: boolean | null;
+  mcqImageWidthPercent?: number;
   mcqOptions?: string[];
   mcqCorrectIndex?: number | null; // Legacy single-answer backups.
   mcqCorrectIndexes?: number[];
@@ -186,6 +190,7 @@ export type McqProgress = {
   found: number[];
   eliminated: number[];
   pointsByTeam: Record<string, number>;
+  optionOrder?: number[];
   teamId?: string;
   finished: boolean;
   lastCorrect?: boolean;

@@ -8,6 +8,7 @@ import { ExpandableImage } from "./ExpandableImage";
 import { QuestionModalActions } from "./QuestionModalActions";
 import { QuestionModalHeader } from "./QuestionModalHeader";
 import { GeoStageModal } from "./GeoStageModal";
+import { GeoPanoramaFrame } from "./GeoPanoramaFrame";
 
 type Props = {
   question: Question;
@@ -104,7 +105,12 @@ export function GeoguesserModal({
                 {mode === "timed" && !mapLocked && countdownSeconds != null && <b>{countdownSeconds}s</b>}
               </div>
             </div>
-            <StreetViewPanorama sourceUrl={sourceUrl} interaction={interaction} allowZoom={mode !== "timed"} className="geo-question-panorama" onReadyChange={setPanoramaReady} />
+            <GeoPanoramaFrame status={<>
+              <strong>{mode === "look" ? "Look & zoom" : mode === "free" ? "Explore freely" : mapLocked ? "View locked" : "Explore now"}</strong>
+              {mode === "timed" && !mapLocked && countdownSeconds != null && <b>{countdownSeconds}s</b>}
+            </>}>
+              <StreetViewPanorama sourceUrl={sourceUrl} interaction={interaction} allowZoom={mode !== "timed"} className="geo-question-panorama" onReadyChange={setPanoramaReady} />
+            </GeoPanoramaFrame>
             <p className="geo-panorama-caption">
               {mode === "look"
                 ? "Turn and zoom to inspect the scene. Moving to another spot is disabled; full points remain available."
@@ -136,7 +142,9 @@ export function GeoguesserModal({
                 presentation="fluid"
               />
             ) : (
-              <StreetViewPanorama sourceUrl={sourceUrl} interaction="explore" allowZoom className="geo-answer-panorama" />
+              <GeoPanoramaFrame status={<strong>Answer view</strong>}>
+                <StreetViewPanorama sourceUrl={sourceUrl} interaction="explore" allowZoom className="geo-answer-panorama" />
+              </GeoPanoramaFrame>
             )}
           </section>
         )}

@@ -1,5 +1,7 @@
 'use client';
 
+/* eslint-disable @next/next/no-img-element -- Uploaded data URLs have unknown dimensions and cannot benefit from Next image optimization. */
+
 import type { Question, TriviaItem } from "@/lib/types";
 import { makeId } from "@/lib/defaultData";
 import { useLayoutEffect, useRef } from "react";
@@ -16,7 +18,15 @@ export function TriviaFields({ question, onChange }: { question: Question; onCha
   };
   return <section className="trivia-config">
     <label className="label">Round title (optional)<input className="input" value={question.prompt} placeholder="The Christmas round" onChange={e => onChange({ prompt: e.target.value })} /></label>
-    <p className="muted">All teams answer on paper. Each team can earn the full {question.points} points. Questions carry equal weight; totals are rounded once. No penalties or rollover.</p>
+    <label className="label">Who plays?
+      <select className="input" value={question.triviaMode ?? "all"} onChange={e => onChange({ triviaMode: e.target.value === "single" ? "single" : "all" })}>
+        <option value="all">All teams</option>
+        <option value="single">One team</option>
+      </select>
+    </label>
+    <p className="muted">{question.triviaMode === "single"
+      ? `Choose the team when the round starts. That team can earn up to ${question.points} points.`
+      : `All teams answer on paper. Each team can earn the full ${question.points} points.`} Questions carry equal weight; totals are rounded once. No penalties or rollover.</p>
     {items.map((item, index) => <section className="trivia-config-item" key={item.id} aria-label={`Trivia question ${index + 1}`}>
       <header><strong>Question {index + 1}</strong><div>
         <button type="button" className="button ghost" disabled={index === 0} aria-label={`Move question ${index + 1} up`} onClick={() => move(index, -1)}>↑</button>

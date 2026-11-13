@@ -2,23 +2,32 @@
 
 import { useRef, useState } from "react";
 import type { Question, Team } from "@/lib/types";
-import { getTriviaResults, isTriviaReviewed, type TriviaMarks } from "@/lib/trivia";
+import { getTriviaResults, getTriviaTeamIds, isTriviaReviewed, type TriviaMarks } from "@/lib/trivia";
 import { getTeamAccent } from "@/lib/teamPresentation";
 import { TeamPill } from "../TeamPill";
 import { QuestionModalHeader } from "./QuestionModalHeader";
 import { ExpandableImage } from "./ExpandableImage";
 
-export function TriviaModal({ question, teams, onAward }: {
-  question: Question; teams: Team[]; onAward: (marks: TriviaMarks, reviewed: string[]) => void;
+export function TriviaModal({ question, teams, defaultTeamId, onAward }: {
+  question: Question;
+  teams: Team[];
+  defaultTeamId?: string;
+  onAward: (marks: TriviaMarks, reviewed: string[], selectedTeamId?: string) => void;
 }) {
   const items = question.triviaItems ?? [];
   const [phase, setPhase] = useState<"ask" | "review" | "summary">("ask");
   const [index, setIndex] = useState(0);
   const [marks, setMarks] = useState<TriviaMarks>({});
   const [reviewed, setReviewed] = useState<string[]>([]);
+  const [selectedTeamId, setSelectedTeamId] = useState(() => (
+    teams.some(team => team.id === defaultTeamId) ? defaultTeamId! : teams[0]?.id ?? ""
+  ));
   const awarding = useRef(false);
   const item = items[index];
-  const results = getTriviaResults(question, teams.map(team => team.id), marks);
+  const singleTeam = question.triviaMode === "single";
+  const roundTeamIds = getTriviaTeamIds(question, teams.map(team => team.id), selectedTeamId);
+  const roundTeams = teams.filter(team => roundTeamIds.includes(team.id));
+  const results = getTriviaResults(question, roundTeamIds, marks);
   const complete = isTriviaReviewed(question, reviewed);
   const progressLabel = phase === "ask" ? "Question progress" : "Answers reviewed";
   const nextAnswer = () => {
@@ -34,7 +43,7 @@ export function TriviaModal({ question, teams, onAward }: {
   };
   const teamPill = (team: Team) => <TeamPill name={team.name} emoji={team.badgeEmoji} color={getTeamAccent(team).base} />;
   return <article className="card round-stage question-modal-card trivia-modal">
-    <QuestionModalHeader category={question.category} typeLabel="Trivia round · all teams" points={question.points} />
+    <QuestionModalHeader category={question.category} typeLabel={`Trivia round · ${singleTeam ? "one team" : "all teams"}`} points={question.points} />
     <div className="trivia-body">
       <header className="trivia-title">
         <div className="trivia-progress">
@@ -50,7 +59,19 @@ export function TriviaModal({ question, teams, onAward }: {
           </ol>
         </div>
         {question.prompt && <h2>{question.prompt}</h2>}
-        <small>{phase === "ask" ? "Everyone answers on paper · points available per team" : phase === "review" ? "Select every team with a correct answer, then advance to confirm." : "Each team earns its own share of the full reward."}</small>
+        {singleTeam && <label className="trivia-team-picker">Playing team
+          <select className="input" value={selectedTeamId} disabled={phase !== "ask" || index > 0} onChange={event => {
+            setSelectedTeamId(event.target.value);
+            setMarks({});
+            setReviewed([]);
+          }}>
+            {teams.map(team => <option key={team.id} value={team.id}>{team.name}</option>)}
+          </select>
+        </label>}
+        <small>{phase === "ask"
+          ? singleTeam ? `${roundTeams[0]?.name ?? "The selected team"} answers · ${question.points} points available` : "Everyone answers on paper · points available per team"
+          : phase === "review" ? singleTeam ? `Mark ${roundTeams[0]?.name ?? "the team"}'s answer, then advance to confirm.` : "Select every team with a correct answer, then advance to confirm."
+            : singleTeam ? "The selected team earns a share for each correct answer." : "Each team earns its own share of the full reward."}</small>
       </header>
       {phase === "summary" ? <div className="trivia-results">{results.map(result => {
         const team = teams.find(team => team.id === result.teamId)!;
@@ -61,7 +82,7 @@ export function TriviaModal({ question, teams, onAward }: {
             {phase === "review" && <p className="trivia-original">{item.prompt}</p>}</div>
           {item.imageData && <ExpandableImage src={item.imageData} alt={item.imageName || "Trivia image"} presentation="fluid" />}
         </section>
-        {phase === "review" && <div className="trivia-marking" role="group" aria-label="Teams with correct answers">{teams.map(team => {
+        {phase === "review" && <div className="trivia-marking" role="group" aria-label="Teams with correct answers">{roundTeams.map(team => {
           const correct = marks[item.id]?.includes(team.id) ?? false;
           return <button type="button" key={team.id} className="trivia-team-mark" aria-label={`${team.name} correct`} aria-pressed={correct} onClick={() => {
             setMarks(previous => ({ ...previous, [item.id]: correct ? (previous[item.id] ?? []).filter(id => id !== team.id) : [...(previous[item.id] ?? []), team.id] }));
@@ -74,9 +95,9 @@ export function TriviaModal({ question, teams, onAward }: {
       <div className="trivia-controls">
       {phase === "summary" ? <>
         <button type="button" className="button ghost" onClick={() => { setPhase("review"); setIndex(0); }}>Back to review</button>
-        <button type="button" className="button question-reveal-answer" disabled={!complete || !teams.length} onClick={() => {
+        <button type="button" className="button question-reveal-answer" disabled={!complete || !roundTeams.length} onClick={() => {
           if (awarding.current) return;
-          awarding.current = true; onAward(marks, reviewed);
+          awarding.current = true; onAward(marks, reviewed, singleTeam ? selectedTeamId : undefined);
         }}>Award points &amp; finish</button>
       </> : <>
         {phase === "review" && <button type="button" className="button ghost" onClick={() => setPhase("ask")}>Back to questions</button>}

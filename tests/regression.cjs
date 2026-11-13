@@ -81,7 +81,7 @@ test('removing a reveal image clears all image-specific authoring state but keep
 });
 
 test('trivia rewards every team independently and requires all answers reviewed', () => {
-  const { getTriviaResults, isTriviaReviewed } = projectLoader()('@/lib/trivia');
+  const { getTriviaResults, getTriviaTeamIds, isTriviaReviewed } = projectLoader()('@/lib/trivia');
   const { getQuestionIssues } = projectLoader()('@/lib/questionValidation');
   const question = { type:'trivia', points:300, triviaItems:[
     {id:'1',prompt:'First?',answer:'Yes'}, {id:'2',prompt:'Second?',answer:'Yes'}, {id:'3',prompt:'Third?',answer:'Yes'},
@@ -95,6 +95,12 @@ test('trivia rewards every team independently and requires all answers reviewed'
   assert.equal(isTriviaReviewed(question, ['1','2']), false);
   assert.equal(isTriviaReviewed(question, ['1','2','3']), true);
   assert.equal(isTriviaReviewed({triviaItems:[]}, []), false);
+  assert.deepEqual(getTriviaTeamIds(question, ['a','b','a'], 'b'), ['a','b']);
+  assert.deepEqual(getTriviaTeamIds({...question,triviaMode:'single'}, ['a','b','c'], 'b'), ['b']);
+  assert.deepEqual(getTriviaTeamIds({...question,triviaMode:'single'}, ['a','b','c'], 'missing'), ['a']);
+  assert.deepEqual(getTriviaResults({...question,triviaMode:'single'}, getTriviaTeamIds({...question,triviaMode:'single'}, ['a','b','c'], 'b'), marks), [
+    {teamId:'b',correct:2,points:200},
+  ]);
   assert.deepEqual(getQuestionIssues(question), []);
   assert(getQuestionIssues({...question,triviaItems:[]}).length);
   assert(getQuestionIssues({...question,triviaItems:[{id:'1',prompt:'',answer:''},{id:'1',prompt:'x',answer:'y'}]}).length);
@@ -479,6 +485,26 @@ test('host countdowns are not random draws and mixed player draws do not repeat'
   assert.equal(result.randomSelections[2].playerId, 'p2');
 });
 
+test('standard partial credit validates answer counts and preserves the full point pool', () => {
+  const { getStandardAnswerCount, getStandardPoints } = projectLoader()('@/lib/standardScoring');
+  const { getQuestionIssues } = projectLoader()('@/lib/questionValidation');
+  const question = { type:'standard', prompt:'Song and artist?', answer:'A song · An artist', points:500 };
+  assert.equal(getStandardAnswerCount(question), 1, 'Existing quizzes retain full-or-no scoring');
+  assert.equal(getStandardPoints(question, 0), 0);
+  assert.equal(getStandardPoints(question, 1), 500);
+  for (let count=2; count<=12; count++) {
+    const split = { ...question, standardAnswerCount:count };
+    assert.equal(getStandardPoints(split, 0), 0);
+    assert.equal(getStandardPoints(split, count), 500, 'Full credit always awards the entire question value');
+    assert.deepEqual(getQuestionIssues(split), []);
+    for (let correct=1; correct<count; correct++) assert.equal(getStandardPoints(split, correct), Math.floor(500*correct/count));
+  }
+  assert.equal(getStandardPoints({...question, points:300, standardAnswerCount:2}, 1), 150);
+  assert.equal(getStandardPoints({...question, standardAnswerCount:3}, 2), 333);
+  for (const invalid of [0,-1,1.5,13,NaN]) assert(getQuestionIssues({...question, standardAnswerCount:invalid}).length);
+  for (const invalid of [-1,1.5,4,NaN]) assert.equal(getStandardPoints({...question, standardAnswerCount:3}, invalid), 0);
+});
+
 test('multiple choice accepts 2–12 complete options and validates the correct answer beyond D', () => {
   const { getQuestionIssues } = projectLoader()('@/lib/questionValidation');
   const base = { id: 'mcq', category: 'Test', points: 500, type: 'mcq', prompt: 'Choose one', answer: '' };
@@ -489,6 +515,27 @@ test('multiple choice accepts 2–12 complete options and validates the correct 
     assert(getQuestionIssues({ ...q, mcqOptions: [...q.mcqOptions.slice(0, -1), ' '] }).length);
   }
   for (const length of [0, 1, 13]) assert(getQuestionIssues({ ...base, mcqOptions: Array(length).fill('Answer'), mcqCorrectIndex: 0 }).length);
+});
+
+test('multiple choice shuffle keeps a stable permutation tied to source answer indexes', () => {
+  const { createMcqProgress, getMcqOptionOrder, prepareMcqProgress, pickMcqOption } = projectLoader()('@/lib/mcq');
+  const question = { type:'mcq', points:300, mcqShuffleOptions:true, mcqOptions:['A','B','C','D'], mcqCorrectIndexes:[2,3], mcqRequiredCorrect:2, mcqRotateOnMiss:true };
+  const prepared = prepareMcqProgress(question, createMcqProgress(), () => 0);
+  assert.deepEqual([...prepared.optionOrder].sort((a,b)=>a-b), [0,1,2,3]);
+  assert.notDeepEqual(prepared.optionOrder, [0,1,2,3]);
+  assert.strictEqual(prepareMcqProgress(question, prepared, () => .9), prepared, 'Reopening keeps the attempt order');
+  assert.deepEqual(getMcqOptionOrder(question, prepared), prepared.optionOrder);
+  const hit = pickMcqOption(question, prepared, 3, 'team-a');
+  assert.deepEqual(getMcqOptionOrder(question, hit.progress), prepared.optionOrder, 'Correct picks keep the displayed order');
+  const miss = pickMcqOption(question, hit.progress, 0, 'team-a');
+  assert.deepEqual(getMcqOptionOrder(question, miss.progress), prepared.optionOrder, 'Misses and rollover keep the displayed order');
+  const restored = JSON.parse(JSON.stringify(miss.progress));
+  assert.strictEqual(prepareMcqProgress(question, restored, () => .9), restored, 'Reloading a started round keeps its order');
+  assert.notDeepEqual(prepareMcqProgress(question, createMcqProgress(), () => .5).optionOrder, prepared.optionOrder, 'A new round can get a new order');
+  assert.deepEqual(getMcqOptionOrder({...question,mcqShuffleOptions:false}, prepared), [0,1,2,3]);
+  const resized = prepareMcqProgress({...question,mcqOptions:['A','B','C']}, prepared, () => .5);
+  assert.equal(resized.optionOrder.length, 3);
+  assert.deepEqual([...resized.optionOrder].sort((a,b)=>a-b), [0,1,2]);
 });
 
 test('multi-answer MCQ shares an exact point pool and rejects repeat picks', () => {

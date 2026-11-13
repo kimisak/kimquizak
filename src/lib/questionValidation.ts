@@ -4,6 +4,7 @@ import type { Question } from "@/lib/types";
 import { parseStreetViewSource } from "@/lib/geoguesser";
 import { extractYouTubeId } from "@/lib/youtube";
 import { getImageRevealAreas, getImageAreaPlayableIndexes } from "@/lib/imageReveal";
+import { STANDARD_MAX_ANSWERS } from "@/lib/standardScoring";
 
 function hasText(value: string | null | undefined): boolean {
   return Boolean(value?.trim());
@@ -88,6 +89,10 @@ export function getQuestionIssues(question: Question): string[] {
 
   if (!hasText(question.prompt) && !question.imageData) issues.push("Add a question or image");
   if (!hasText(question.answer) && !question.answerImageData) issues.push("Add the answer");
+  if (type === "standard" && question.standardAnswerCount !== undefined
+    && (!Number.isInteger(question.standardAnswerCount) || question.standardAnswerCount < 1 || question.standardAnswerCount > STANDARD_MAX_ANSWERS)) {
+    issues.push(`Choose between 1 and ${STANDARD_MAX_ANSWERS} answers for split scoring`);
+  }
   return issues;
 }
 

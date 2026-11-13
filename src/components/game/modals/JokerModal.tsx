@@ -148,7 +148,8 @@ export function JokerModal({
             <div className="joker-rule">
               <span aria-hidden>🎩</span>
               <p>
-                <strong>Correct moves up one level; a miss moves down one.</strong> The Joker jumps directly to level 6 and 100% of {maximumReward} points. {rotateInfo ? "A miss also passes play to the next team." : "The same team stays in control after a miss."}
+                Correct: move up one level. The Joker jumps to level 6 and {maximumReward} points.
+                <strong className="question-rule-consequence"><span className="question-rule-warning">Wrong answer:</span> move down one level. {rotateInfo ? "Play passes to the next team." : "The same team keeps playing."}</strong>
               </p>
             </div>
             <div className="joker-remaining">

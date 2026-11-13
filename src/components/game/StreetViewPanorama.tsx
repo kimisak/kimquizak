@@ -77,10 +77,11 @@ type Props = {
   interaction: "fixed" | "look" | "explore";
   className?: string;
   onReadyChange?: (ready: boolean) => void;
+  onErrorChange?: (error: string | null) => void;
   allowZoom?: boolean;
 };
 
-export function StreetViewPanorama({ sourceUrl, interaction, className = "", onReadyChange, allowZoom = false }: Props) {
+export function StreetViewPanorama({ sourceUrl, interaction, className = "", onReadyChange, onErrorChange, allowZoom = false }: Props) {
   const source = useMemo(() => parseStreetViewSource(sourceUrl), [sourceUrl]);
   const lat = source?.lat;
   const lng = source?.lng;
@@ -146,17 +147,22 @@ export function StreetViewPanorama({ sourceUrl, interaction, className = "", onR
         }
         if (status === "OK") {
           if (interactionRef.current === "look" && !frozenPanoRef.current) frozenPanoRef.current = panorama.getPano();
-          setError(""); setState("ready"); onReadyChange?.(true);
+          setError(""); setState("ready"); onReadyChange?.(true); onErrorChange?.(null);
         }
-        else if (status) { setState("unavailable"); onReadyChange?.(false); }
+        else if (status) {
+          setState("unavailable"); onReadyChange?.(false);
+          onErrorChange?.("No Street View panorama was found here.");
+        }
       };
       listener = panorama.addListener("status_changed", updateStatus);
       updateStatus();
     }).catch((reason: unknown) => {
       if (!cancelled) {
-        setError(reason instanceof Error ? reason.message : "Google Maps could not be loaded");
+        const message = reason instanceof Error ? reason.message : "Google Maps could not be loaded";
+        setError(message);
         setState("unavailable");
         onReadyChange?.(false);
+        onErrorChange?.(message);
       }
     });
     return () => {
@@ -167,7 +173,7 @@ export function StreetViewPanorama({ sourceUrl, interaction, className = "", onR
       panoramaRef.current = null;
       frozenPanoRef.current = null;
     };
-  }, [lat, lng, pano, heading, pitch, zoom, allowZoom, onReadyChange]);
+  }, [lat, lng, pano, heading, pitch, zoom, allowZoom, onReadyChange, onErrorChange]);
 
   useEffect(() => {
     if (interaction === "fixed" && interactionRef.current !== "fixed" && panoramaRef.current) frozenPovRef.current = panoramaRef.current.getPov();

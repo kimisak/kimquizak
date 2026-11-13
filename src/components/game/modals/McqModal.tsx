@@ -1,7 +1,7 @@
 'use client';
 
-import type { CSSProperties } from "react";
-import { MCQ_MAX_OPTIONS, getMcqCorrectIndexes, getMcqRequiredCorrect, getMcqPickPoints } from "@/lib/mcq";
+import { useId, useRef, useState, type CSSProperties, type PointerEvent } from "react";
+import { MCQ_MAX_OPTIONS, getMcqCorrectIndexes, getMcqOptionOrder, getMcqRequiredCorrect, getMcqPickPoints } from "@/lib/mcq";
 import type { Question, McqProgress, Team } from "@/lib/types";
 import { ExpandableImage } from "./ExpandableImage";
 import { QuestionModalHeader } from "./QuestionModalHeader";
@@ -18,6 +18,7 @@ type Props = {
   teams: Team[];
   onSelect: (idx: number) => void;
   onContinue: () => void;
+  onMediaWidthChange?: (width: number | undefined) => void;
 };
 
 const OPTION_PALETTE = [
@@ -47,8 +48,10 @@ export function McqModal({
   teams,
   onSelect,
   onContinue,
+  onMediaWidthChange,
 }: Props) {
   const options = question.mcqOptions?.slice(0, MCQ_MAX_OPTIONS) ?? [];
+  const optionOrder = getMcqOptionOrder(question, progress);
   const teamName = answeringTeamName || currentTeamName;
   const teamColor = answeringTeamName ? answeringTeamColor : currentTeamColor;
   const teamEmoji = answeringTeamName ? answeringTeamEmoji : currentTeamEmoji;
@@ -67,6 +70,31 @@ export function McqModal({
   const nextPoints = getMcqPickPoints(question, progress.found.length);
   const totalAwarded = Object.values(progress.pointsByTeam).reduce((sum, points) => sum + points, 0);
   const rolloverEnabled = question.mcqRotateOnMiss === true;
+  const stageRef = useRef<HTMLElement>(null);
+  const answersId = useId();
+  const automaticWidth = options.length > 4 ? 28 : 36;
+  const [mediaWidth, setMediaWidth] = useState(question.mcqImageWidthPercent ?? automaticWidth);
+  const [resizing, setResizing] = useState(false);
+  const currentWidth = useRef(mediaWidth);
+  const clampWidth = (value: number) => Math.max(18, Math.min(46, Math.round(value)));
+  const updateWidth = (value: number, save = false) => {
+    const next = clampWidth(value);
+    currentWidth.current = next;
+    setMediaWidth(next);
+    if (save) onMediaWidthChange?.(next);
+  };
+  const moveDivider = (event: PointerEvent<HTMLDivElement>) => {
+    if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
+    const bounds = stageRef.current?.getBoundingClientRect();
+    if (bounds) updateWidth((bounds.right - event.clientX) / bounds.width * 100);
+  };
+  const finishResize = (event: PointerEvent<HTMLDivElement>) => {
+    if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
+    event.currentTarget.releasePointerCapture(event.pointerId);
+    setResizing(false);
+    onMediaWidthChange?.(currentWidth.current);
+  };
+  const longOptions = options.some(option => option.length > 30);
 
   return (
     <article className={`card round-stage round-mcq question-modal-card mcq-question-modal${options.length > 4 ? " has-many-options" : ""}${resolved ? " answer-visible" : ""}`}>
@@ -81,20 +109,21 @@ export function McqModal({
       />
 
       <div className="question-modal-scroll mcq-modal-scroll">
-        <section className={`mcq-stage${displayedImage ? " has-image" : ""}`}>
-          <div className="mcq-main">
+        <section ref={stageRef} className={`mcq-stage${displayedImage ? " has-image" : ""}${longOptions ? " has-long-options" : ""}${resizing ? " is-resizing" : ""}`} style={{ "--mcq-media-width": `${clampWidth(mediaWidth)}%` } as CSSProperties}>
+          <div id={answersId} className="mcq-main">
             <header className="mcq-prompt">
               <span className="question-modal-eyebrow">{resolved ? "Correct answers" : "Choose an answer"}</span>
               <h1 className={getPromptDensity(question.prompt)}>{question.prompt || "No question entered yet."}</h1>
             </header>
 
             <div className={`mcq-options option-count-${options.length}`}>
-              {options.map((option, index) => {
-                const eliminatedOption = progress.eliminated.includes(index);
-                const foundOption = progress.found.includes(index);
-                const correctOption = foundOption || (resolved && correctIndexes.includes(index));
-                const mutedOption = resolved && !correctIndexes.includes(index);
-                const palette = OPTION_PALETTE[index % OPTION_PALETTE.length];
+              {optionOrder.map((sourceIndex, displayIndex) => {
+                const option = options[sourceIndex];
+                const eliminatedOption = progress.eliminated.includes(sourceIndex);
+                const foundOption = progress.found.includes(sourceIndex);
+                const correctOption = foundOption || (resolved && correctIndexes.includes(sourceIndex));
+                const mutedOption = resolved && !correctIndexes.includes(sourceIndex);
+                const palette = OPTION_PALETTE[displayIndex % OPTION_PALETTE.length];
                 const stateClass = correctOption
                   ? " is-correct"
                   : eliminatedOption
@@ -106,26 +135,58 @@ export function McqModal({
                 return (
                   <button
                     className={`mcq-option${stateClass}`}
-                    key={index}
+                    key={sourceIndex}
                     type="button"
                     disabled={eliminatedOption || foundOption || resolved}
-                    onClick={() => onSelect(index)}
+                    onClick={() => onSelect(sourceIndex)}
                     style={{
                       "--mcq-option-base": palette.base,
                       "--mcq-option-glow": palette.glow,
                     } as CSSProperties}
                   >
-                    <span className="mcq-option-letter">{String.fromCharCode(65 + index)}</span>
+                    <span className="mcq-option-letter" aria-label={correctOption ? (foundOption ? "Found" : "Correct") : undefined}>
+                      {correctOption ? "✓" : String.fromCharCode(65 + displayIndex)}
+                    </span>
                     <strong>{option || "(empty option)"}</strong>
-                    {eliminatedOption && !correctOption && <small>Passed</small>}
-                    {correctOption && <small>{foundOption && !resolved ? "Found" : "Correct"}</small>}
                   </button>
                 );
               })}
             </div>
           </div>
 
-          {displayedImage && (
+          {displayedImage && <>
+            <div
+              className="mcq-media-resizer"
+              role="separator"
+              tabIndex={0}
+              aria-label="Resize question image"
+              aria-controls={answersId}
+              aria-orientation="vertical"
+              aria-valuemin={18}
+              aria-valuemax={46}
+              aria-valuenow={clampWidth(mediaWidth)}
+              aria-valuetext={`${clampWidth(mediaWidth)} percent image width`}
+              title="Drag to resize the image · arrow keys to adjust · double-click to reset"
+              onPointerDown={event => {
+                if (event.button !== 0) return;
+                event.preventDefault();
+                event.currentTarget.focus();
+                event.currentTarget.setPointerCapture(event.pointerId);
+                setResizing(true);
+              }}
+              onPointerMove={moveDivider}
+              onPointerUp={finishResize}
+              onPointerCancel={finishResize}
+              onDoubleClick={() => {
+                updateWidth(automaticWidth);
+                onMediaWidthChange?.(undefined);
+              }}
+              onKeyDown={event => {
+                if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+                event.preventDefault();
+                updateWidth(event.key === "Home" ? 18 : event.key === "End" ? 46 : currentWidth.current + (event.key === "ArrowLeft" ? 2 : -2), true);
+              }}
+            />
             <ExpandableImage
               key={resolved && question.answerImageData ? "answer-image" : "question-image"}
               src={displayedImage.src}
@@ -134,7 +195,7 @@ export function McqModal({
               presentation="fluid"
               className="mcq-media"
             />
-          )}
+          </>}
         </section>
       </div>
 
@@ -142,10 +203,10 @@ export function McqModal({
         {!resolved ? <>
           <div className="mcq-rule" aria-live="polite">
             <span aria-hidden>✦</span>
-            <p><strong>Find {required} correct {required === 1 ? "answer" : "answers"}.</strong>{" "}
-              Correct picks earn points and keep your turn. {rolloverEnabled
-                ? "A miss passes to the next team."
-                : "A miss ends the question."} Earned points are kept.</p>
+            <p>Find {required} correct {required === 1 ? "answer" : "answers"}. Correct picks earn points and keep your turn.
+              <strong className="question-rule-consequence"><span className="question-rule-warning">Wrong answer:</span>{" "}{rolloverEnabled
+                ? "play passes to the next team."
+                : "the question ends."} Earned points are kept.</strong></p>
           </div>
           <div className="mcq-remaining" aria-live="polite">
             <strong>{progress.found.length}/{required}</strong>

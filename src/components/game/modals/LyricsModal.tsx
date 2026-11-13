@@ -284,7 +284,7 @@ export function LyricsModal({
         middle={!showAnswer ? (
           <div className="text-grid-action-hint">
             <span aria-hidden>✦</span>
-            <p><strong>Choose a tile.</strong> A cranberry pass tile moves play to the next team without changing the score.</p>
+            <p>Choose a tile.<strong className="question-rule-consequence">A pass tile passes play to the next team. No points are lost.</strong></p>
             {passCount > 0 && <small>{passCount} found</small>}
           </div>
         ) : null}

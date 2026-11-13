@@ -1,0 +1,3 @@
+# Local source material that must not be uploaded with CLI deployments.
+/private/
+*.Zone.Identifier

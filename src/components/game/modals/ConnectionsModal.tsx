@@ -84,7 +84,13 @@ export function ConnectionsModal({ question, progress, teams, onAction, onContin
       </>}
     </div>
     <footer className="question-modal-actions connections-actions">
-      <span>{progress.solved.length}/{required} found · {limit ? `${Math.max(0, limit - progress.mistakes)} mistakes left` : `${progress.mistakes} mistakes`}</span>
+      <div className="connections-footer-copy">
+        <span>{progress.solved.length}/{required} found · {limit ? `${Math.max(0, limit - progress.mistakes)} mistakes left` : `${progress.mistakes} mistakes`}</span>
+        {!progress.finished && <strong className="question-rule-consequence">
+          <span className="question-rule-warning">{hasTimer ? "Wrong answer or timeout:" : "Wrong answer:"}</span>{" "}{question.connectionsRotateOnMiss !== false ? "uses a mistake and passes play to the next team." : "uses a mistake; the same team keeps playing."}
+          {limit > 0 && " The round ends when no mistakes remain."}
+        </strong>}
+      </div>
       <div>{progress.finished ? <>{!finishedRevealing && <button className="button ghost" onClick={() => setRevealed(remainingGroups.length)}>Reveal all now</button>}<button className="button" disabled={!finishedRevealing} onClick={onContinue}>Continue</button></> : <>
         {progress.started && <><button className="button ghost" onClick={() => { setSelected([]); onAction({ type: "shuffle" }); }}>Shuffle</button><button className="button ghost" disabled={!selected.length} onClick={() => setSelected([])}>Clear</button><button className="button" disabled={selected.length !== 4 || attempted} onClick={() => onAction({ type: "guess", tiles: selected })}>Submit group</button></>}
         <button className="button ghost" onClick={() => { if (window.confirm("End this round and reveal the remaining connections? Earned points will be kept.")) onAction({ type: "end" }); }}>End round</button>

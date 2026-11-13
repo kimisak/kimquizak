@@ -1,17 +1,15 @@
 'use client';
 
 import { TeamEmoji } from "./TeamEmoji";
-import { HostCutscene } from "./HostCutscene";
 import { PlayerPill } from "./PlayerPill";
-import { useCallback, useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
+import { Fragment, useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 import type { HostProfile, PlayerBondKind, ScoreTransaction, Team } from "@/lib/types";
 import { getTeamAccent, getTeamMarker } from "@/lib/teamPresentation";
 import { normalizePlayerBondKind } from "@/lib/playerBonds";
-import { createPortal } from "react-dom";
+import { createPortal, flushSync } from "react-dom";
 import { getGestureShape, trackPocketShake, type GesturePoint, type PocketShake } from "@/lib/pocketShake";
 import pocketStyles from "./PocketSpill.module.css";
 import { HOST_HOME_ID, HOST_PROFILE_ID } from "@/lib/hostProfile";
-import { chooseHostScene, type HostScene } from "@/lib/hostScenes";
 
 type Props = {
   teams: Team[];
@@ -63,7 +61,6 @@ type ActiveDrag = {
 
 type TeamEffectKind = "beer" | "snow" | "confetti";
 type PlayerEncounterKind = PlayerBondKind | "high-five";
-type HostHangoutPhase = "talking" | "drinking" | "laughing" | "relationship" | "returning";
 
 const playgroundProps: Array<{ kind: TeamEffectKind; emoji: string; label: string }> = [
   { kind: "beer", emoji: "🍺", label: "Beer shower" },
@@ -87,25 +84,6 @@ const bondVisuals: Record<PlayerEncounterKind, { moods: readonly [string, string
   parents: { moods: ["🥹", "😴"], particles: ["👶", "🍼", "🧸", "💩", "👶", "🍼", "💛"] },
   "drinking-buddies": { moods: ["🥴", "🤪"], particles: ["🍻", "🍺", "🥂", "🍾", "🍻", "🍺", "🥂"] },
   "high-five": { moods: ["🙌", "🙌"], particles: ["✨", "✋", "💫", "🙌", "✨", "✋", "💥"] },
-};
-
-const boothDrinks = [
-  { emoji: "🍺", label: "Beer!" },
-  { emoji: "🥂", label: "Champagne!" },
-  { emoji: "🍷", label: "Wine!" },
-] as const;
-
-type HostHangout = {
-  scene: HostScene;
-  playerEmoji: string;
-  playerColor: string;
-  step: number;
-  names: { host: string; player: string; team: string };
-  playerId: string;
-  phase: HostHangoutPhase;
-  epoch: number;
-  drink: (typeof boothDrinks)[number];
-  bondKind?: PlayerBondKind;
 };
 
 const getNeutralMood = (playerId: string) => {
@@ -146,6 +124,7 @@ export function Leaderboard({ teams, hostProfile, onAdjust, onSet, history = [],
   const activeDrag = useRef<ActiveDrag | null>(null);
   const angerTimers = useRef(new Map<string, number>());
   const returnAnimations = useRef(new Map<string, Animation>());
+  const lineupAnimations = useRef(new Map<string, Animation>());
   const returnMoodTimers = useRef(new Map<string, number>());
   const [teamEffects, setTeamEffects] = useState<Record<string, { kind: TeamEffectKind; epoch: number; particleCount: number }>>({});
   const teamEffectTimers = useRef(new Map<string, number>());
@@ -155,13 +134,12 @@ export function Leaderboard({ teams, hostProfile, onAdjust, onSet, history = [],
   const visitTimers = useRef(new Map<string, number>());
   const teamElements = useRef(new Map<string, HTMLDivElement>());
   const hostBoothElement = useRef<HTMLDivElement | null>(null);
-  const boothDrinkIndex = useRef(-1);
-  const previousHostScene = useRef<string | undefined>(undefined);
-  const finishHostScene = useRef<(() => void) | null>(null);
-  const hostHangoutRef = useRef<HostHangout | null>(null);
-  const hostVisitQueue = useRef<string[]>([]);
-  const [hostHangout, setHostHangout] = useState<HostHangout | null>(null);
-  const [queuedHostPlayerIds, setQueuedHostPlayerIds] = useState<string[]>([]);
+  const playerHomeElements = useRef(new Map<string, HTMLLIElement>());
+  const playerHomeWidths = useRef(new Map<string, number>());
+  const [returningGuest, setReturningGuest] = useState<{ playerId: string; width: number } | null>(null);
+  const [hostGuestId, setHostGuestId] = useState<string | null>(null);
+  const [hostPlayerList, setHostPlayerList] = useState<HTMLUListElement | null>(null);
+  const hostGuest = teams.flatMap(team => team.players).find(player => player.id === hostGuestId && player.name.trim());
   const [bondReactions, setBondReactions] = useState<Record<string, { kind: PlayerEncounterKind; epoch: number; role: "dragged" | "target" }>>({});
   const bondTimers = useRef(new Map<string, number>());
   const [spectatorReactions, setSpectatorReactions] = useState<Record<string, number>>({});
@@ -177,31 +155,13 @@ export function Leaderboard({ teams, hostProfile, onAdjust, onSet, history = [],
     angerTimers.current.forEach((timer) => window.clearTimeout(timer));
     returnMoodTimers.current.forEach((timer) => window.clearTimeout(timer));
     returnAnimations.current.forEach((animation) => animation.cancel());
+    lineupAnimations.current.forEach((animation) => animation.cancel());
     teamEffectTimers.current.forEach((timer) => window.clearTimeout(timer));
     visitTimers.current.forEach((timer) => window.clearTimeout(timer));
     bondTimers.current.forEach((timer) => window.clearTimeout(timer));
     spectatorTimers.current.forEach((timer) => window.clearTimeout(timer));
     toyDragCleanup.current?.();
   }, []);
-
-  const advanceHostScene = useCallback(() => {
-    const current = hostHangoutRef.current;
-    if (!current || current.phase === "returning") return;
-    if (current.step >= current.scene.lines.length) {
-      finishHostScene.current?.();
-      return;
-    }
-    const step = current.step + 1;
-    const next = { ...current, step, phase: current.scene.lines[step]?.mood ?? "laughing" as HostHangoutPhase };
-    hostHangoutRef.current = next;
-    setHostHangout(next);
-  }, []);
-
-  useEffect(() => {
-    if (!hostHangout || hostHangout.phase === "returning") return;
-    const timer = window.setTimeout(advanceHostScene, 3200);
-    return () => window.clearTimeout(timer);
-  }, [hostHangout, advanceHostScene]);
 
   const spillPockets = (drag: ActiveDrag) => {
     const schedule = (callback: () => void, delay: number) => {
@@ -444,10 +404,12 @@ export function Leaderboard({ teams, hostProfile, onAdjust, onSet, history = [],
     if (activeDrag.current) return;
     event.preventDefault();
     const element = event.currentTarget;
-    const returningAnimation = returnAnimations.current.get(playerId);
+    const returningAnimation = returnAnimations.current.get(playerId) ?? lineupAnimations.current.get(playerId);
     const visibleRect = returningAnimation ? element.getBoundingClientRect() : null;
     returningAnimation?.cancel();
     returnAnimations.current.delete(playerId);
+    lineupAnimations.current.delete(playerId);
+    if (returningGuest?.playerId === playerId) setReturningGuest(null);
     const origin = element.getBoundingClientRect();
     const scrollAnchor = element.parentElement!;
     const anchor = scrollAnchor.getBoundingClientRect();
@@ -669,85 +631,32 @@ export function Leaderboard({ teams, hostProfile, onAdjust, onSet, history = [],
     drag.collisions = collisions;
   };
 
-  function runHostHangout(
-    playerId: string,
-    element: HTMLLIElement,
-    origin: DOMRect,
-    initialX: number,
-    initialY: number,
-  ) {
-    const boothRect = hostBoothElement.current?.getBoundingClientRect();
-    if (!boothRect || !element.isConnected) return;
-    effectEpoch.current += 1;
-    const epoch = effectEpoch.current;
-    const hostBondKind = findBondKind(playerId, HOST_PROFILE_ID) ?? undefined;
-    if (hostBondKind) triggerBondEncounter(playerId, HOST_PROFILE_ID, hostBondKind);
-    boothDrinkIndex.current = (boothDrinkIndex.current + 1) % boothDrinks.length;
-    const drink = boothDrinks[boothDrinkIndex.current];
-    const hostRect = playerElements.current.get(HOST_PROFILE_ID)?.getBoundingClientRect();
-    const boothLeft = Math.min(
-      boothRect.right - origin.width - 14,
-      Math.max(boothRect.left + 14, (hostRect?.right ?? boothRect.left + 150) + 12),
-    );
-    const boothTop = Math.min(
-      boothRect.bottom - origin.height - 9,
-      Math.max(boothRect.top + 9, hostRect?.top ?? boothRect.top + 12),
-    );
-    const boothX = boothLeft - origin.left;
-    const boothY = boothTop - origin.top;
-    const scene = chooseHostScene(previousHostScene.current);
-    previousHostScene.current = scene.id;
-    const team = teams.find(team => team.players.some(player => player.id === playerId));
-    const player = team?.players.find(player => player.id === playerId);
-    setTravelMoods((current) => {
-      const next = { ...current };
-      delete next[playerId];
-      delete next[HOST_PROFILE_ID];
-      return next;
-    });
-    const nextHangout: HostHangout = {
-      playerId, phase: scene.lines[0].mood, epoch, drink, bondKind: hostBondKind,
-      scene, step: 0,
-      playerEmoji: team ? getTeamMarker(team) : "🙂",
-      playerColor: team ? getTeamAccent(team).base : "#c99c4a",
-      names: { host: hostProfile?.name.trim() || "Host", player: player?.name.trim() || "Spiller", team: team?.name || "laget" },
-    };
-    hostHangoutRef.current = nextHangout;
-    setHostHangout(nextHangout);
-    const arrival = element.animate([
-      { transform: `translate3d(${initialX}px,${initialY}px,0) scale(1.04)` },
-      { transform: `translate3d(${boothX}px,${boothY}px,0) scale(1.04)` },
-    ], { duration: 450, fill: "both", easing: "ease-out" });
-    returnAnimations.current.set(playerId, arrival);
-    finishHostScene.current = () => {
-      const current = hostHangoutRef.current;
-      if (!current || current.epoch !== epoch || current.phase === "returning") return;
-      const next = { ...current, phase: "returning" as const };
-      hostHangoutRef.current = next;
-      setHostHangout(next);
-      const start = getComputedStyle(element).transform;
-      arrival.cancel();
+  const movePlayerLineup = (update: () => void) => {
+    const positions = [...playerElements.current.entries()]
+      .filter(([id, element]) => id !== activeDrag.current?.playerId
+        && !returnAnimations.current.has(id)
+        && element.closest(".scoreboard-team"))
+      .map(([id, element]) => ({ id, before: element.getBoundingClientRect() }));
+    lineupAnimations.current.forEach(animation => animation.cancel());
+    lineupAnimations.current.clear();
+    flushSync(update);
+    positions.forEach(({ id, before }) => {
+      const element = playerElements.current.get(id);
+      if (!element?.closest(".scoreboard-team")) return;
+      const after = element.getBoundingClientRect();
+      const x = before.left - after.left;
+      const y = before.top - after.top;
+      if (Math.hypot(x, y) < 1) return;
       const animation = element.animate([
-        { transform: start },
-        { transform: "translate3d(0,0,0) scale(1) rotate(0deg)" },
-      ], { duration: 600, fill: "both", easing: "ease-in-out" });
-      returnAnimations.current.set(playerId, animation);
+        { transform: `translate(${x}px,${y}px)` },
+        { transform: "translate(0,0)" },
+      ], { duration: 450, easing: "cubic-bezier(.22,.61,.36,1)" });
+      lineupAnimations.current.set(id, animation);
       void animation.finished.then(() => {
-        if (returnAnimations.current.get(playerId) !== animation) return;
-        animation.cancel();
-        returnAnimations.current.delete(playerId);
-        if (hostHangoutRef.current?.epoch !== epoch) return;
-        finishHostScene.current = null;
-        hostHangoutRef.current = null;
-        setHostHangout(null);
-        const nextPlayerId = hostVisitQueue.current.shift();
-        setQueuedHostPlayerIds([...hostVisitQueue.current]);
-        if (!nextPlayerId) return;
-        const nextElement = playerElements.current.get(nextPlayerId);
-        if (nextElement) runHostHangout(nextPlayerId, nextElement, nextElement.getBoundingClientRect(), 0, 0);
+        if (lineupAnimations.current.get(id) === animation) lineupAnimations.current.delete(id);
       }).catch(() => undefined);
-    };
-  }
+    });
+  };
 
   const finishPlayerDrag = (
     pointerId: number,
@@ -793,47 +702,34 @@ export function Leaderboard({ teams, hostProfile, onAdjust, onSet, history = [],
     const boothRect = hostBoothElement.current?.getBoundingClientRect();
     const visitedHostBooth = drag.playerId !== HOST_PROFILE_ID
       && boothRect
-      && releaseCenter.x >= boothRect.left
-      && releaseCenter.x <= boothRect.right
-      && releaseCenter.y >= boothRect.top
-      && releaseCenter.y <= boothRect.bottom;
+      && releaseClientX >= boothRect.left
+      && releaseClientX <= boothRect.right
+      && releaseClientY >= boothRect.top
+      && releaseClientY <= boothRect.bottom;
     if (visitedHostBooth && boothRect) {
       setTravelMoods((current) => {
         const next = { ...current };
         delete next[drag.playerId];
         return next;
       });
-      if (hostHangoutRef.current) {
-        if (hostHangoutRef.current.playerId !== drag.playerId
-          && !hostVisitQueue.current.includes(drag.playerId)) {
-          hostVisitQueue.current.push(drag.playerId);
-          setQueuedHostPlayerIds([...hostVisitQueue.current]);
-
-          const queueReturn = element.animate([
-            {
-              transform: `translate3d(${drag.x}px,${drag.y}px,0) scale(1.035) rotate(${Math.max(-3, Math.min(3, drag.x / 38))}deg)`,
-            },
-            {
-              transform: `translate3d(${drag.x * 0.28}px,${drag.y * 0.28}px,0) scale(1.01) rotate(0deg)`,
-              offset: 0.72,
-            },
-            { transform: "translate3d(0,0,0) scale(1) rotate(0deg)" },
-          ], {
-            duration: Math.max(300, Math.min(720, 280 + Math.hypot(drag.x, drag.y))),
-            easing: "cubic-bezier(.2,.78,.22,1)",
-            fill: "both",
-          });
-          returnAnimations.current.set(drag.playerId, queueReturn);
-          void queueReturn.finished.then(() => {
-            if (returnAnimations.current.get(drag.playerId) !== queueReturn) return;
-            queueReturn.cancel();
-            returnAnimations.current.delete(drag.playerId);
-          }).catch(() => undefined);
-        }
-      } else {
-        runHostHangout(drag.playerId, element, drag.origin, drag.x, drag.y);
-      }
+      if (drag.playerId !== hostGuestId) playerHomeWidths.current.set(drag.playerId, drag.origin.width);
+      movePlayerLineup(() => {
+        setReturningGuest(null);
+        setHostGuestId(drag.playerId);
+      });
       return;
+    }
+    const returningToTeam = drag.playerId === hostGuestId;
+    let homeX = 0;
+    let homeY = 0;
+    if (returningToTeam) {
+      // Open the player's original slot before measuring the walking destination.
+      movePlayerLineup(() => setReturningGuest({ playerId: drag.playerId, width: playerHomeWidths.current.get(drag.playerId) ?? drag.origin.width }));
+      const home = playerHomeElements.current.get(drag.playerId)?.getBoundingClientRect();
+      if (home) {
+        homeX = home.left - drag.origin.left;
+        homeY = home.top - drag.origin.top;
+      }
     }
     const nearestBondedPlayer = [
       ...teams.flatMap((team) => team.players.map((player) => ({ player, teamId: team.id }))),
@@ -896,7 +792,7 @@ export function Leaderboard({ teams, hostProfile, onAdjust, onSet, history = [],
     const wasLaunched = releaseDistance >= 24 && releaseSpeed >= PLAYER_LAUNCH_SPEED_THRESHOLD;
     const wasDroppedFromAbove = drag.y <= -PLAYER_DROP_HEIGHT_THRESHOLD;
     const shouldFall = wasLaunched || wasDroppedFromAbove;
-    if (!visitedTeam && !shouldFall) {
+    if (!returningToTeam && !visitedTeam && !shouldFall) {
       // A normal reposition is not a throw. Return from every direction without
       // the exaggerated walk/fall sequence (especially for horizontal moves).
       const gentleDuration = Math.max(280, Math.min(700, 260 + releaseDistance * 1.05));
@@ -932,7 +828,7 @@ export function Leaderboard({ teams, hostProfile, onAdjust, onSet, history = [],
     }
     const rowRect = visitedTeam
       ? teamElements.current.get(visitedTeam.id)?.getBoundingClientRect()
-      : element.closest(".scoreboard-team")?.getBoundingClientRect();
+      : teamElements.current.get(drag.homeTeamId)?.getBoundingClientRect();
     const launchFlightMs = Math.max(220, Math.min(620, 150 + releaseSpeed * 190));
     const maxHorizontalLaunch = Math.min(460, Math.max(210, window.innerWidth * 0.32));
     const launchTravelX = Math.max(
@@ -952,15 +848,15 @@ export function Leaderboard({ teams, hostProfile, onAdjust, onSet, history = [],
         ? Math.max(rowFloorY, drag.y + 8)
         : Math.max(rowFloorY, drag.y + projectedFall)
       : drag.y;
-    const homeDistance = Math.hypot(projectedX, groundY);
+    const homeDistance = Math.hypot(projectedX - homeX, groundY - homeY);
     const duration = visitedTeam
       ? Math.max(1450, Math.min(3400, 1050 + homeDistance * 3.2))
       : Math.max(1250, Math.min(3200, 900 + homeDistance * 3));
     const releaseRotation = Math.max(-11, Math.min(11, releaseVelocityX * 8 + drag.x / 30));
     const at = (progress: number, step: number) => {
       const remaining = 1 - progress;
-      const x = projectedX * remaining;
-      const y = groundY * remaining - Math.abs(Math.sin(progress * Math.PI * 8)) * 5;
+      const x = homeX + (projectedX - homeX) * remaining;
+      const y = homeY + (groundY - homeY) * remaining - Math.abs(Math.sin(progress * Math.PI * 8)) * 5;
       const rotation = step % 2 === 0 ? -4 : 4;
       return `translate3d(${x}px,${y}px,0) scale(1) rotate(${rotation}deg)`;
     };
@@ -1006,7 +902,7 @@ export function Leaderboard({ teams, hostProfile, onAdjust, onSet, history = [],
       { transform: at(0.54, 2), offset: visitedTeam ? 0.82 : 0.68 },
       { transform: at(0.7, 3), offset: visitedTeam ? 0.89 : 0.78 },
       { transform: at(0.84, 4), offset: visitedTeam ? 0.95 : 0.88 },
-      { transform: "translate3d(0,0,0) scale(1) rotate(0deg)", offset: 1 },
+      { transform: `translate3d(${homeX}px,${homeY}px,0) scale(1) rotate(0deg)`, offset: 1 },
     ];
     const animation = element.animate([
       ...fallAndRecover,
@@ -1026,6 +922,10 @@ export function Leaderboard({ teams, hostProfile, onAdjust, onSet, history = [],
       animation.cancel();
       returnAnimations.current.delete(drag.playerId);
       returnMoodTimers.current.delete(drag.playerId);
+      if (returningToTeam) {
+        setHostGuestId(current => current === drag.playerId ? null : current);
+        setReturningGuest(current => current?.playerId === drag.playerId ? null : current);
+      }
       setTravelMoods((current) => {
         const next = { ...current };
         delete next[drag.playerId];
@@ -1083,16 +983,7 @@ export function Leaderboard({ teams, hostProfile, onAdjust, onSet, history = [],
         const hostTeamEffect = teamEffects[HOST_HOME_ID];
         const hostBondReaction = bondReactions[HOST_PROFILE_ID];
         const hostBondVisual = hostBondReaction ? bondVisuals[hostBondReaction.kind] : null;
-        const hangoutMood = hostHangout?.phase === "talking"
-          ? "🗣️"
-          : hostHangout?.phase === "drinking"
-            ? hostHangout.drink.emoji
-            : hostHangout?.phase === "laughing"
-              ? "😂"
-              : hostHangout?.phase === "relationship" && hostHangout.bondKind
-                ? bondVisuals[hostHangout.bondKind].moods[1]
-              : hostHangout?.phase === "returning" ? "👋" : null;
-        const hostMood = hangoutMood ?? (hostTravelMood === "nervous"
+        const hostMood = (hostTravelMood === "nervous"
           ? "😬"
           : hostTravelMood === "dizzy"
             ? "😵‍💫"
@@ -1111,11 +1002,7 @@ export function Leaderboard({ teams, hostProfile, onAdjust, onSet, history = [],
                         : hostTeamEffect?.kind === "confetti" ? "🥳" : "😎");
         const hostMoodClass = hostTravelMood === "nervous" || hostTravelMood === "dizzy"
           ? hostTravelMood
-          : hostHangout?.phase
-            ? hostHangout.phase === "relationship" && hostHangout.bondKind
-              ? hostHangout.bondKind
-              : `booth-${hostHangout.phase}`
-            : hostBondReaction?.kind ?? hostTravelMood ?? (angryPlayers[HOST_PROFILE_ID]
+          : hostBondReaction?.kind ?? hostTravelMood ?? (angryPlayers[HOST_PROFILE_ID]
               ? "angry"
               : hostTeamEffect?.kind === "beer"
                 ? "tipsy"
@@ -1125,9 +1012,8 @@ export function Leaderboard({ teams, hostProfile, onAdjust, onSet, history = [],
         return (
           <div
             ref={hostBoothElement}
-            data-hangout-phase={hostHangout?.phase}
-            data-hangout-player-id={hostHangout?.playerId}
-            className={`scoreboard-host-booth${hostHangout ? " is-entertaining" : ""}${draggedPlayerId && draggedPlayerId !== HOST_PROFILE_ID ? " is-ready" : ""}${toyDrag?.targetTeamId === HOST_HOME_ID ? " is-prop-target" : ""}`}
+            data-guest-player-id={hostGuest?.id}
+            className={`scoreboard-host-booth${hostGuest ? " has-guest" : ""}${draggedPlayerId && draggedPlayerId !== HOST_PROFILE_ID ? " is-ready" : ""}${toyDrag?.targetTeamId === HOST_HOME_ID ? " is-prop-target" : ""}`}
           >
             {hostTeamEffect && (
               <div key={`${hostTeamEffect.kind}-${hostTeamEffect.epoch}`} className={`scoreboard-emoji-shower is-${hostTeamEffect.kind}`} aria-hidden>
@@ -1151,7 +1037,7 @@ export function Leaderboard({ teams, hostProfile, onAdjust, onSet, history = [],
               </div>
             )}
             <span className="scoreboard-host-label">Host booth</span>
-            <ul className="scoreboard-player-list" aria-label="Host">
+            <ul ref={setHostPlayerList} className="scoreboard-player-list" aria-label="Host and guest">
               <PlayerPill
                 name={hostProfile.name.trim()}
                 marker={hostProfile.emoji}
@@ -1196,19 +1082,6 @@ export function Leaderboard({ teams, hostProfile, onAdjust, onSet, history = [],
 
               </PlayerPill>
             </ul>
-            {hostHangout && hostHangout.phase !== "returning" && (
-              <HostCutscene
-                key={hostHangout.epoch}
-                scene={hostHangout.scene}
-                step={hostHangout.step}
-                names={hostHangout.names}
-                hostEmoji={hostProfile.emoji}
-                playerEmoji={hostHangout.playerEmoji}
-                playerColor={hostHangout.playerColor}
-                onNext={advanceHostScene}
-                onSkip={() => finishHostScene.current?.()}
-              />
-            )}
           </div>
         );
       })()}
@@ -1360,19 +1233,12 @@ export function Leaderboard({ teams, hostProfile, onAdjust, onSet, history = [],
                     {compact ? (
                       <ul className="scoreboard-player-list" aria-label={`Players in ${team.name}`}>
                         {namedPlayers.map((player, playerIndex) => {
+                          const playerEffect = teamEffects[hostGuest?.id === player.id ? HOST_HOME_ID : team.id];
                           const travelMood = travelMoods[player.id];
                           const bondReaction = bondReactions[player.id];
-                          const boothPhase = hostHangout?.playerId === player.id ? hostHangout.phase : null;
-                          const isQueuedForHost = queuedHostPlayerIds.includes(player.id);
                           const isSpectating = Boolean(spectatorReactions[player.id]);
                           const protectedTravelMood = travelMood === "nervous" || travelMood === "dizzy";
-                          const activeMood = isQueuedForHost
-                            ? "booth-waiting"
-                            : boothPhase
-                            ? boothPhase === "relationship" && hostHangout?.bondKind
-                              ? hostHangout.bondKind
-                              : `booth-${boothPhase}`
-                            : protectedTravelMood
+                          const activeMood = protectedTravelMood
                             ? travelMood
                             : bondReaction?.kind
                               ?? travelMood
@@ -1382,27 +1248,15 @@ export function Leaderboard({ teams, hostProfile, onAdjust, onSet, history = [],
                                   ? "suspicious"
                                   : isSpectating
                                     ? "watching"
-                                  : teamEffect?.kind === "beer"
+                                  : playerEffect?.kind === "beer"
                                     ? "tipsy"
-                                  : teamEffect?.kind === "snow"
+                                  : playerEffect?.kind === "snow"
                                     ? "cold"
-                                    : teamEffect?.kind === "confetti"
+                                    : playerEffect?.kind === "confetti"
                                       ? "partying"
                                       : scoresHidden ? "score-suspense" : moodState);
                           const bondVisual = bondReaction ? bondVisuals[bondReaction.kind] : null;
-                          const moodEmoji = isQueuedForHost
-                            ? "⏳"
-                            : boothPhase === "talking"
-                            ? "🙂"
-                            : boothPhase === "drinking"
-                              ? hostHangout?.drink.emoji ?? "🥂"
-                              : boothPhase === "laughing"
-                                ? "🤣"
-                                : boothPhase === "relationship" && hostHangout?.bondKind
-                                  ? bondVisuals[hostHangout.bondKind].moods[0]
-                                : boothPhase === "returning"
-                                  ? "😊"
-                                  : travelMood === "nervous"
+                          const moodEmoji = travelMood === "nervous"
                             ? "😬"
                             : travelMood === "dizzy"
                               ? "😵‍💫"
@@ -1418,18 +1272,18 @@ export function Leaderboard({ teams, hostProfile, onAdjust, onSet, history = [],
                                             ? ["👀", "🤨", "😲", "😆"][playerIndex % 4]
                                             : isSpectating
                                               ? playerIndex % 2 ? "🤭" : "👀"
-                                            : teamEffect?.kind === "beer"
+                                            : playerEffect?.kind === "beer"
                                               ? ["🥴", "😄", "😁", "🥳"][playerIndex % 4]
-                                              : teamEffect?.kind === "snow"
+                                              : playerEffect?.kind === "snow"
                                                 ? ["🥶", "🫨", "😬", "😮"][playerIndex % 4]
-                                              : teamEffect?.kind === "confetti"
+                                              : playerEffect?.kind === "confetti"
                                                   ? ["🥳", "🤩", "😁", "😄"][playerIndex % 4]
                                               : scoresHidden
                                                 ? getScoreSuspenseMood(player.id)
                                               : allScoresNeutral
                                                 ? getNeutralMood(player.id)
                                                 : moodSet[playerIndex % moodSet.length];
-                          return (
+                          const pill = (
                             <PlayerPill
                               name={player.name.trim()}
                               marker={<TeamEmoji emoji={marker} color={accent.base} />}
@@ -1439,22 +1293,22 @@ export function Leaderboard({ teams, hostProfile, onAdjust, onSet, history = [],
                                 if (node) playerElements.current.set(player.id, node);
                                 else playerElements.current.delete(player.id);
                               }}
-                              className={`temperament-${getPlayerTemperament(player.id)}${teamEffect ? ` has-team-effect effect-${teamEffect.kind}` : ""}${bondReaction ? " has-bond-reaction" : ""}${isSpectating ? " is-witnessing" : ""}${boothPhase ? " is-booth-visiting" : ""}${isQueuedForHost ? " is-booth-queued" : ""} mood-${activeMood}${draggedPlayerId === player.id ? " is-dragging" : ""}`}
-                              title={isQueuedForHost ? `${player.name.trim()} · waiting for the host booth` : `${player.name.trim()} · drag to play`}
+                              className={`temperament-${getPlayerTemperament(player.id)}${playerEffect ? ` has-team-effect effect-${playerEffect.kind}` : ""}${bondReaction ? " has-bond-reaction" : ""}${isSpectating ? " is-witnessing" : ""}${hostGuest?.id === player.id ? " scoreboard-guest-player" : ""} mood-${activeMood}${draggedPlayerId === player.id ? " is-dragging" : ""}`}
+                              title={`${player.name.trim()} · ${hostGuest?.id === player.id ? "drag out to return to team" : "drag to play or join the host"}`}
                               style={{
-                                "--player-layer": namedPlayers.length - playerIndex,
+                                "--player-layer": playerIndex + 1,
                                 "--player-count": namedPlayers.length,
                                 "--mood-delay": `${playerIndex * -0.85}s`,
                                 "--drag-x": "0px",
                                 "--drag-y": "0px",
                                 "--drag-rotate": "0deg",
-                                visibility: isQueuedForHost ? "visible" : undefined,
+                                "--team-base": accent.base,
                               } as CSSProperties}
                               onPointerDown={(event) => startPlayerDrag(event, player.id, team.id)}
                             >
-                              {teamEffect && (
-                                <span className={`scoreboard-player-prop is-${teamEffect.kind}`} aria-hidden>
-                                  {teamEffect.kind === "beer" ? "🍺" : teamEffect.kind === "snow" ? "❄️" : "🎉"}
+                              {playerEffect && (
+                                <span className={`scoreboard-player-prop is-${playerEffect.kind}`} aria-hidden>
+                                  {playerEffect.kind === "beer" ? "🍺" : playerEffect.kind === "snow" ? "❄️" : "🎉"}
                                 </span>
                               )}
                               {!travelMood
@@ -1462,7 +1316,7 @@ export function Leaderboard({ teams, hostProfile, onAdjust, onSet, history = [],
                                 && !angryPlayers[player.id]
                                 && !isSpectating
                                 && !teamVisit
-                                && !teamEffect
+                                && !playerEffect
                                 && playerIndex % 2 === 0
                                 && playerIndex < namedPlayers.length - 1 && (
                                   <span
@@ -1492,6 +1346,15 @@ export function Leaderboard({ teams, hostProfile, onAdjust, onSet, history = [],
                               )}
                             </PlayerPill>
                           );
+                          return hostGuest?.id === player.id && hostPlayerList
+                            ? <Fragment key={player.id}>
+                              {returningGuest?.playerId === player.id && <li className="scoreboard-player-home" aria-hidden ref={node => {
+                                if (node) playerHomeElements.current.set(player.id, node);
+                                else playerHomeElements.current.delete(player.id);
+                              }} style={{ width: returningGuest.width }} />}
+                              {createPortal(pill, hostPlayerList, player.id)}
+                            </Fragment>
+                            : pill;
                         })}
                       </ul>
                     ) : (

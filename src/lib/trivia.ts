@@ -2,6 +2,13 @@ import type { Question } from "./types";
 
 export type TriviaMarks = Record<string, string[]>;
 
+export function getTriviaTeamIds(question: Question, teamIds: string[], selectedTeamId?: string) {
+  const uniqueTeamIds = [...new Set(teamIds)];
+  if (question.triviaMode !== "single") return uniqueTeamIds;
+  if (selectedTeamId && uniqueTeamIds.includes(selectedTeamId)) return [selectedTeamId];
+  return uniqueTeamIds.slice(0, 1);
+}
+
 export function getTriviaResults(question: Question, teamIds: string[], marks: TriviaMarks) {
   const items = question.triviaItems ?? [];
   return [...new Set(teamIds)].map(teamId => {

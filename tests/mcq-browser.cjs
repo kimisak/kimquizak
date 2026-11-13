@@ -49,7 +49,7 @@ const demo = require('../default_questions.json');
     assert(await card.getByRole('checkbox', { name: 'Option 12 is correct', exact: true }).isChecked());
     console.log('Backup and reload verified');
     await page.goto(origin + '/game');
-    await page.getByRole('button', { name: 'OPTIONS, 500 points', exact: true }).click().catch(async error => { console.log((await page.locator('body').innerText()).slice(-2500)); throw error; });
+    await page.getByRole('button', { name: /^OPTIONS, 500 points(?:, shared round, other teams may participate)?$/ }).click().catch(async error => { console.log((await page.locator('body').innerText()).slice(-2500)); throw error; });
     const modal = page.locator('.mcq-question-modal');
     const assertFits = async () => {
       const layout = await modal.evaluate(root => {
@@ -90,7 +90,7 @@ const demo = require('../default_questions.json');
     await page.goto(origin + '/config/questions');
     await Promise.all([page.waitForEvent('load'), page.locator('.archive-panel input[type=file]').setInputFiles({ name: 'synthetic-mcq-image.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(backup)) })]);
     await page.goto(origin + '/game');
-    await page.getByRole('button', { name: 'OPTIONS, 500 points', exact: true }).click();
+    await page.getByRole('button', { name: /^OPTIONS, 500 points(?:, shared round, other teams may participate)?$/ }).click();
     for (const viewport of [{width:1280,height:720}, {width:1024,height:600}, {width:390,height:844}]) {
       await page.setViewportSize(viewport);
       await assertFits();
