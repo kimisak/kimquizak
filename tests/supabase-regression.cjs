@@ -29,7 +29,7 @@ test('proxy verifies claims and propagates every cookie batch with no-cache head
       },
     } }) },
   });
-  const request = new NextRequest('https://example.com/game', { headers: { cookie: 'session=expired' } });
+  const request = new NextRequest('https://example.com/login', { headers: { cookie: 'session=expired' } });
   const response = await updateSession(request);
   assert(verified);
   assert.equal(request.cookies.get('session').value, 'refreshed');
@@ -62,14 +62,29 @@ test('server helpers create separate clients for separate requests and await coo
   assert.deepEqual(written, [['test', 'value', { path: '/' }]]);
 });
 
-test('proxy matcher covers app requests and excludes audio and framework assets', () => {
+test('proxy matcher only refreshes sessions for host and private API requests', () => {
   const { unstable_doesMiddlewareMatch } = require('next/experimental/testing/server');
   const { config: matcher } = load('src/proxy.ts', { '@/lib/supabase/proxy': {} });
-  for (const url of ['/', '/game', '/config/questions', '/login', '/auth/callback', '/api/maps/config']) {
+  for (const url of ['/login', '/account', '/account/settings', '/auth/callback', '/api/maps/config', '/api/quizzes']) {
     assert(unstable_doesMiddlewareMatch({ config: matcher, nextConfig: {}, url }), url);
   }
-  for (const url of ['/audio/sleigh-bells-fast.mp3', '/favicon.ico', '/_next/static/main.js', '/kimquizak-logo.svg']) {
+  for (const url of ['/', '/game', '/config/teams', '/config/questions', '/api/maps/resolve-link', '/audio/sleigh-bells-fast.mp3', '/favicon.ico', '/_next/static/main.js', '/kimquizak-logo.svg']) {
     assert.equal(unstable_doesMiddlewareMatch({ config: matcher, nextConfig: {}, url }), false, url);
+  }
+});
+
+test('public quiz routes never contact Auth even with an expired session and unreachable Supabase', async () => {
+  const { updateSession } = load('src/lib/supabase/proxy.ts', {
+    './config': { getSupabaseConfig: () => config },
+    '@supabase/ssr': { createServerClient: () => assert.fail('Public pages must not wait for Auth') },
+  });
+  for (const path of ['/', '/game', '/config/teams', '/config/questions', '/api/maps/resolve-link']) {
+    const response = await updateSession(new NextRequest(`https://example.com${path}`, {
+      headers: { cookie: 'sb-example-auth-token=expired-session' },
+    }));
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get('location'), null);
+    assert.equal(response.cookies.getAll().length, 0, 'Public navigation preserves the existing session');
   }
 });
 
@@ -274,7 +289,7 @@ test('all Supabase clients use Secure cookies in production and allow local HTTP
       };
       await load('src/lib/supabase/server.ts', stubs).createClient();
       load('src/lib/supabase/client.ts', stubs).createClient();
-      await load('src/lib/supabase/proxy.ts', stubs).updateSession(new NextRequest('https://example.com/game'));
+      await load('src/lib/supabase/proxy.ts', stubs).updateSession(new NextRequest('https://example.com/login'));
       assert.equal(options.length, 3);
       for (const settings of options) {
         assert.equal(settings.cookieOptions.secure, environment === 'production');

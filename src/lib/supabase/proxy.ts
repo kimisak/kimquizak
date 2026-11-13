@@ -4,6 +4,10 @@ import { getSupabaseConfig } from "./config";
 
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
+  const pathname = request.nextUrl.pathname;
+  const needsSession = ["/login", "/account", "/auth", "/api/quizzes", "/api/maps/config"]
+    .some((path) => pathname === path || pathname.startsWith(`${path}/`));
+  if (!needsSession) return response;
   const config = getSupabaseConfig();
   const isAccount = request.nextUrl.pathname === "/account" || request.nextUrl.pathname.startsWith("/account/");
   const loginRedirect = () => {

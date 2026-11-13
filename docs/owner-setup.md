@@ -11,6 +11,11 @@
 
 Every archive endpoint, the account page, and the Maps configuration endpoint verifies the current user with Supabase Auth and compares the UUID against the server configuration. Unconfigured deployments fail closed for these features. Public local editing and demo play remain available. There is no signup page.
 
+Home, Teams, Questions, and Play do not refresh Supabase sessions. The proxy runs only
+on login/account/auth routes and the private archive and Maps configuration endpoints,
+so a Supabase outage or paused project cannot delay public page rendering. Host login,
+cloud snapshots, and authenticated Street View still need a working Supabase connection.
+
 The archive uses the publishable client with the user's session. Database RLS independently requires membership in a private owner allowlist and matching `owner_id`; other authenticated users cannot read, insert, or delete snapshots. Anonymous roles have no table privileges. After applying the delete migration, enrolled owners can permanently delete their own snapshots from the Host page. Each deletion requires confirmation and leaves browser-local quizzes and downloaded files intact. Browser roles cannot update snapshots or change the allowlist. Changing owners requires updating both the allowlist and the environment variable.
 
 Saved snapshots are separate copies, not automatic synchronization. The API accepts backups up to 3 MB (including embedded media) to stay below hosting request limits, and lists the latest 100. Large quizzes still support local file backups. Quiz content and credentials are not written to application logs.

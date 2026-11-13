@@ -6,6 +6,6 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // Page/API requests only: audio, images, and Next.js assets need no auth refresh.
-  matcher: ["/", "/game/:path*", "/config/:path*", "/login/:path*", "/account/:path*", "/auth/:path*", "/api/:path*"],
+  // Local quiz pages must stay usable even when Supabase is unreachable.
+  matcher: ["/login/:path*", "/account/:path*", "/auth/:path*", "/api/quizzes/:path*", "/api/maps/config"],
 };
