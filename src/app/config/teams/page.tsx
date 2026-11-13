@@ -320,7 +320,9 @@ export default function TeamConfigPage() {
     setTeams((prev) => {
       const allPlayers = prev.flatMap((team) => team.players);
       if (!allPlayers.some((player) => player.name.trim())) return prev;
-      const capacities = prev.map((team) => team.players.length);
+      const playersPerTeam = Math.floor(allPlayers.length / prev.length);
+      const extraPlayers = allPlayers.length % prev.length;
+      const capacities = shuffleArray(prev.map((_, index) => playersPerTeam + (index < extraPlayers ? 1 : 0)));
       const distributedPlayers = balanceGenderMix
         ? distributePlayersByGender(allPlayers, capacities)
         : (() => {
@@ -972,7 +974,7 @@ export default function TeamConfigPage() {
               onClick={startShuffling}
               disabled={isShuffling || !teams.some((team) => team.players.some((player) => player.name.trim()))}
               title={teams.some((team) => team.players.some((player) => player.name.trim()))
-                ? "Shuffle entered player names across teams"
+                ? "Shuffle players across teams and even out team sizes"
                 : "Enter at least one player name to shuffle"}
               style={{ cursor: "pointer" }}
             >
